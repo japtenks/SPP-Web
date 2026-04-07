@@ -1,0 +1,621 @@
+.marketplace-shell,
+.marketplace-search-panel,
+.marketplace-profession-grid,
+.marketplace-bot-grid,
+.marketplace-recipe-list,
+.marketplace-profession-holder-list,
+.marketplace-specialty-list {
+  display: grid;
+}
+.marketplace-shell {
+  gap: 24px;
+}
+.marketplace-search-panel {
+  gap: 12px;
+}
+.marketplace-search-label {
+  margin: 0;
+  color: #ffe39a;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.marketplace-search-copy {
+  margin: 0;
+  color: #cfbb91;
+  line-height: 1.55;
+}
+.marketplace-construction-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 204, 72, 0.24);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(64, 40, 8, 0.4), rgba(26, 16, 4, 0.48));
+  color: #f2ddb0;
+  line-height: 1.5;
+}
+.marketplace-construction-warning strong {
+  color: #ffd467;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.marketplace-construction-warning span {
+  min-width: 0;
+}
+.marketplace-search-input {
+  width: 100%;
+}
+.marketplace-search-input:focus {
+  border-color: rgba(255, 204, 72, 0.46);
+  box-shadow: 0 0 0 3px rgba(255, 204, 72, 0.08);
+}
+.marketplace-search-empty {
+  display: none;
+}
+.marketplace-profession-grid {
+  gap: 22px;
+}
+.marketplace-profession {
+  border: 1px solid rgba(255, 204, 72, 0.16);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(11, 15, 28, 0.94), rgba(5, 8, 18, 0.88));
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+}
+.marketplace-profession-summary {
+  padding: 22px;
+  border-bottom: 1px solid rgba(255, 204, 72, 0.08);
+}
+.marketplace-profession-kicker {
+  margin-bottom: 6px;
+  color: #ffd467;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marketplace-profession-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  flex: 1 1 auto;
+}
+.marketplace-profession-id {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.marketplace-profession-icon {
+  width: 52px;
+  height: 52px;
+  border: 1px solid rgba(255, 204, 72, 0.18);
+  border-radius: 14px;
+  background: #080808;
+}
+.marketplace-profession-title {
+  margin: 0;
+  color: #fff1be;
+  font-size: 1.45rem;
+}
+.marketplace-profession-desc {
+  margin: 6px 0 0;
+  color: #bda87a;
+  line-height: 1.5;
+}
+.marketplace-profession-note {
+  margin: 10px 0 0;
+  color: #cdb98f;
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+.marketplace-profession-stats {
+  display: grid;
+  gap: 8px;
+  text-align: right;
+}
+.marketplace-profession-stat {
+  position: relative;
+}
+.marketplace-profession-stat strong {
+  display: block;
+  color: #fff1be;
+  font-size: 1.15rem;
+}
+.marketplace-profession-stat span {
+  color: #bda87a;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marketplace-profession-stat.marketplace-profession-stat--hoverable {
+  cursor: default;
+}
+.marketplace-profession-stat-flyout {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  display: none;
+  min-width: 240px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 204, 72, 0.18);
+  border-radius: 14px;
+  background: rgba(6, 10, 22, 0.98);
+  box-shadow: 0 18px 34px rgba(0, 0, 0, 0.34);
+  text-align: left;
+}
+.marketplace-profession-stat.marketplace-profession-stat--hoverable:hover .marketplace-profession-stat-flyout {
+  display: block;
+}
+.marketplace-profession-stat-flyout-title {
+  margin: 0 0 8px;
+  color: #ffe39a;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marketplace-profession-holder-list {
+  gap: 6px;
+}
+.marketplace-profession-holder-link {
+  color: #f7edd0;
+  font-size: 0.92rem;
+  text-decoration: none;
+}
+.marketplace-profession-holder-link:hover {
+  color: #ffe39a;
+}
+.marketplace-profession-body {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+.marketplace-specialist-panel,
+.marketplace-specialties-panel {
+  padding: 18px;
+  border: 1px solid rgba(255, 204, 72, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.marketplace-section-head,
+.marketplace-specialty-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+}
+.marketplace-section-head {
+  margin-bottom: 14px;
+}
+.marketplace-section-title {
+  margin: 0;
+  color: #ffe39a;
+  font-size: 1.05rem;
+}
+.marketplace-section-copy {
+  color: #bda87a;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marketplace-crafter-card {
+  padding: 16px;
+  border: 1px solid rgba(255, 204, 72, 0.12);
+  border-radius: 16px;
+  background: rgba(4, 7, 16, 0.76);
+}
+.marketplace-specialty-list {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+.marketplace-specialty-row {
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 204, 72, 0.12);
+  border-radius: 16px;
+  background: rgba(4, 7, 16, 0.62);
+}
+.marketplace-featured-board {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.marketplace-faction-panel {
+  padding: 18px;
+  border: 1px solid rgba(255, 204, 72, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.marketplace-faction-panel--horde {
+  border-color: rgba(190, 72, 72, 0.24);
+  background: linear-gradient(180deg, rgba(56, 14, 14, 0.34), rgba(12, 7, 16, 0.42));
+}
+.marketplace-faction-panel--alliance {
+  border-color: rgba(72, 122, 210, 0.24);
+  background: linear-gradient(180deg, rgba(12, 28, 64, 0.34), rgba(12, 7, 16, 0.42));
+}
+.marketplace-faction-head,
+.marketplace-bot-head,
+.marketplace-progress-copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.marketplace-faction-head {
+  align-items: center;
+  margin-bottom: 14px;
+}
+.marketplace-faction-title {
+  margin: 0;
+  color: #ffe39a;
+  font-size: 1.05rem;
+}
+.marketplace-faction-panel--horde .marketplace-faction-title {
+  color: #ff9f9f;
+}
+.marketplace-faction-panel--alliance .marketplace-faction-title {
+  color: #9fc4ff;
+}
+.marketplace-faction-copy {
+  color: #bda87a;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marketplace-specialty-title {
+  color: #fff1be;
+  font-size: 0.98rem;
+}
+.marketplace-specialty-state {
+  color: #bda87a;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marketplace-specialty-crafter {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 12px;
+  color: #f7edd0;
+  text-decoration: none;
+}
+.marketplace-specialty-crafter-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.marketplace-specialty-crafter-copy strong {
+  color: #fff1be;
+}
+.marketplace-specialty-crafter-copy span {
+  color: #bda87a;
+  font-size: 0.86rem;
+}
+.marketplace-specialty-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.marketplace-online-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 204, 72, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f7edd0;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.marketplace-online-pill__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #b84a4a;
+}
+.marketplace-online-pill.is-online .marketplace-online-pill__dot {
+  background: #57d67a;
+}
+.marketplace-online-pill.is-offline .marketplace-online-pill__dot {
+  background: #d05e5e;
+}
+.marketplace-crafter-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.marketplace-crafter-chip {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 204, 72, 0.08);
+  color: #ffe39a;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.marketplace-crafter-chip--cap {
+  min-width: 108px;
+  text-align: center;
+}
+.marketplace-bot-grid {
+  gap: 14px;
+}
+.marketplace-bot {
+  padding: 16px;
+  border: 1px solid rgba(255, 204, 72, 0.12);
+  border-radius: 16px;
+  background: rgba(4, 7, 16, 0.76);
+}
+.marketplace-bot-head {
+  align-items: flex-start;
+}
+.marketplace-bot-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  color: #f7edd0;
+  text-decoration: none;
+}
+.marketplace-bot-avatars {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+.marketplace-bot-avatars img {
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgba(255, 204, 72, 0.14);
+  border-radius: 10px;
+  background: #090909;
+}
+.marketplace-bot-name {
+  display: block;
+  color: #fff1be;
+  font-size: 1rem;
+  font-weight: 800;
+}
+.marketplace-bot-meta {
+  margin-top: 3px;
+  color: #bda87a;
+  font-size: 0.86rem;
+}
+.marketplace-bot-specialties {
+  display: block;
+  margin-top: 4px;
+  color: #9fd2ff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.marketplace-bot-rank {
+  color: #ffd467;
+  font-size: 0.88rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.marketplace-bot-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.marketplace-bot-stat {
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 204, 72, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.marketplace-bot-stat strong {
+  display: block;
+  color: #fff1be;
+  font-size: 1rem;
+}
+.marketplace-bot-stat span {
+  display: block;
+  margin-top: 4px;
+  color: #bda87a;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marketplace-progress {
+  margin-top: 12px;
+}
+.marketplace-progress-track {
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.marketplace-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8e6200, #ffd467);
+}
+.marketplace-progress-copy {
+  margin-top: 6px;
+  color: #bda87a;
+  font-size: 0.8rem;
+}
+.marketplace-recipe-box {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 204, 72, 0.12);
+}
+.marketplace-recipe-summary {
+  padding: 0 0 14px;
+}
+.marketplace-recipe-summary .collapse-card__title {
+  font-size: 1rem;
+}
+.marketplace-recipe-summary .collapse-card__meta {
+  color: #bda87a;
+  font-size: 0.85rem;
+}
+.marketplace-recipe-body {
+  padding: 0;
+}
+.marketplace-recipe-list {
+  gap: 8px;
+}
+.marketplace-recipe {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  text-decoration: none;
+}
+.marketplace-recipe img {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 204, 72, 0.14);
+  border-radius: 12px;
+  background: #090909;
+}
+.marketplace-recipe strong {
+  display: block;
+  font-size: 0.93rem;
+  line-height: 1.25;
+}
+.marketplace-recipe small {
+  display: block;
+  margin-top: 3px;
+  color: #bda87a;
+}
+.marketplace-bot-empty {
+  padding: 14px;
+  border: 1px dashed rgba(255, 204, 72, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  color: #bda87a;
+}
+.marketplace-empty {
+  color: #cdb98f;
+}
+.marketplace-error {
+  color: #ffd8d8;
+}
+.marketplace-loading {
+  padding: 16px;
+  color: #cdb98f;
+}
+.marketplace-lazy-detail {
+  display: grid;
+  gap: 18px;
+}
+.marketplace-profession-detail-shell,
+.marketplace-search-results,
+.marketplace-search-results-list {
+  display: grid;
+  gap: 18px;
+}
+.marketplace-tier-panel {
+  padding: 18px;
+  border: 1px solid rgba(255, 204, 72, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+}
+.marketplace-tier-head,
+.marketplace-search-result-head,
+.marketplace-search-result-body,
+.marketplace-search-result-profession {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.marketplace-tier-head,
+.marketplace-search-result-head {
+  align-items: center;
+  margin-bottom: 14px;
+}
+.marketplace-tier-title {
+  margin: 0;
+  color: #ffe39a;
+  font-size: 1.02rem;
+}
+.marketplace-tier-copy,
+.marketplace-search-result-copy {
+  color: #bda87a;
+  font-size: 0.82rem;
+}
+.marketplace-search-results[hidden] {
+  display: none;
+}
+.marketplace-search-result {
+  display: grid;
+  gap: 14px;
+}
+.marketplace-search-result-tag {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 204, 72, 0.12);
+  color: #ffe39a;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.marketplace-search-result-tag.is-special {
+  background: rgba(255, 145, 77, 0.14);
+  color: #ffd19d;
+}
+.marketplace-search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #f7edd0;
+  text-decoration: none;
+}
+.marketplace-search-result-item img {
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 204, 72, 0.14);
+  border-radius: 12px;
+  background: #090909;
+}
+.marketplace-search-empty.feature-panel {
+  display: block;
+}
+@media (max-width: 860px) {
+  .marketplace-featured-board,
+  .marketplace-specialty-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .marketplace-construction-warning {
+    flex-direction: column;
+  }
+  .marketplace-profession-head,
+  .marketplace-search-result-body,
+  .marketplace-tier-head,
+  .marketplace-search-result-head,
+  .marketplace-section-head,
+  .marketplace-specialty-head,
+  .marketplace-specialty-crafter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .marketplace-specialty-meta {
+    justify-content: flex-start;
+  }
+}

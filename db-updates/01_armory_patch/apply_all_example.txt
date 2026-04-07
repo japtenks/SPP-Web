@@ -1,0 +1,11 @@
+From the MySQL client, change into this directory and run:
+
+mysql -u root -p classicarmory < 10_dbc_spellicon_delta.sql
+mysql -u root -p classicarmory < 20_dbc_spellitemenchantment_tooltip.sql
+mysql -u root -p classicarmory < 30_dbc_talent_tooltip.sql
+mysql -u root -p classicarmory < 40_dbc_talenttab_tooltip.sql
+mysql -u root -p classicarmory < 50_armory_itemset_notes.sql
+
+Or from inside the mysql client:
+
+SOURCE apply_all.sql

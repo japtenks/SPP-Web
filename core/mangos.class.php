@@ -1,0 +1,602 @@
+<?php
+class Mangos{
+    public $zoneByID;
+    public $characterInfoByID;
+    public $charDataField;
+
+    public function Mangos(){
+        $this->construct_zoneByID();
+        $this->construct_characterinfo();
+        $this->construct_charDataField();
+
+    }
+
+
+    public function construct_charDataField(){
+        include(__DIR__ . '/cache/mangos_scripts/UpdateFields.php');
+        $this->charDataField = $mangos_field;
+        unset($mangos_field);
+    }
+
+public function construct_zoneByID(){
+		$this->zoneByID = array(
+			36 => 'Alterac Mountains',
+			2597 => 'Alterac Valley',
+			3358 => 'Arathi Basin',
+			45 => 'Arathi Highlands',
+			331 => 'Ashenvale',
+			3790 => 'Auchindoun: Auchenai Crypts',
+			3792 => 'Auchindoun: Mana-Tombs',
+			3791 => 'Auchindoun: Sethekk Halls',
+			3789 => 'Auchindoun: Shadow Labyrinth',
+			4494 => 'Azjol-Nerub: Ahn`kahet: The Old Kingdom',
+			3477 => 'Azjol-Nerub: Azjol-Nerub',
+			16 => 'Azshara',
+			3524 => 'Azuremyst Isle',
+			3 => 'Badlands',
+			3959 => 'Black Temple',
+			719 => 'Blackfathom Deeps',
+			1584 => 'Blackrock Depths',
+			25 => 'Blackrock Mountain',
+			1583 => 'Blackrock Spire',
+			2677 => 'Blackwing Lair',
+			3522 => 'Blade`s Edge Mountains',
+			4 => 'Blasted Lands',
+			3525 => 'Bloodmyst Isle',
+			3537 => 'Borean Tundra',
+			46 => 'Burning Steppes',
+			3606 => 'Caverns of Time: Hyjal Summit',
+			2367 => 'Caverns of Time: Old Hillsbrad Foothills',
+			2366 => 'Caverns of Time: The Black Morass',
+			4100 => 'Caverns of Time: The Culling of Stratholme',
+			3607 => 'Coilfang Reservoir: Serpentshrine Cavern',
+			3717 => 'Coilfang Reservoir: The Slave Pens',
+			3715 => 'Coilfang Reservoir: The Steamvault',
+			3716 => 'Coilfang Reservoir: The Underbog',
+			2817 => 'Crystalsong Forest',
+			4395 => 'Dalaran',
+			4378 => 'Dalaran Sewers',
+			148 => 'Darkshore',
+			1657 => 'Darnassus',
+			41 => 'Deadwind Pass',
+			2257 => 'Deeprun Tram',
+			405 => 'Desolace',
+			2557 => 'Dire Maul',
+			65 => 'Dragonblight',
+			4196 => 'Drak`Tharon Keep',
+			1 => 'Dun Morogh',
+			14 => 'Durotar',
+			10 => 'Duskwood',
+			15 => 'Dustwallow Marsh',
+			139 => 'Eastern Plaguelands',
+			12 => 'Elwynn Forest',
+			3430 => 'Eversong Woods',
+			3820 => 'Eye of the Storm',
+			361 => 'Felwood',
+			357 => 'Feralas',
+			3433 => 'Ghostlands',
+			133 => 'Gnomeregan',
+			394 => 'Grizzly Hills',
+			3618 => 'Gruul`s Lair',
+			4375 => 'Gundrak',
+			3562 => 'Hellfire Citadel: Hellfire Ramparts',
+			3836 => 'Hellfire Citadel: Magtheridon`s Lair',
+			3713 => 'Hellfire Citadel: The Blood Furnace',
+			3714 => 'Hellfire Citadel: The Shattered Halls',
+			3483 => 'Hellfire Peninsula',
+			267 => 'Hillsbrad Foothills',
+			495 => 'Howling Fjord',
+			210 => 'Icecrown',
+			1537 => 'Ironforge',
+			4080 => 'Isle of Quel`Danas',
+			2562 => 'Karazhan',
+			38 => 'Loch Modan',
+			4095 => 'Magisters` Terrace',
+			2100 => 'Maraudon',
+			2717 => 'Molten Core',
+			493 => 'Moonglade',
+			215 => 'Mulgore',
+			3518 => 'Nagrand',
+			3456 => 'Naxxramas',
+			3523 => 'Netherstorm',
+			2159 => 'Onyxia`s Lair',
+			1637 => 'Orgrimmar',
+			2437 => 'Ragefire Chasm',
+			722 => 'Razorfen Downs',
+			491 => 'Razorfen Kraul',
+			44 => 'Redridge Mountains',
+			3429 => 'Ruins of Ahn`Qiraj',
+			3968 => 'Ruins of Lordaeron (Undercity)',
+			796 => 'Scarlet Monastery',
+			2057 => 'Scholomance',
+			51 => 'Searing Gorge',
+			209 => 'Shadowfang Keep',
+			3520 => 'Shadowmoon Valley',
+			3703 => 'Shattrath City',
+			3711 => 'Sholazar Basin',
+			1377 => 'Silithus',
+			3487 => 'Silvermoon City',
+			130 => 'Silverpine Forest',
+			406 => 'Stonetalon Mountains',
+			1519 => 'Stormwind City',
+			4384 => 'Strand of the Ancients',
+			33 => 'Stranglethorn Vale',
+			2017 => 'Stratholme',
+			1417 => 'Sunken Temple',
+			4075 => 'Sunwell Plateau',
+			8 => 'Swamp of Sorrows',
+			440 => 'Tanaris',
+			141 => 'Teldrassil',
+			3846 => 'Tempest Keep: The Arcatraz',
+			3847 => 'Tempest Keep: The Botanica',
+			3842 => 'Tempest Keep: The Eye',
+			3849 => 'Tempest Keep: The Mechanar',
+			3428 => 'Temple of Ahn`Qiraj',
+			3519 => 'Terokkar Forest',
+			17 => 'The Barrens',
+			3702 => 'The Circle of Blood (Blade`s Edge)',
+			1581 => 'The Deadmines',
+			3557 => 'The Exodar',
+			47 => 'The Hinterlands',
+			4500 => 'The Nexus: The Eye of Eternity',
+			4120 => 'The Nexus: The Nexus',
+			4228 => 'The Nexus: The Oculus',
+			4493 => 'The Obsidian Sanctum',
+			3698 => 'The Ring of Trials (Nagrand)',
+			4406 => 'The Ring of Valor (Orgrimmar)',
+			4298 => 'The Scarlet Enclave',
+			717 => 'The Stockade',
+			67 => 'The Storm Peaks',
+			457 => 'The Veiled Sea',
+			4415 => 'The Violet Hold',
+			400 => 'Thousand Needles',
+			1638 => 'Thunder Bluff',
+			85 => 'Tirisfal Glades',
+			1337 => 'Uldaman',
+			4272 => 'Ulduar: Halls of Lightning',
+			4264 => 'Ulduar: Halls of Stone',
+			490 => 'Un`Goro Crater',
+			1497 => 'Undercity',
+			206 => 'Utgarde Keep: Utgarde Keep',
+			1196 => 'Utgarde Keep: Utgarde Pinnacle',
+			4603 => 'Vault of Archavon',
+			718 => 'Wailing Caverns',
+			3277 => 'Warsong Gulch',
+			28 => 'Western Plaguelands',
+			40 => 'Westfall',
+			11 => 'Wetlands',
+			4197 => 'Wintergrasp',
+			618 => 'Winterspring',
+			3521 => 'Zangarmarsh',
+			3805 => 'Zul`Aman',
+			66 => 'Zul`Drak',
+			978 => 'Zul`Farrak',
+			19 => 'Zul`Gurub',
+);
+}
+
+    public function construct_characterinfo(){
+        $this->characterInfoByID = array(
+            'character_race' => array(
+                1 => 'Human',
+                2 => 'Orc',
+                3 => 'Dwarf',
+                4 => 'Night Elf',
+                5 => 'Undead',
+                6 => 'Tauren',
+                7 => 'Gnome',
+                8 => 'Troll',
+                9 => 'Goblin',
+                10 => 'Blood Elf',
+                11 => 'Dranei',
+            ),
+            'character_class' => array(
+                1 => 'Warrior',
+                2 => 'Paladin',
+                3 => 'Hunter',
+                4 => 'Rogue',
+                5 => 'Priest',
+				6 => 'Death Knight',
+                7 => 'Shaman',
+                8 => 'Mage',
+                9 => 'Warlock',
+                11 => 'Druid',
+            ),
+
+            'character_gender' => array(
+                0 => 'Male',
+                1 => 'Female',
+                2 => 'None',
+            ),
+            'character_rank' => array(
+                'alliance' => array(
+                    1 => 'Private',
+                    2 => 'Corporal',
+                    3 => 'Sergeant',
+                    4 => 'Master Sergeant',
+                    5 => 'Sergeant Major',
+                    6 => 'Knight',
+                    7 => 'Knight-Lieutenant',
+                    8 => 'Knight-Captain',
+                    9 => 'Knight-Champion',
+                    10 => 'Lieutenant-Commander',
+                    11 => 'Commander',
+                    12 => 'Marshal',
+                    13 => 'Field Marshal',
+                    14 => 'Grand Marshal'
+                ),
+                'horde' => array(
+                    1 => 'Scout',
+                    2 => 'Grunt',
+                    3 => 'Sergeant',
+                    4 => 'Senior-Sergeant',
+                    5 => 'First-Sergeant',
+                    6 => 'Stone Guard',
+                    7 => 'Blood Guard',
+                    8 => 'Legionnaire',
+                    9 => 'Centurion',
+                    10 => 'Champion',
+                    11 => 'Lieutenant General',
+                    12 => 'General',
+                    13 => 'Warlord',
+                    14 => 'High Warlord'
+                )
+            )
+        );
+    }
+
+    public function get_zone_name($zoneid){
+        if (isset($this->zoneByID[$zoneid])){
+            $zonename=$this->zoneByID[$zoneid];
+        }else{
+            $zonename='Unknown zone';
+        }
+        return $zonename;
+    }
+
+    /* Function: Mail item to player with donation ID and who to deliver item too
+     * Vars: $donate_item_id = ID defined in realmd.donation_template
+     *       $character_item_id = Character ID from world.character that the item is beeing sent too.
+     *       $txnid = The ID of the donation.
+     *       $admin_send = If admin is true paypal is not involved and you can use this as a send function.
+     */
+    public function mail_item_donation($donate_item_id, $character_item_id, $txnid=false,$admin_send = false){
+        global $realmDbMap;
+        $realmId = function_exists('spp_current_realm_id')
+            ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
+            : (isset($realmDbMap) ? spp_resolve_realm_id($realmDbMap) : 1);
+        $realmPdo = spp_get_pdo('realmd', $realmId);
+        $worldPdo = spp_get_pdo('world',  $realmId);
+
+        #Constants
+        $donateid = (int)$donate_item_id; // The donation ID in table donation_template
+        $stmtDt = $realmPdo->prepare("SELECT * FROM `donations_template` WHERE id=?");
+        $stmtDt->execute([$donateid]);
+        $donation_template = $stmtDt->fetch(PDO::FETCH_ASSOC);
+        if (!$donation_template) {
+            return FALSE;
+        }
+        $ROUNDS = 0; // Rounds is to check how many times loop goes. NOT CHANGE THIS!
+        $items = explode(",", $donation_template['items']);
+
+        // Generate item's from item-sets if find any item sets of course. :)
+        $items_itemset = explode(",", $donation_template['itemset']);
+        if ($items_itemset[0] != ''){
+            foreach($items_itemset as $itemset_id){
+                $stmtIs = $worldPdo->prepare("SELECT entry FROM `item_template` WHERE itemset=?");
+                $stmtIs->execute([(int)$itemset_id]);
+                $qray = $stmtIs->fetchAll(PDO::FETCH_ASSOC);
+                foreach($qray as $d){
+                    $items[] = $d['entry'];
+                }
+            }
+        }
+        foreach($items as $self => $item){
+            if ($item == '' || !is_numeric($item)){
+                unset($items[$self]);
+            }
+        }
+
+        return $this->mail_item_list(array_values($items), $character_item_id, (string)($donation_template['description'] ?? 'Item Pack'));
+    }
+
+    public function mail_item_list($itemIds, $character_item_id, $subject = 'Item Pack'){
+        global $realmDbMap;
+        $realmId = function_exists('spp_current_realm_id')
+            ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
+            : (isset($realmDbMap) ? spp_resolve_realm_id($realmDbMap) : 1);
+        $worldPdo = spp_get_pdo('world',  $realmId);
+        $charPdo  = spp_get_pdo('chars',  $realmId);
+
+        $charTableHas = static function (PDO $pdo, string $tableName, string $columnName): bool {
+            static $cache = array();
+            $cacheKey = spl_object_hash($pdo) . ':' . $tableName . ':' . $columnName;
+            if (isset($cache[$cacheKey])) {
+                return $cache[$cacheKey];
+            }
+            $stmt = $pdo->prepare('SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? LIMIT 1');
+            $stmt->execute(array($tableName, $columnName));
+            return $cache[$cacheKey] = (bool)$stmt->fetchColumn();
+        };
+
+        $error_output = 0;
+        $ROUNDS = 0;
+        $guid = (int)$character_item_id;
+        $items = array();
+        foreach ((array)$itemIds as $entry) {
+            if (is_array($entry)) {
+                $itemId = (int)($entry['id'] ?? 0);
+                $count = (int)($entry['count'] ?? 0);
+            } else {
+                $itemId = (int)$entry;
+                $count = 1;
+            }
+
+            if ($itemId <= 0 || $count <= 0) {
+                continue;
+            }
+
+            $items[] = array('id' => $itemId, 'count' => $count);
+        }
+
+        if ($guid <= 0 || empty($items)) {
+            return FALSE;
+        }
+
+        foreach ($items as $itemEntry){
+            $item_id = (int)$itemEntry['id'];
+            $itemCount = (int)$itemEntry['count'];
+
+            $stmtIt = $worldPdo->prepare("SELECT * FROM `item_template` WHERE entry=?");
+            $stmtIt->execute([(int)$item_id]);
+            $data = $stmtIt->fetch(PDO::FETCH_ASSOC);
+            if (!$data) {
+                $error_output++;
+                continue;
+            }
+
+            $stackLimit = max(1, (int)($data['stackable'] ?? 1));
+            $remainingCount = max(1, $itemCount);
+
+            while ($remainingCount > 0) {
+                $stackCount = min($stackLimit, $remainingCount);
+                $remainingCount -= $stackCount;
+
+                // We need to get a unquie guid for char_inv. Problem is that mangos is caching and not updated on sql.
+                // Therefor we need to create a offset guid.
+
+                $ROUNDS++;
+                // If this is the first loop we must check if we MUST increment with offset or if we can just apply id +1
+                $new_guid = $this->mangos_newguid('item_instance', $realmId);
+                $item = $new_guid['new_guid'];
+                $WE_DID_OFFSET_ID = $new_guid['incr'];
+
+
+
+                ## array FOR ITEM_INSTANCE, THERE ARE $this->charDataField['ITEM_END'] Fields if not a bag.
+                ## IF BAG its $this->charDataField['CONTAINER_END'] fields.
+                $item_instance_value = array();
+                for($i=0;$i<$this->charDataField['ITEM_END'];$i++)$item_instance_value[$i]=0;
+
+
+
+                ## Defines
+                $item_instance_value[$this->charDataField['OBJECT_FIELD_GUID']] = $item;    //Guid
+                $item_instance_value[$this->charDataField['OBJECT_FIELD_TYPE']] = 1073741936;  //defaultvalue
+                $item_instance_value[$this->charDataField['OBJECT_FIELD_ENTRY']] = $data['entry'];//entry
+                $item_instance_value[$this->charDataField['OBJECT_FIELD_SCALE_X']] = 1065353216; //defaultvalue
+                $item_instance_value[$this->charDataField['ITEM_FIELD_OWNER']] = 1;  //owner_guid
+                $item_instance_value[$this->charDataField['ITEM_FIELD_STACK_COUNT']] = $stackCount; // Stacks. Amount
+                $item_instance_value[$this->charDataField['ITEM_FIELD_FLAGS']] = $data['Flags']; //Flags
+                $item_instance_value[$this->charDataField['ITEM_FIELD_DURABILITY']] = $data['MaxDurability']; // Min Durability
+                $item_instance_value[$this->charDataField['ITEM_FIELD_MAXDURABILITY']] = $data['MaxDurability'] ; // Max Durability
+
+                if ($data['InventoryType'] == 18){  // If this is A Bag.
+                   // X fields to Bag slot.
+                    for($i=$this->charDataField['ITEM_END'];$i<$this->charDataField['CONTAINER_END'];$i++)$item_instance_value[$i]=0;
+                    $item_instance_value[$this->charDataField['OBJECT_FIELD_TYPE']]= "7";
+                    $item_instance_value[$this->charDataField['CONTAINER_FIELD_NUM_SLOTS']]= $data['ContainerSlots'];   // Slots on bag
+                    $item_instance_value[$this->charDataField['CONTAINER_ALIGN_PAD']]= "0";  // CONTAINER_ALIGN_PAD
+
+                }else{ $item_instance_value[$this->charDataField['OBJECT_FIELD_TYPE']] = 3;}
+                if ($data['spellid_1'] != 0){ $item_instance_value['16'] = 4294967295; }else{ $item_instance_value['16'] = 0; }
+
+
+                ## // ## Main operation ## \\ ##
+
+                $additem_code = implode($item_instance_value, ' ');
+                $data_field = $additem_code;
+
+                $usesLegacyDataBlob = $charTableHas($charPdo, 'item_instance', 'data');
+                $count1 = 0;
+                $check_finalcount = 0;
+
+                if ($usesLegacyDataBlob) {
+        			// Here we count how many of the current item the user has
+                    $stmtCi1 = $charPdo->prepare("SELECT data FROM `item_instance` WHERE guid=? AND owner_guid=?");
+                    $stmtCi1->execute([$item, $guid]);
+                    $count_insert1 = $stmtCi1->fetchAll(PDO::FETCH_ASSOC);
+                    $count1 = count($count_insert1);
+                    $stmtCi2 = $charPdo->prepare("INSERT INTO `item_instance` (guid, owner_guid, data) VALUES(?,?,?)");
+                    $stmtCi2->execute([$item, $guid, $data_field]);
+
+        			// Lets check to see if our query was successful
+                    $stmtCiChk = $charPdo->prepare("SELECT data FROM `item_instance` WHERE guid=? AND owner_guid=?");
+                    $stmtCiChk->execute([$item, $guid]);
+                    $check_insert1 = $stmtCiChk->fetchAll(PDO::FETCH_ASSOC);
+                    $check_finalcount = count($check_insert1);
+                } else {
+                    $stmtCi1 = $charPdo->prepare("SELECT guid FROM `item_instance` WHERE guid=? AND owner_guid=?");
+                    $stmtCi1->execute([$item, $guid]);
+                    $count1 = count($stmtCi1->fetchAll(PDO::FETCH_ASSOC));
+
+                    $stmtCi2 = $charPdo->prepare("
+                        INSERT INTO `item_instance`
+                            (guid, owner_guid, itemEntry, creatorGuid, giftCreatorGuid, count, duration, charges, flags, enchantments, randomPropertyId, durability, itemTextId)
+                        VALUES
+                            (?, ?, ?, 0, 0, ?, 0, '', ?, '', 0, ?, 0)
+                    ");
+                    $stmtCi2->execute([$item, $guid, (int)$data['entry'], $stackCount, (int)($data['Flags'] ?? 0), (int)($data['MaxDurability'] ?? 0)]);
+
+                    $stmtCiChk = $charPdo->prepare("SELECT guid FROM `item_instance` WHERE guid=? AND owner_guid=?");
+                    $stmtCiChk->execute([$item, $guid]);
+                    $check_finalcount = count($stmtCiChk->fetchAll(PDO::FETCH_ASSOC));
+                }
+
+    			// If the user has more of the item he selected, then when we started, then success!
+                if ($check_finalcount > $count1){
+
+                    $new_guid = $this->mangos_newguid('mail', $realmId);
+                    $mail_id = $new_guid['new_guid'];
+                    $WE_DID_OFFSET_ID = $new_guid['incr'];
+
+    				// case active. We need to add slash if its Some other in db who has ' "
+    				## Constants
+    				$insertitem = $data['name'];
+    				$timestampplus_start = date('YmdHis', time());
+    				$startitemnow_unix = strtotime($timestampplus_start);
+
+    				// Here we create the mail message for the item, and check to see if the query was successfull. If the mail message exists, then we move on
+                    $mailSubject = $subject !== '' ? $subject : $insertitem;
+                    $mailBody = 'Enjoy your item pack!';
+                    $mailColumns = array('id', 'messageType', 'stationery');
+                    $mailValues = array($mail_id, 0, 41);
+
+                    if ($charTableHas($charPdo, 'mail', 'mailTemplateId')) {
+                        $mailColumns[] = 'mailTemplateId';
+                        $mailValues[] = 0;
+                    }
+
+                    $mailColumns[] = 'sender';
+                    $mailValues[] = 1;
+                    $mailColumns[] = 'receiver';
+                    $mailValues[] = $guid;
+                    $mailColumns[] = 'subject';
+                    $mailValues[] = $mailSubject;
+
+                    if ($charTableHas($charPdo, 'mail', 'body')) {
+                        $mailColumns[] = 'body';
+                        $mailValues[] = $mailBody;
+                    }
+
+                    if ($charTableHas($charPdo, 'mail', 'itemTextId')) {
+                        $mailColumns[] = 'itemTextId';
+                        $mailValues[] = 0;
+                    }
+
+                    $mailColumns[] = 'has_items';
+                    $mailValues[] = 1;
+                    $mailColumns[] = 'expire_time';
+                    $mailValues[] = 32495688732;
+                    $mailColumns[] = 'deliver_time';
+                    $mailValues[] = $startitemnow_unix;
+                    $mailColumns[] = 'money';
+                    $mailValues[] = 0;
+                    $mailColumns[] = 'cod';
+                    $mailValues[] = 0;
+                    $mailColumns[] = 'checked';
+                    $mailValues[] = 0;
+
+                    $mailPlaceholders = implode(',', array_fill(0, count($mailColumns), '?'));
+                    $stmtMail = $charPdo->prepare(
+                        'INSERT INTO mail (`' . implode('`,`', $mailColumns) . '`) VALUES(' . $mailPlaceholders . ')'
+                    );
+                    $stmtMail->execute($mailValues);
+                    $stmtMailChk = $charPdo->prepare("SELECT id FROM mail WHERE id=? AND receiver=?");
+                    $stmtMailChk->execute([$mail_id, $guid]);
+                    $check_insert2 = $stmtMailChk->fetchAll(PDO::FETCH_ASSOC);
+                    if (count($check_insert2) > 0){
+
+    					// Lets check to see if the placing of the item, in the mail message was successfull
+                        $stmtMi = $charPdo->prepare("INSERT INTO mail_items (mail_id, item_guid, item_template, receiver) VALUES (?,?,?,?)");
+                        $stmtMi->execute([$mail_id, $item, $data['entry'], $guid]);
+                        $stmtMiChk = $charPdo->prepare("SELECT mail_id FROM mail_items WHERE mail_id=? AND receiver=?");
+                        $stmtMiChk->execute([$mail_id, $guid]);
+                        $check_insert3 = $stmtMiChk->fetchAll(PDO::FETCH_ASSOC);
+                        if (count($check_insert3) > 0){
+    					echo "<font color='blue'><br />Success!&nbsp</font>";
+    					}else{ $error_output++; echo "<br /><font color='red'>MySQL Error: Problem inserting item into mail.</font><br />"; }
+    				}else{ $error_output++; echo "<br /><font color='red'>MySQL Error: Problem creating mail message.</font><br />"; }
+    			}else{ $error_output++; echo "<br /><font color='red'>MySQL Error: Problem inserting data into \"Item Instance\" table.</font><br />"; }
+            }
+
+        }
+		// Return true if all query's where successful. Else return false
+        return $error_output == 0;
+    }
+
+
+
+    /*   Function used to increase guids to any database in mangos. ( Must be in switch beneath and in database world_entrys ).
+     *   Return type array,
+     *   Return values, [New_guid], [(bool) If we did increment or not]
+     *   $database defined in World database and table world_entrys in REALM database
+     */
+    public function mangos_newguid($database, $realmId = 1){
+        $realmPdo = spp_get_pdo('realmd', $realmId);
+        $charPdo  = spp_get_pdo('chars',  $realmId);
+
+        // We check here for processtimes and checks with mangos.
+        $highest_mangostime = (int)$realmPdo->query("SELECT `starttime` FROM `uptime` ORDER BY starttime DESC LIMIT 0,1")->fetchColumn();
+
+        // Some realm schemas do not carry the legacy world_entrys table.
+        $hasWorldEntrys = false;
+        try {
+            $stmtWe = $realmPdo->prepare("SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'world_entrys' LIMIT 1");
+            $stmtWe->execute();
+            $hasWorldEntrys = (bool)$stmtWe->fetchColumn();
+        } catch (Throwable $e) {
+            $hasWorldEntrys = false;
+        }
+
+        // We store timestamps and incre info in database when the tracking table exists.
+        $last_increment = 0;
+        if ($hasWorldEntrys) {
+            $stmtLi = $realmPdo->prepare("SELECT last_inc FROM `world_entrys` WHERE db_name=?");
+            $stmtLi->execute([$database]);
+            $last_increment = (int)$stmtLi->fetchColumn();
+        }
+
+        // We find the max guid of the wanted table.
+        // Maybe some tables have other name of "guid" example: "id". Also define the Id we want to increase with.
+        switch($database){
+            case 'character':
+                $last_id_cell_maxguid = (int)$charPdo->query("SELECT MAX(guid) FROM `characters`")->fetchColumn();
+                $offset_incre_guid = 0;
+            break;
+            case 'item_instance':
+                $last_id_cell_maxguid = (int)$charPdo->query("SELECT MAX(guid) FROM `item_instance`")->fetchColumn();
+                $offset_incre_guid = 20000;
+            break;
+            case 'mail':
+                $last_id_cell_maxguid = (int)$charPdo->query("SELECT MAX(id) FROM `mail`")->fetchColumn();
+                $offset_incre_guid = 5000;
+            break;
+        }
+        // Die if we didnt find the databases properties.
+        if ($last_id_cell_maxguid == '' && $offset_incre_guid == ''){
+            die("Database you tried to Increase ID is not in switch in common.php also proberly not in database relamd.world_entrys");
+        }
+
+        // Now we need to find out Whenever we want to create new High ids or not.
+        // If mangos START stamp is higher then lastest transfer we must increase ID with offset. Else we can just go on.
+        if ($hasWorldEntrys && ($last_increment < $highest_mangostime || $last_increment == '')){
+            $stmtUpWe = $realmPdo->prepare("UPDATE `world_entrys` SET last_inc=?,last_id=? WHERE db_name=?");
+            $stmtUpWe->execute([time(), $last_id_cell_maxguid, $database]);
+            $last_id_cell = $last_id_cell_maxguid + $offset_incre_guid+1;
+            $WE_DID_OFFSET_ID = TRUE;
+        }else{
+            $last_id_cell = $last_id_cell_maxguid+1;
+            $WE_DID_OFFSET_ID = FALSE;
+        }
+        $array = array(
+            'new_guid' => $last_id_cell,
+            'incr' => $WE_DID_OFFSET_ID,
+        );
+        return $array;
+
+    }
+
+}
+
+?>
