@@ -31,13 +31,6 @@ SOAP.Enabled = 1
 
 After the patches are applied, the website should be available for guest access.
 
-For a dry run first, use:
-
-```powershell
-powershell -File tools/install_db_patches.ps1 -Patch classicrealmd -PlanOnly
-powershell -File tools/install_db_patches.ps1 -Patch armory -PlanOnly
-```
-
 ## Installation On Proxmox
 
 For the Proxmox shell-port workflow:
