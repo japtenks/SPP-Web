@@ -83,102 +83,95 @@ Useful scripts in `tools/` include:
 - `scan_bot_events.php` to scan and inspect bot event inputs
 
 ## Showcase
-
-Showcase screenshots are published as external release assets so they stay out of source clones and GitHub source ZIP downloads.
-
-1. Keep your source screenshots in the local `showcase/` folder.
-2. Run `powershell -File .local/showcase/prepare_showcase.ps1 -UpdateReadme` to rename and resize them into `showcase/processed/`.
-3. Run `powershell -File .local/showcase/publish_showcase_release.ps1` to upload the processed assets and manifest to the `showcase-assets` release.
-
 <!-- SHOWCASE_GALLERY_START -->
 <p align="center">
 
-<img width="31%" alt="SPP Web showcase 01" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-01.png">
+<img width="31%" alt="SPP Web showcase 01" src="./showcase/processed/showcase-01.png">
 
-<img width="31%" alt="SPP Web showcase 02" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-02.png">
+<img width="31%" alt="SPP Web showcase 02" src="./showcase/processed/showcase-02.png">
 
-<img width="31%" alt="SPP Web showcase 03" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-03.png">
+<img width="31%" alt="SPP Web showcase 03" src="./showcase/processed/showcase-03.png">
 
-<img width="31%" alt="SPP Web showcase 04" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-04.png">
+<img width="31%" alt="SPP Web showcase 04" src="./showcase/processed/showcase-04.png">
 
-<img width="31%" alt="SPP Web showcase 05" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-05.png">
+<img width="31%" alt="SPP Web showcase 05" src="./showcase/processed/showcase-05.png">
 
-<img width="31%" alt="SPP Web showcase 06" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-06.png">
+<img width="31%" alt="SPP Web showcase 06" src="./showcase/processed/showcase-06.png">
 
 </p>
 
 <details>
 <summary>Open full screenshot gallery (35 images)</summary>
 
-<p><img width="900" alt="SPP Web showcase 01" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-01.png"></p>
+<p><img width="900" alt="SPP Web showcase 01" src="./showcase/processed/showcase-01.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 02" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-02.png"></p>
+<p><img width="900" alt="SPP Web showcase 02" src="./showcase/processed/showcase-02.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 03" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-03.png"></p>
+<p><img width="900" alt="SPP Web showcase 03" src="./showcase/processed/showcase-03.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 04" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-04.png"></p>
+<p><img width="900" alt="SPP Web showcase 04" src="./showcase/processed/showcase-04.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 05" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-05.png"></p>
+<p><img width="900" alt="SPP Web showcase 05" src="./showcase/processed/showcase-05.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 06" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-06.png"></p>
+<p><img width="900" alt="SPP Web showcase 06" src="./showcase/processed/showcase-06.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 07" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-07.png"></p>
+<p><img width="900" alt="SPP Web showcase 07" src="./showcase/processed/showcase-07.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 08" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-08.png"></p>
+<p><img width="900" alt="SPP Web showcase 08" src="./showcase/processed/showcase-08.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 09" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-09.png"></p>
+<p><img width="900" alt="SPP Web showcase 09" src="./showcase/processed/showcase-09.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 10" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-10.png"></p>
+<p><img width="900" alt="SPP Web showcase 10" src="./showcase/processed/showcase-10.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 11" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-11.png"></p>
+<p><img width="900" alt="SPP Web showcase 11" src="./showcase/processed/showcase-11.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 12" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-12.png"></p>
+<p><img width="900" alt="SPP Web showcase 12" src="./showcase/processed/showcase-12.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 13" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-13.png"></p>
+<p><img width="900" alt="SPP Web showcase 13" src="./showcase/processed/showcase-13.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 14" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-14.png"></p>
+<p><img width="900" alt="SPP Web showcase 14" src="./showcase/processed/showcase-14.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 15" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-15.png"></p>
+<p><img width="900" alt="SPP Web showcase 15" src="./showcase/processed/showcase-15.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 16" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-16.png"></p>
+<p><img width="900" alt="SPP Web showcase 16" src="./showcase/processed/showcase-16.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 17" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-17.png"></p>
+<p><img width="900" alt="SPP Web showcase 17" src="./showcase/processed/showcase-17.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 18" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-18.png"></p>
+<p><img width="900" alt="SPP Web showcase 18" src="./showcase/processed/showcase-18.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 19" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-19.png"></p>
+<p><img width="900" alt="SPP Web showcase 19" src="./showcase/processed/showcase-19.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 20" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-20.png"></p>
+<p><img width="900" alt="SPP Web showcase 20" src="./showcase/processed/showcase-20.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 21" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-21.png"></p>
+<p><img width="900" alt="SPP Web showcase 21" src="./showcase/processed/showcase-21.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 22" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-22.png"></p>
+<p><img width="900" alt="SPP Web showcase 22" src="./showcase/processed/showcase-22.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 23" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-23.png"></p>
+<p><img width="900" alt="SPP Web showcase 23" src="./showcase/processed/showcase-23.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 24" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-24.png"></p>
+<p><img width="900" alt="SPP Web showcase 24" src="./showcase/processed/showcase-24.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 25" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-25.png"></p>
+<p><img width="900" alt="SPP Web showcase 25" src="./showcase/processed/showcase-25.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 26" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-26.png"></p>
+<p><img width="900" alt="SPP Web showcase 26" src="./showcase/processed/showcase-26.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 27" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-27.png"></p>
+<p><img width="900" alt="SPP Web showcase 27" src="./showcase/processed/showcase-27.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 28" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-28.png"></p>
+<p><img width="900" alt="SPP Web showcase 28" src="./showcase/processed/showcase-28.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 29" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-29.png"></p>
+<p><img width="900" alt="SPP Web showcase 29" src="./showcase/processed/showcase-29.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 30" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-30.png"></p>
+<p><img width="900" alt="SPP Web showcase 30" src="./showcase/processed/showcase-30.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 31" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-31.png"></p>
+<p><img width="900" alt="SPP Web showcase 31" src="./showcase/processed/showcase-31.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 32" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-32.png"></p>
+<p><img width="900" alt="SPP Web showcase 32" src="./showcase/processed/showcase-32.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 33" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-33.png"></p>
+<p><img width="900" alt="SPP Web showcase 33" src="./showcase/processed/showcase-33.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 34" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-34.png"></p>
+<p><img width="900" alt="SPP Web showcase 34" src="./showcase/processed/showcase-34.png"></p>
 
-<p><img width="900" alt="SPP Web showcase 35" src="https://github.com/japtenks/SPP-Web/releases/download/showcase-assets/showcase-35.png"></p>
+<p><img width="900" alt="SPP Web showcase 35" src="./showcase/processed/showcase-35.png"></p>
 
 </details>
 <!-- SHOWCASE_GALLERY_END -->
