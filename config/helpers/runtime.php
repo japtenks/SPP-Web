@@ -412,8 +412,191 @@ if (!function_exists('spp_realm_runtime_selection_modes')) {
     {
         return array(
             'manual' => 'Manual',
-            'session_probe' => 'Session Probe',
         );
+    }
+}
+
+if (!function_exists('spp_realm_runtime_definition_fields')) {
+    function spp_realm_runtime_definition_fields(): array
+    {
+        return array(
+            'id',
+            'name',
+            'address',
+            'port',
+            'realmd',
+            'world',
+            'chars',
+            'armory',
+            'bots',
+            'icon',
+            'realmflags',
+            'timezone',
+            'allowedSecurityLevel',
+            'population',
+            'realmbuilds',
+        );
+    }
+}
+
+if (!function_exists('spp_realm_runtime_definition_from_realm_map')) {
+    function spp_realm_runtime_definition_from_realm_map(int $realmId, array $realmInfo): array
+    {
+        return array(
+            'id' => $realmId,
+            'name' => trim((string)($realmInfo['name'] ?? '')),
+            'address' => trim((string)($realmInfo['address'] ?? '')),
+            'port' => (int)($realmInfo['port'] ?? 0),
+            'realmd' => trim((string)($realmInfo['realmd'] ?? '')),
+            'world' => trim((string)($realmInfo['world'] ?? '')),
+            'chars' => trim((string)($realmInfo['chars'] ?? '')),
+            'armory' => trim((string)($realmInfo['armory'] ?? '')),
+            'bots' => trim((string)($realmInfo['bots'] ?? '')),
+            'icon' => (int)($realmInfo['icon'] ?? 0),
+            'realmflags' => (int)($realmInfo['realmflags'] ?? 0),
+            'timezone' => (int)($realmInfo['timezone'] ?? 0),
+            'allowedSecurityLevel' => (int)($realmInfo['allowedSecurityLevel'] ?? 0),
+            'population' => trim((string)($realmInfo['population'] ?? '0')),
+            'realmbuilds' => trim((string)($realmInfo['realmbuilds'] ?? '')),
+        );
+    }
+}
+
+if (!function_exists('spp_realm_runtime_fallback_definitions')) {
+    function spp_realm_runtime_fallback_definitions(array $realmDbMap): array
+    {
+        $definitions = array();
+
+        foreach ($realmDbMap as $realmId => $realmInfo) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0 || !is_array($realmInfo)) {
+                continue;
+            }
+
+            $definitions[$realmId] = spp_realm_runtime_definition_from_realm_map($realmId, $realmInfo);
+        }
+
+        ksort($definitions, SORT_NUMERIC);
+
+        return $definitions;
+    }
+}
+
+if (!function_exists('spp_realm_runtime_normalize_definitions')) {
+    function spp_realm_runtime_normalize_definitions($definitions, array $fallbackDefinitions = array()): array
+    {
+        if (!is_array($definitions)) {
+            return array();
+        }
+
+        $normalized = array();
+        foreach ($definitions as $definitionKey => $definitionValue) {
+            if (!is_array($definitionValue)) {
+                continue;
+            }
+
+            $realmId = (int)($definitionValue['id'] ?? $definitionKey);
+            if ($realmId <= 0) {
+                continue;
+            }
+
+            $fallback = (array)($fallbackDefinitions[$realmId] ?? array());
+            $definition = spp_realm_runtime_definition_from_realm_map($realmId, array_merge($fallback, $definitionValue));
+            if ($definition['realmd'] === '' || $definition['world'] === '' || $definition['chars'] === '') {
+                continue;
+            }
+
+            $normalized[$realmId] = $definition;
+        }
+
+        ksort($normalized, SORT_NUMERIC);
+
+        return $normalized;
+    }
+}
+
+if (!function_exists('spp_realm_runtime_realm_map_from_definitions')) {
+    function spp_realm_runtime_realm_map_from_definitions(array $definitions): array
+    {
+        $realmDbMap = array();
+
+        foreach ($definitions as $realmId => $definition) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0 || !is_array($definition)) {
+                continue;
+            }
+
+            $realmDbMap[$realmId] = spp_realm_runtime_definition_from_realm_map($realmId, $definition);
+        }
+
+        ksort($realmDbMap, SORT_NUMERIC);
+
+        return $realmDbMap;
+    }
+}
+
+if (!function_exists('spp_realm_runtime_catalog')) {
+    function spp_realm_runtime_catalog(array $fallbackRealmDbMap, bool $refresh = false): array
+    {
+        static $cache = null;
+
+        if ($cache !== null && !$refresh) {
+            return $cache;
+        }
+
+        $fallbackDefinitions = spp_realm_runtime_fallback_definitions($fallbackRealmDbMap);
+        $configOnlyDefinitions = array();
+        $diagnostics = array();
+        $source = 'config';
+        $dbDefinitions = array();
+
+        $rawDefinitions = spp_website_setting('realm_runtime.realm_definitions', null);
+        if ($rawDefinitions !== null) {
+            $rawDefinitions = trim((string)$rawDefinitions);
+            if ($rawDefinitions !== '') {
+                $decodedDefinitions = json_decode($rawDefinitions, true);
+                if (json_last_error() !== JSON_ERROR_NONE || !is_array($decodedDefinitions)) {
+                    $diagnostics[] = 'Stored runtime realm definitions are invalid JSON; using config fallback slots.';
+                    error_log('[realm.runtime] Invalid JSON in realm_runtime.realm_definitions: ' . json_last_error_msg());
+                } else {
+                    $dbDefinitions = spp_realm_runtime_normalize_definitions($decodedDefinitions, $fallbackDefinitions);
+                    if (!empty($dbDefinitions)) {
+                        $source = 'db';
+                    } else {
+                        $diagnostics[] = 'Stored runtime realm definitions did not contain any usable realm slots; using config fallback slots.';
+                        error_log('[realm.runtime] No usable runtime realm definitions found in realm_runtime.realm_definitions.');
+                    }
+                }
+            }
+        }
+
+        $activeDefinitions = !empty($dbDefinitions) ? $dbDefinitions : $fallbackDefinitions;
+        foreach ($fallbackDefinitions as $realmId => $definition) {
+            if (!isset($activeDefinitions[$realmId])) {
+                $configOnlyDefinitions[$realmId] = $definition;
+            }
+        }
+        $runtimeDefinitions = $activeDefinitions;
+        foreach ($configOnlyDefinitions as $realmId => $definition) {
+            $runtimeDefinitions[$realmId] = $definition;
+        }
+        ksort($runtimeDefinitions, SORT_NUMERIC);
+
+        $cache = array(
+            'source' => $source,
+            'realm_definitions' => $activeDefinitions,
+            'realm_db_map' => spp_realm_runtime_realm_map_from_definitions($activeDefinitions),
+            'runtime_realm_definitions' => $runtimeDefinitions,
+            'runtime_realm_db_map' => spp_realm_runtime_realm_map_from_definitions($runtimeDefinitions),
+            'fallback_definitions' => $fallbackDefinitions,
+            'fallback_realm_db_map' => spp_realm_runtime_realm_map_from_definitions($fallbackDefinitions),
+            'config_only_definitions' => $configOnlyDefinitions,
+            'config_only_realm_db_map' => spp_realm_runtime_realm_map_from_definitions($configOnlyDefinitions),
+            'has_db_definitions' => !empty($dbDefinitions),
+            'diagnostics' => $diagnostics,
+        );
+
+        return $cache;
     }
 }
 
@@ -469,6 +652,12 @@ if (!function_exists('spp_realm_runtime_state')) {
             'selection_mode' => 'manual',
             'source' => 'config',
         );
+
+        $catalog = spp_realm_runtime_catalog($GLOBALS['fallbackConfiguredRealmDbMap'] ?? $realmDbMap, $refresh);
+        $state['realm_definitions_source'] = (string)($catalog['source'] ?? 'config');
+        $state['runtime_realm_ids'] = $realmIds;
+        $state['config_only_realm_ids'] = array_values(array_map('intval', array_keys((array)($catalog['config_only_realm_db_map'] ?? array()))));
+        $state['definition_diagnostics'] = array_values((array)($catalog['diagnostics'] ?? array()));
 
         $rows = spp_website_settings_rows($refresh);
         $prefix = 'realm_runtime.';

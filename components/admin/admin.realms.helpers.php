@@ -103,8 +103,80 @@ if (!function_exists('spp_admin_realms_runtime_selection_modes')) {
     {
         return array(
             'manual' => 'Manual',
-            'session_probe' => 'Session Probe',
         );
+    }
+}
+
+if (!function_exists('spp_admin_realms_runtime_catalog')) {
+    function spp_admin_realms_runtime_catalog(array $realmDbMap = array()): array
+    {
+        $fallbackRealmDbMap = $GLOBALS['fallbackConfiguredRealmDbMap'] ?? $realmDbMap;
+        $catalog = $GLOBALS['realmRuntimeCatalog'] ?? null;
+        if (is_array($catalog) && !empty($catalog)) {
+            return $catalog;
+        }
+
+        if (function_exists('spp_realm_runtime_catalog')) {
+            return spp_realm_runtime_catalog(is_array($fallbackRealmDbMap) ? $fallbackRealmDbMap : array());
+        }
+
+        return array(
+            'source' => 'config',
+            'realm_db_map' => $realmDbMap,
+            'runtime_realm_db_map' => $realmDbMap,
+            'fallback_realm_db_map' => $fallbackRealmDbMap,
+            'config_only_realm_db_map' => array(),
+            'realm_definitions' => array(),
+            'fallback_definitions' => array(),
+            'config_only_definitions' => array(),
+            'diagnostics' => array(),
+        );
+    }
+}
+
+if (!function_exists('spp_admin_realms_definition_from_row')) {
+    function spp_admin_realms_definition_from_row(int $realmId, array $definition = array(), array $realmlistRow = array()): array
+    {
+        return array(
+            'id' => $realmId,
+            'name' => trim((string)($definition['name'] ?? $realmlistRow['name'] ?? '')),
+            'address' => trim((string)($definition['address'] ?? $realmlistRow['address'] ?? '')),
+            'port' => (int)($definition['port'] ?? $realmlistRow['port'] ?? 0),
+            'realmd' => trim((string)($definition['realmd'] ?? '')),
+            'world' => trim((string)($definition['world'] ?? '')),
+            'chars' => trim((string)($definition['chars'] ?? '')),
+            'armory' => trim((string)($definition['armory'] ?? '')),
+            'bots' => trim((string)($definition['bots'] ?? '')),
+            'icon' => (int)($definition['icon'] ?? $realmlistRow['icon'] ?? 0),
+            'realmflags' => (int)($definition['realmflags'] ?? $realmlistRow['realmflags'] ?? 0),
+            'timezone' => (int)($definition['timezone'] ?? $realmlistRow['timezone'] ?? 0),
+            'allowedSecurityLevel' => (int)($definition['allowedSecurityLevel'] ?? $realmlistRow['allowedSecurityLevel'] ?? 0),
+            'population' => trim((string)($definition['population'] ?? $realmlistRow['population'] ?? '0')),
+            'realmbuilds' => trim((string)($definition['realmbuilds'] ?? $realmlistRow['realmbuilds'] ?? '')),
+        );
+    }
+}
+
+if (!function_exists('spp_admin_realms_runtime_realmlist_rows')) {
+    function spp_admin_realms_runtime_realmlist_rows(PDO $realmsPdo): array
+    {
+        $rows = array();
+
+        try {
+            $stmt = $realmsPdo->query("SELECT * FROM `realmlist` ORDER BY `id` ASC");
+            foreach (($stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: array()) : array()) as $row) {
+                $realmId = (int)($row['id'] ?? 0);
+                if ($realmId > 0) {
+                    $rows[$realmId] = $row;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('[admin.realms] Failed loading realmlist rows: ' . $e->getMessage());
+        }
+
+        ksort($rows, SORT_NUMERIC);
+
+        return $rows;
     }
 }
 
@@ -122,76 +194,67 @@ if (!function_exists('spp_admin_realms_runtime_realm_options')) {
     function spp_admin_realms_runtime_realm_options(PDO $realmsPdo, array $realmDbMap): array
     {
         $options = array();
-        $allowedRealmIds = array_fill_keys(array_map('intval', array_keys($realmDbMap)), true);
-        $realmlistRows = array();
+        $catalog = spp_admin_realms_runtime_catalog($realmDbMap);
+        $effectiveDefinitions = (array)($catalog['realm_definitions'] ?? array());
+        $configOnlyDefinitions = (array)($catalog['config_only_definitions'] ?? array());
+        $realmlistRows = spp_admin_realms_runtime_realmlist_rows($realmsPdo);
 
-        try {
-            $stmt = $realmsPdo->query("SELECT `id`, `name`, `address`, `port` FROM `realmlist` ORDER BY `id` ASC");
-            $realmlistRows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: array()) : array();
-            foreach ($realmlistRows as $row) {
-                $realmId = (int)($row['id'] ?? 0);
-                if ($realmId <= 0 || !isset($allowedRealmIds[$realmId])) {
-                    continue;
-                }
-
-                $realmName = trim((string)($row['name'] ?? ''));
-                if ($realmName === '') {
-                    $realmName = 'Realm ' . $realmId;
-                }
-
-                $address = trim((string)($row['address'] ?? ''));
-                $port = (int)($row['port'] ?? 0);
-                $summary = $realmName;
-                if ($address !== '') {
-                    $summary .= ' (' . $address;
-                    if ($port > 0) {
-                        $summary .= ':' . $port;
-                    }
-                    $summary .= ')';
-                }
-
-                $options[$realmId] = array(
-                    'id' => $realmId,
-                    'name' => $realmName,
-                    'address' => $address,
-                    'port' => $port,
-                    'label' => $summary,
-                    'is_config_only' => false,
-                );
+        foreach ($effectiveDefinitions as $realmId => $definition) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0) {
+                continue;
             }
-        } catch (Throwable $e) {
-            error_log('[admin.realms] Failed loading runtime realm options: ' . $e->getMessage());
+
+            $realmlistRow = (array)($realmlistRows[$realmId] ?? array());
+            if (function_exists('spp_admin_realms_runtime_realmlist_row')) {
+                $realmlistRow = (array)spp_admin_realms_runtime_realmlist_row((string)($definition['realmd'] ?? ''), $realmId);
+            }
+            $item = spp_admin_realms_definition_from_row($realmId, (array)$definition, $realmlistRow);
+            $realmName = $item['name'] !== '' ? $item['name'] : ('Realm ' . $realmId);
+            $summary = $realmName;
+            if ($item['address'] !== '') {
+                $summary .= ' (' . $item['address'];
+                if ((int)$item['port'] > 0) {
+                    $summary .= ':' . (int)$item['port'];
+                }
+                $summary .= ')';
+            }
+
+            $item['label'] = $summary;
+            $item['is_config_only'] = false;
+            $item['is_runtime_definition'] = true;
+            $item['has_realmlist_row'] = !empty($realmlistRow);
+            $options[$realmId] = $item;
         }
 
-        foreach ($realmDbMap as $realmId => $realmConfig) {
+        foreach ($configOnlyDefinitions as $realmId => $definition) {
             $realmId = (int)$realmId;
             if ($realmId <= 0 || isset($options[$realmId])) {
                 continue;
             }
 
-            $charsDb = trim((string)($realmConfig['chars'] ?? ''));
-            $realmdDb = trim((string)($realmConfig['realmd'] ?? ''));
-            $realmName = 'Configured Slot ' . $realmId;
-            $summary = $realmName;
-            $detailBits = array();
-            if ($realmdDb !== '') {
-                $detailBits[] = 'realmd=' . $realmdDb;
+            $realmlistRow = (array)($realmlistRows[$realmId] ?? array());
+            if (function_exists('spp_admin_realms_runtime_realmlist_row')) {
+                $realmlistRow = (array)spp_admin_realms_runtime_realmlist_row((string)($definition['realmd'] ?? ''), $realmId);
             }
-            if ($charsDb !== '') {
-                $detailBits[] = 'chars=' . $charsDb;
+            $item = spp_admin_realms_definition_from_row($realmId, (array)$definition, $realmlistRow);
+            $summary = 'Config-Only Slot ' . $realmId;
+            $detailBits = array();
+            if ($item['realmd'] !== '') {
+                $detailBits[] = 'realmd=' . $item['realmd'];
+            }
+            if ($item['chars'] !== '') {
+                $detailBits[] = 'chars=' . $item['chars'];
             }
             if (!empty($detailBits)) {
                 $summary .= ' (' . implode(', ', $detailBits) . ')';
             }
 
-            $options[$realmId] = array(
-                'id' => $realmId,
-                'name' => $realmName,
-                'address' => '',
-                'port' => 0,
-                'label' => $summary,
-                'is_config_only' => true,
-            );
+            $item['label'] = $summary;
+            $item['is_config_only'] = true;
+            $item['is_runtime_definition'] = false;
+            $item['has_realmlist_row'] = !empty($realmlistRow);
+            $options[$realmId] = $item;
         }
 
         ksort($options, SORT_NUMERIC);
@@ -203,10 +266,11 @@ if (!function_exists('spp_admin_realms_runtime_realm_options')) {
 if (!function_exists('spp_admin_realms_runtime_state')) {
     function spp_admin_realms_runtime_state(PDO $realmsPdo, array $realmDbMap): array
     {
+        $configuredRealmDbMap = (array)($GLOBALS['allConfiguredRealmDbMap'] ?? $realmDbMap);
         $options = spp_admin_realms_runtime_realm_options($realmsPdo, $realmDbMap);
         $validRealmIds = array_map('intval', array_keys($options));
         $runtimeState = function_exists('spp_realm_runtime_state')
-            ? spp_realm_runtime_state($realmDbMap)
+            ? spp_realm_runtime_state($configuredRealmDbMap)
             : array(
                 'multirealm' => 0,
                 'default_realm_id' => !empty($validRealmIds) ? (int)$validRealmIds[0] : 0,
@@ -234,6 +298,7 @@ if (!function_exists('spp_admin_realms_runtime_state')) {
             'runtime_settings' => $runtimeState,
             'runtime_realm_options' => $options,
             'runtime_selection_modes' => spp_admin_realms_runtime_selection_modes(),
+            'runtime_catalog' => spp_admin_realms_runtime_catalog($configuredRealmDbMap),
         );
     }
 }

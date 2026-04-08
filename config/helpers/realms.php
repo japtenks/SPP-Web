@@ -188,7 +188,7 @@ if (!function_exists('spp_realm_runtime_selection_mode')) {
             $mode = 'manual';
         }
 
-        if (!in_array($mode, array('manual', 'session_probe'), true)) {
+        if ($mode !== 'manual') {
             $mode = 'manual';
         }
 
@@ -404,58 +404,26 @@ if (!function_exists('spp_realm_runtime_resolve_active_realm_id')) {
         $activeRealmSource = 'default';
         $activeRealmAt = 0;
 
-        if ($selectionMode === 'session_probe') {
-            $sessionCache = spp_realm_runtime_session_cache();
-            $cachedRealmId = (int)($sessionCache['resolved_active_realm_id'] ?? 0);
-            if ($cachedRealmId > 0 && isset($enabledRealmMap[$cachedRealmId])) {
-                $activeRealmId = $cachedRealmId;
-                $activeRealmSource = (string)($sessionCache['resolved_active_realm_source'] ?? 'session_probe_cached');
-                $activeRealmAt = (int)($sessionCache['resolved_active_realm_at'] ?? 0);
-            } else {
-                $reachableRealmIds = spp_realm_runtime_probe_enabled_realm_ids($enabledRealmMap, $config);
-                if (!empty($reachableRealmIds)) {
-                    if (count($reachableRealmIds) > 1 && isset($enabledRealmMap[$defaultRealmId]) && in_array($defaultRealmId, $reachableRealmIds, true)) {
-                        $activeRealmId = $defaultRealmId;
-                        $activeRealmSource = 'session_probe_default_reachable';
-                    } else {
-                        $activeRealmId = (int)$reachableRealmIds[0];
-                        $activeRealmSource = count($reachableRealmIds) > 1
-                            ? 'session_probe_first_reachable'
-                            : 'session_probe';
-                    }
-                    $activeRealmAt = time();
-                    spp_realm_runtime_store_session_cache($activeRealmId, $activeRealmSource);
-                } else {
-                    $activeRealmId = isset($enabledRealmMap[$defaultRealmId])
-                        ? $defaultRealmId
-                        : (int)array_key_first($enabledRealmMap);
-                    $activeRealmSource = 'session_probe_default';
-                    $activeRealmAt = time();
-                    spp_realm_runtime_store_session_cache($activeRealmId, $activeRealmSource);
-                }
-            }
-        } else {
-            $requestRealmId = 0;
-            if (isset($_REQUEST['changerealm_to']) && ctype_digit((string)$_REQUEST['changerealm_to'])) {
-                $requestRealmId = (int)$_REQUEST['changerealm_to'];
-            } elseif (isset($_GET['realm']) && ctype_digit((string)$_GET['realm'])) {
-                $requestRealmId = (int)$_GET['realm'];
-            } elseif (isset($_COOKIE['cur_selected_realmd']) && ctype_digit((string)$_COOKIE['cur_selected_realmd'])) {
-                $requestRealmId = (int)$_COOKIE['cur_selected_realmd'];
-            } elseif (isset($_COOKIE['cur_selected_realm']) && ctype_digit((string)$_COOKIE['cur_selected_realm'])) {
-                $requestRealmId = (int)$_COOKIE['cur_selected_realm'];
-            } elseif (!empty($GLOBALS['user']['cur_selected_realmd'])) {
-                $requestRealmId = (int)$GLOBALS['user']['cur_selected_realmd'];
-            }
+        $requestRealmId = 0;
+        if (isset($_REQUEST['changerealm_to']) && ctype_digit((string)$_REQUEST['changerealm_to'])) {
+            $requestRealmId = (int)$_REQUEST['changerealm_to'];
+        } elseif (isset($_GET['realm']) && ctype_digit((string)$_GET['realm'])) {
+            $requestRealmId = (int)$_GET['realm'];
+        } elseif (isset($_COOKIE['cur_selected_realmd']) && ctype_digit((string)$_COOKIE['cur_selected_realmd'])) {
+            $requestRealmId = (int)$_COOKIE['cur_selected_realmd'];
+        } elseif (isset($_COOKIE['cur_selected_realm']) && ctype_digit((string)$_COOKIE['cur_selected_realm'])) {
+            $requestRealmId = (int)$_COOKIE['cur_selected_realm'];
+        } elseif (!empty($GLOBALS['user']['cur_selected_realmd'])) {
+            $requestRealmId = (int)$GLOBALS['user']['cur_selected_realmd'];
+        }
 
-            if ($requestRealmId > 0 && isset($enabledRealmMap[$requestRealmId])) {
-                $activeRealmId = $requestRealmId;
-                $activeRealmSource = 'manual';
-            } elseif (isset($enabledRealmMap[$defaultRealmId])) {
-                $activeRealmId = $defaultRealmId;
-            } else {
-                $activeRealmId = (int)array_key_first($enabledRealmMap);
-            }
+        if ($requestRealmId > 0 && isset($enabledRealmMap[$requestRealmId])) {
+            $activeRealmId = $requestRealmId;
+            $activeRealmSource = 'manual';
+        } elseif (isset($enabledRealmMap[$defaultRealmId])) {
+            $activeRealmId = $defaultRealmId;
+        } else {
+            $activeRealmId = (int)array_key_first($enabledRealmMap);
         }
 
         if ($activeRealmId <= 0 || !isset($enabledRealmMap[$activeRealmId])) {
@@ -492,7 +460,22 @@ if (!function_exists('spp_realm_runtime_sync_selected_realm_cookie')) {
 if (!function_exists('spp_realm_runtime_apply_bootstrap')) {
     function spp_realm_runtime_apply_bootstrap(array $configuredRealmDbMap, ?string $component = null, ?string $subpage = null, $config = null): array
     {
-        $runtime = spp_realm_runtime_resolve_active_realm_id($configuredRealmDbMap, $config);
+        $runtimeCatalog = function_exists('spp_realm_runtime_catalog')
+            ? spp_realm_runtime_catalog($configuredRealmDbMap)
+            : array(
+                'realm_db_map' => $configuredRealmDbMap,
+                'runtime_realm_db_map' => $configuredRealmDbMap,
+                'fallback_realm_db_map' => $configuredRealmDbMap,
+                'config_only_realm_db_map' => array(),
+                'source' => 'config',
+                'diagnostics' => array(),
+            );
+        $runtimeRealmDbMap = (array)($runtimeCatalog['runtime_realm_db_map'] ?? $runtimeCatalog['realm_db_map'] ?? $configuredRealmDbMap);
+        if (empty($runtimeRealmDbMap)) {
+            $runtimeRealmDbMap = $configuredRealmDbMap;
+        }
+
+        $runtime = spp_realm_runtime_resolve_active_realm_id($runtimeRealmDbMap, $config);
         $enabledRealmMap = (array)($runtime['enabled_realm_map'] ?? array());
         $activeRealmId = (int)($runtime['active_realm_id'] ?? 0);
         $component = strtolower(trim((string)$component));
@@ -510,12 +493,16 @@ if (!function_exists('spp_realm_runtime_apply_bootstrap')) {
         }
 
         $db = $GLOBALS['db'] ?? array();
-        $activeRealm = ($activeRealmId > 0 && isset($configuredRealmDbMap[$activeRealmId]))
-            ? $configuredRealmDbMap[$activeRealmId]
+        $activeRealm = ($activeRealmId > 0 && isset($runtimeRealmDbMap[$activeRealmId]))
+            ? $runtimeRealmDbMap[$activeRealmId]
             : array();
 
         $GLOBALS['spp_realm_runtime'] = $runtime;
-        $GLOBALS['allConfiguredRealmDbMap'] = $configuredRealmDbMap;
+        $GLOBALS['realmRuntimeCatalog'] = $runtimeCatalog;
+        $GLOBALS['fallbackConfiguredRealmDbMap'] = (array)($runtimeCatalog['fallback_realm_db_map'] ?? $configuredRealmDbMap);
+        $GLOBALS['configOnlyRealmDbMap'] = (array)($runtimeCatalog['config_only_realm_db_map'] ?? array());
+        $GLOBALS['allConfiguredRealmDbMap'] = $runtimeRealmDbMap;
+        $GLOBALS['dbBackedRealmDbMap'] = (array)($runtimeCatalog['realm_db_map'] ?? array());
         $GLOBALS['allEnabledRealmDbMap'] = $enabledRealmMap;
         $GLOBALS['allRealmDbMap'] = $enabledRealmMap;
         $GLOBALS['realmDbMap'] = $requestRealmMap;
@@ -553,6 +540,8 @@ if (!function_exists('spp_realm_runtime_apply_bootstrap')) {
             $bootstrapState['enabled_realm_ids'] = array_values(array_map('intval', array_keys($enabledRealmMap)));
             $bootstrapState['active_realm_id'] = $activeRealmId;
             $bootstrapState['active_realm_source'] = (string)($runtime['active_realm_source'] ?? 'default');
+            $bootstrapState['realm_definitions_source'] = (string)($runtimeCatalog['source'] ?? 'config');
+            $bootstrapState['realm_definition_diagnostics'] = array_values((array)($runtimeCatalog['diagnostics'] ?? array()));
             $GLOBALS['spp_bootstrap_state'] = $bootstrapState;
         }
 

@@ -10,21 +10,26 @@ if (!function_exists('spp_admin_realms_load_page_state')) {
     function spp_admin_realms_load_page_state(array $args = array()): array
     {
         $realmDbMap = (array)($args['realm_db_map'] ?? ($GLOBALS['realmDbMap'] ?? array()));
-        $realmsPdo = spp_get_pdo('realmd', spp_resolve_realm_id($realmDbMap));
+        $configuredRealmDbMap = (array)($GLOBALS['allConfiguredRealmDbMap'] ?? $realmDbMap);
+        $realmsPdo = spp_website_settings_pdo();
 
-        $actionState = spp_admin_realms_handle_action($realmsPdo, $realmDbMap);
-        $runtimeView = spp_admin_realms_runtime_state($realmsPdo, $realmDbMap);
+        $actionState = spp_admin_realms_handle_action($realmsPdo, $configuredRealmDbMap);
+        $runtimeView = spp_admin_realms_runtime_state($realmsPdo, $configuredRealmDbMap);
         $runtimeSettings = (array)($runtimeView['runtime_settings'] ?? array());
-        $scanRealmMap = $realmDbMap;
+        $runtimeRealmOptions = (array)($runtimeView['runtime_realm_options'] ?? array());
+        $scanRealmMap = $runtimeRealmOptions;
         $enabledRealmIds = array_values(array_map('intval', (array)($runtimeSettings['enabled_realm_ids'] ?? array())));
         if (!empty($enabledRealmIds)) {
             $enabledLookup = array_fill_keys($enabledRealmIds, true);
-            $scanRealmMap = array_intersect_key($realmDbMap, $enabledLookup);
+            $scanRealmMap = array_intersect_key($runtimeRealmOptions, $enabledLookup);
             if (empty($scanRealmMap)) {
-                $scanRealmMap = $realmDbMap;
+                $scanRealmMap = $runtimeRealmOptions;
             }
         }
+        $previousRealmDbMap = $GLOBALS['realmDbMap'] ?? array();
+        $GLOBALS['realmDbMap'] = $scanRealmMap;
         $view = spp_admin_realms_build_view($realmsPdo, $scanRealmMap);
+        $GLOBALS['realmDbMap'] = $previousRealmDbMap;
         $runtimeForm = !empty($actionState['runtime_form'])
             ? $actionState['runtime_form']
             : array(
@@ -41,10 +46,14 @@ if (!function_exists('spp_admin_realms_load_page_state')) {
             'realm_operations_href' => 'index.php?n=admin&sub=operations',
             'admin_realms_csrf_token' => spp_csrf_token('admin_realms'),
             'runtime_settings' => $runtimeSettings,
-            'runtime_realm_options' => (array)($runtimeView['runtime_realm_options'] ?? array()),
+            'runtime_realm_options' => $runtimeRealmOptions,
             'runtime_selection_modes' => (array)($runtimeView['runtime_selection_modes'] ?? array()),
             'runtime_form' => $runtimeForm,
             'runtime_errors' => (array)($actionState['runtime_errors'] ?? array()),
+            'runtime_catalog' => (array)($runtimeView['runtime_catalog'] ?? array()),
+            'runtime_warnings' => (array)($runtimeView['runtime_warnings'] ?? array()),
+            'slot_form' => (array)($actionState['slot_form'] ?? array()),
+            'slot_errors' => (array)($actionState['slot_errors'] ?? array()),
         ));
     }
 }

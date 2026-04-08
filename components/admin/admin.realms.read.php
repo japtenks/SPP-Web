@@ -137,9 +137,9 @@ if (!function_exists('spp_admin_realms_schema_slot_meta')) {
 
             $meta[$realmId] = array(
                 'id' => $realmId,
-                'name' => '',
-                'address' => '',
-                'port' => 0,
+                'name' => trim((string)($realmInfo['name'] ?? '')),
+                'address' => trim((string)($realmInfo['address'] ?? '')),
+                'port' => (int)($realmInfo['port'] ?? 0),
                 'realmd_db' => (string)($realmInfo['realmd'] ?? ''),
                 'chars_db' => (string)($realmInfo['chars'] ?? ''),
             );
@@ -240,10 +240,12 @@ if (!function_exists('spp_admin_realms_schema_realmd_topology')) {
             'mode' => 'unknown',
             'summary' => '',
             'columns' => array(),
+            'warning' => '',
         );
 
         if (!spp_db_table_exists($pdo, 'realmd_db_version')) {
             $result['summary'] = 'No `realmd_db_version` table found.';
+            $result['warning'] = 'Launcher/bootstrap marker table `realmd_db_version` is missing for this realmd database.';
             return $result;
         }
 
@@ -267,9 +269,11 @@ if (!function_exists('spp_admin_realms_schema_realmd_topology')) {
                 $result['summary'] = 'Dedicated per-expansion realmd signature via `realmd_db_version`: ' . $columns[0];
             } else {
                 $result['summary'] = 'No expansion marker columns found on `realmd_db_version`.';
+                $result['warning'] = 'No launcher/bootstrap expansion markers were found in `realmd_db_version` for this realmd database.';
             }
         } catch (Throwable $e) {
             $result['summary'] = 'Failed reading `realmd_db_version`: ' . $e->getMessage();
+            $result['warning'] = 'The website could not read `realmd_db_version` for read-only diagnostics.';
         }
 
         return $result;
@@ -374,6 +378,7 @@ if (!function_exists('spp_admin_realms_schema_scan_view')) {
         $slotMetaMap = spp_admin_realms_schema_slot_meta($siteRealmdPdo, $realmDbMap);
         $realmdGroups = spp_admin_realms_schema_realmd_groups($realmDbMap, $slotMetaMap);
         $databases = array();
+        $warnings = array();
         $summary = array(
             'database_count' => 0,
             'check_count' => 0,
@@ -408,7 +413,10 @@ if (!function_exists('spp_admin_realms_schema_scan_view')) {
                 $detail .= ' | DB: ' . $realmdDbName;
             }
             if (!empty($topology['summary'])) {
-                $detail .= ' | ' . (string)$topology['summary'];
+                $detail .= ' | Read-only topology: ' . (string)$topology['summary'];
+            }
+            if (!empty($topology['warning'])) {
+                $warnings[] = 'REALMD [' . $realmdDbName . ']: ' . (string)$topology['warning'];
             }
 
             $label = 'REALMD [' . $realmdDbName . ']';
@@ -467,18 +475,23 @@ if (!function_exists('spp_admin_realms_schema_scan_view')) {
         return array(
             'summary' => $summary,
             'databases' => $databases,
+            'warnings' => array_values(array_unique($warnings)),
         );
     }
 }
 
 function spp_admin_realms_build_view(PDO $realmsPdo, array $realmDbMap = array())
 {
+    $configuredRealmDbMap = (array)($GLOBALS['allConfiguredRealmDbMap'] ?? $realmDbMap);
+    $runtimeItems = array_values(spp_admin_realms_runtime_realm_options($realmsPdo, $configuredRealmDbMap));
+    $realmlistItems = spp_admin_realms_runtime_realmlist_rows($realmsPdo);
     $view = array(
         'view_mode' => 'list',
         'pathway_info' => array(
             array('title' => 'Realm Management', 'link' => 'index.php?n=admin&sub=realms'),
         ),
-        'items' => array(),
+        'items' => $runtimeItems,
+        'realmlist_items' => array_values($realmlistItems),
         'item' => null,
         'schema_scan' => spp_admin_realms_schema_scan_view($realmsPdo, $realmDbMap),
     );
@@ -489,13 +502,14 @@ function spp_admin_realms_build_view(PDO $realmsPdo, array $realmDbMap = array()
     if ($action === 'edit' && $realmId > 0) {
         $view['view_mode'] = 'edit';
         $view['pathway_info'][] = array('title' => 'Editing', 'link' => '');
-        $stmt = $realmsPdo->prepare("SELECT * FROM realmlist WHERE `id`=?");
-        $stmt->execute([$realmId]);
-        $view['item'] = $stmt->fetch(PDO::FETCH_ASSOC);
+        foreach ($runtimeItems as $runtimeItem) {
+            if ((int)($runtimeItem['id'] ?? 0) === $realmId) {
+                $view['item'] = $runtimeItem;
+                break;
+            }
+        }
         return $view;
     }
 
-    $stmt = $realmsPdo->query("SELECT * FROM realmlist ORDER BY `name`");
-    $view['items'] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     return $view;
 }
