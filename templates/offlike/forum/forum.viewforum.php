@@ -97,9 +97,11 @@ $forumLockIcon = spp_modern_forum_image_url('lock-icon.gif');
       <div class="forum-row">
         <div><img src="<?php echo htmlspecialchars(((int)($user['id'] ?? 0) <= 0 || !empty($t['isnew'])) ? $forumNewPostsIcon : $forumNoNewPostsIcon, ENT_QUOTES); ?>" alt="Status"></div>
         <div class="col-subject">
-          <a href="<?php echo $t['linktothis']; ?>">
-            <?php echo htmlspecialchars($t['topic_name']); ?>
-          </a>
+          <span class="forum-subject-link">
+            <a href="<?php echo $t['linktothis']; ?>">
+              <?php echo htmlspecialchars($t['topic_name']); ?>
+            </a>
+          </span>
           <?php if ($t['closed']): ?><span class="new-tag">Closed</span><?php endif; ?>
         </div>
         <div><?php echo htmlspecialchars($t['topic_author_display']); ?></div>

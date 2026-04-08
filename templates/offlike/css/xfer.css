@@ -5367,6 +5367,20 @@ img.forum-header {
   text-decoration: none;
   transition: color 0.2s, text-shadow 0.3s;
 }
+.forum-view .col-subject {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.forum-view .forum-subject-link {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.forum-view .forum-subject-link a {
+  display: inline;
+  overflow-wrap: anywhere;
+}
 .forum-view .col-subject a:hover {
   color: #ffd97a;
   text-shadow: 0 0 8px rgba(255, 204, 102, 0.4);
@@ -5377,7 +5391,10 @@ img.forum-header {
   font-size: 0.7rem;
   padding: 1px 5px;
   border-radius: 4px;
-  margin-left: 6px;
+  margin-left: 0;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  align-self: center;
 }
 .forum-view .forum-header-inner {
   display: flex;

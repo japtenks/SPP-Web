@@ -21,7 +21,7 @@ builddiv_start(1, 'Create Account');
 
 <div class="register-shell feature-panel">
 <div class="account-auth-layout">
-  <img src="templates/offlike/images/orc2.jpg" alt="Orc Warrior">
+  <img src="<?php echo htmlspecialchars(spp_modern_image_url('misc/orc2.jpg'), ENT_QUOTES, 'UTF-8'); ?>" alt="Orc Warrior">
   <?php if (!$registerClosed): ?>
   <form method="post" action="index.php?n=account&sub=register" class="register-form">
     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)$registerCsrfToken, ENT_QUOTES, 'UTF-8'); ?>">

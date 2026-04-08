@@ -321,7 +321,7 @@ function spp_forum_build_index_items(PDO $realmPdo, array $user): array
         || ((int)($user['gmlevel'] ?? 0) >= 3)
         || ((int)($user['g_is_admin'] ?? 0) === 1)
         || ((int)($user['g_is_supadmin'] ?? 0) === 1);
-    $showHiddenForums = $canModerateHiddenForums && !empty($user['show_hidden_forums']);
+    $showHiddenForums = $canModerateHiddenForums;
 
     if (!$showHiddenForums) {
         $queryparts .= " WHERE hidden!=1 ";
