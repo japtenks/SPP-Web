@@ -123,10 +123,12 @@ if (!function_exists('spp_admin_realms_runtime_realm_options')) {
     {
         $options = array();
         $allowedRealmIds = array_fill_keys(array_map('intval', array_keys($realmDbMap)), true);
+        $realmlistRows = array();
 
         try {
             $stmt = $realmsPdo->query("SELECT `id`, `name`, `address`, `port` FROM `realmlist` ORDER BY `id` ASC");
-            foreach (($stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : array()) as $row) {
+            $realmlistRows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: array()) : array();
+            foreach ($realmlistRows as $row) {
                 $realmId = (int)($row['id'] ?? 0);
                 if ($realmId <= 0 || !isset($allowedRealmIds[$realmId])) {
                     continue;
@@ -154,11 +156,45 @@ if (!function_exists('spp_admin_realms_runtime_realm_options')) {
                     'address' => $address,
                     'port' => $port,
                     'label' => $summary,
+                    'is_config_only' => false,
                 );
             }
         } catch (Throwable $e) {
             error_log('[admin.realms] Failed loading runtime realm options: ' . $e->getMessage());
         }
+
+        foreach ($realmDbMap as $realmId => $realmConfig) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0 || isset($options[$realmId])) {
+                continue;
+            }
+
+            $charsDb = trim((string)($realmConfig['chars'] ?? ''));
+            $realmdDb = trim((string)($realmConfig['realmd'] ?? ''));
+            $realmName = 'Configured Slot ' . $realmId;
+            $summary = $realmName;
+            $detailBits = array();
+            if ($realmdDb !== '') {
+                $detailBits[] = 'realmd=' . $realmdDb;
+            }
+            if ($charsDb !== '') {
+                $detailBits[] = 'chars=' . $charsDb;
+            }
+            if (!empty($detailBits)) {
+                $summary .= ' (' . implode(', ', $detailBits) . ')';
+            }
+
+            $options[$realmId] = array(
+                'id' => $realmId,
+                'name' => $realmName,
+                'address' => '',
+                'port' => 0,
+                'label' => $summary,
+                'is_config_only' => true,
+            );
+        }
+
+        ksort($options, SORT_NUMERIC);
 
         return $options;
     }

@@ -88,16 +88,19 @@
       <div class="realm-admin__advanced">
         <p class="realm-admin__advanced-title">Enabled Realms</p>
         <?php if (!empty($runtime_realm_options)) { ?>
-          <div class="realm-admin__form-grid">
-            <?php foreach ((array)$runtime_realm_options as $realmOption) { ?>
-              <div class="realm-admin__field">
-                <label>
-                  <input type="checkbox" name="enabled_realm_ids[]" value="<?php echo (int)$realmOption['id']; ?>"<?php echo in_array((int)$realmOption['id'], (array)($runtime_form['enabled_realm_ids'] ?? array()), true) ? ' checked' : ''; ?>>
-                  <?php echo htmlspecialchars((string)$realmOption['label']); ?>
-                </label>
-              </div>
-            <?php } ?>
-          </div>
+	          <div class="realm-admin__form-grid">
+	            <?php foreach ((array)$runtime_realm_options as $realmOption) { ?>
+	              <div class="realm-admin__field">
+	                <label>
+	                  <input type="checkbox" name="enabled_realm_ids[]" value="<?php echo (int)$realmOption['id']; ?>"<?php echo in_array((int)$realmOption['id'], (array)($runtime_form['enabled_realm_ids'] ?? array()), true) ? ' checked' : ''; ?>>
+	                  <?php echo htmlspecialchars((string)$realmOption['label']); ?>
+	                </label>
+	                <?php if (!empty($realmOption['is_config_only'])) { ?>
+	                  <div class="realm-admin__muted">Config-only slot. This key exists in the website realm map even though it is not currently present in <code>realmlist</code>.</div>
+	                <?php } ?>
+	              </div>
+	            <?php } ?>
+	          </div>
         <?php } else { ?>
           <p class="realm-admin__muted">No configured realms are currently available in the runtime map.</p>
         <?php } ?>
