@@ -143,6 +143,10 @@ if (!function_exists('spp_forum_load_post_page_state')) {
             $state['canPost'] = false;
             $state['posting_block_reason'] = 'The topic you are trying to reply to was not found.';
             output_message('alert', $state['posting_block_reason']);
+        } elseif (!empty($state['this_forum']) && !spp_forum_can_view_forum($state['this_forum'], $user)) {
+            $state['canPost'] = false;
+            $state['posting_block_reason'] = 'The forum you are trying to post in was not found.';
+            output_message('alert', $state['posting_block_reason']);
         }
 
         $_newsFid = (int)spp_config_forum('news_forum_id', 0);

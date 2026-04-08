@@ -668,6 +668,66 @@ if (!function_exists('spp_item_set_bonus_description')) {
         $t2 = $format(((int)($spell['effect_amplitude_2'] ?? 0)) / 1000);
         $t3 = $format(((int)($spell['effect_amplitude_3'] ?? 0)) / 1000);
 
+        $externalSpellRow = static function (int $sourceRealmId, int $spellId): ?array {
+            static $cache = [];
+
+            $cacheKey = $sourceRealmId . ':' . $spellId;
+            if (array_key_exists($cacheKey, $cache)) {
+                return $cache[$cacheKey];
+            }
+
+            if ($spellId <= 0) {
+                $cache[$cacheKey] = null;
+                return null;
+            }
+
+            try {
+                $armoryPdo = spp_get_pdo('armory', $sourceRealmId);
+                $stmt = $armoryPdo->prepare('SELECT * FROM `dbc_spell` WHERE `id` = ? LIMIT 1');
+                $stmt->execute([$spellId]);
+                $cache[$cacheKey] = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+            } catch (Throwable $e) {
+                $cache[$cacheKey] = null;
+            }
+
+            return $cache[$cacheKey];
+        };
+
+        $externalEffectValues = static function (int $sourceRealmId, int $spellId, int $index) use ($formatEffect, $externalSpellRow): array {
+            $row = $externalSpellRow($sourceRealmId, $spellId);
+            if (!$row) {
+                return [0, 0, '0'];
+            }
+
+            return $formatEffect($row, $index);
+        };
+
+        $externalDotValue = static function (int $sourceRealmId, int $spellId, int $index) use ($dotValue, $externalSpellRow): int {
+            $row = $externalSpellRow($sourceRealmId, $spellId);
+            if (!$row) {
+                return 0;
+            }
+
+            $durationSeconds = spp_item_set_spell_duration_seconds($sourceRealmId, (int)($row['ref_spellduration'] ?? 0));
+            return $dotValue($row, $index, $durationSeconds);
+        };
+
+        $formatDividedEffect = static function (float $min, float $max) use ($format): string {
+            $min = abs($min);
+            $max = abs($max);
+            if ($max < $min) {
+                $swap = $min;
+                $min = $max;
+                $max = $swap;
+            }
+
+            if ($max > $min) {
+                return (string)((int)floor($min)) . ' to ' . (string)((int)ceil($max));
+            }
+
+            return $format($min);
+        };
+
         $description = strtr($description, [
             '$s1' => $s1Text,
             '$s2' => $s2Text,
@@ -689,6 +749,73 @@ if (!function_exists('spp_item_set_bonus_description')) {
             '$h' => (string)$headline,
             '$u' => (string)$stacks,
         ]);
+
+        $description = preg_replace_callback(
+            '/\$\s*\/\s*(-?\d+(?:\.\d+)?)\s*;\s*(?:\$?(\d+))?(s|o)([1-3])/i',
+            static function (array $matches) use (
+                $realmId,
+                $s1Min,
+                $s1Max,
+                $s2Min,
+                $s2Max,
+                $s3Min,
+                $s3Max,
+                $o1,
+                $o2,
+                $o3,
+                $format,
+                $formatDividedEffect,
+                $externalEffectValues,
+                $externalDotValue
+            ): string {
+                $divisor = (float)($matches[1] ?? 0);
+                if ($divisor == 0.0) {
+                    return '0';
+                }
+
+                $spellId = isset($matches[2]) ? (int)$matches[2] : 0;
+                $tokenType = strtolower((string)($matches[3] ?? 's'));
+                $index = (int)($matches[4] ?? 1);
+
+                if ($tokenType === 's') {
+                    if ($spellId > 0) {
+                        [$min, $max] = $externalEffectValues($realmId, $spellId, $index);
+                    } else {
+                        $minMap = [1 => $s1Min, 2 => $s2Min, 3 => $s3Min];
+                        $maxMap = [1 => $s1Max, 2 => $s2Max, 3 => $s3Max];
+                        $min = (float)($minMap[$index] ?? 0);
+                        $max = (float)($maxMap[$index] ?? $min);
+                    }
+
+                    return $formatDividedEffect($min / $divisor, $max / $divisor);
+                }
+
+                if ($spellId > 0) {
+                    $value = $externalDotValue($realmId, $spellId, $index);
+                } else {
+                    $valueMap = [1 => $o1, 2 => $o2, 3 => $o3];
+                    $value = (float)($valueMap[$index] ?? 0);
+                }
+
+                return $format(abs((float)$value / $divisor));
+            },
+            $description
+        );
+
+        $description = preg_replace_callback(
+            '/\$\{\s*\$m([1-3])\s*\/\s*(-?\d+(?:\.\d+)?)\s*\}/i',
+            static function (array $matches) use ($s1Min, $s2Min, $s3Min, $format): string {
+                $divisor = (float)($matches[2] ?? 0);
+                if ($divisor == 0.0) {
+                    return '0';
+                }
+
+                $valueMap = [1 => $s1Min, 2 => $s2Min, 3 => $s3Min];
+                $index = (int)($matches[1] ?? 1);
+                return $format(abs((float)($valueMap[$index] ?? 0) / $divisor));
+            },
+            $description
+        );
 
         while (preg_match('/\\$l([^:;]+):([^;]+);/', $description, $matches, PREG_OFFSET_CAPTURE)) {
             $full = $matches[0][0];

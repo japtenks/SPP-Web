@@ -42,7 +42,7 @@ if (!function_exists('spp_server_honor_prepare_rows')) {
             $row['faction_name'] = $factionName;
         $row['faction_icon'] = spp_modern_faction_logo_url($factionKey);
             $row['rank_name'] = $rankName;
-            $row['rank_icon'] = spp_theme_icons_url('pvpranks/rank' . $rankId . '.gif');
+            $row['rank_icon'] = spp_modern_image_url(sprintf('icons/64x64/pvprank%02d.png', $rankId));
             $row['rank_blurb'] = $rankBlurbById[$rankId] ?? '';
             $row['class_name'] = $className;
             $row['race_name'] = $raceName;

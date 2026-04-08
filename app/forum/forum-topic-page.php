@@ -47,6 +47,11 @@ if (!function_exists('spp_forum_load_topic_page_state')) {
             $state['__stop'] = true;
             return $state;
         }
+        if (!spp_forum_can_view_forum($state['this_forum'], $user)) {
+            output_message('alert', 'This forum or topic does not exist.');
+            $state['__stop'] = true;
+            return $state;
+        }
 
         list($state['this_forum'], $state['this_topic']) = spp_forum_prepare_viewtopic_links(
             $state['this_forum'],

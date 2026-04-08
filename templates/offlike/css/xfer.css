@@ -1153,6 +1153,7 @@ img[src*="*.jpg"] {
   border: 1px solid #222;
   border-radius: 10px;
   box-shadow: 0 0 15px rgba(0,0,0,0.7);
+  background: rgba(6, 8, 14, 0.24);
   padding: 20px 24px 22px;
   font-family: 'Trebuchet MS', sans-serif;
   color: #ccc;
@@ -1163,7 +1164,9 @@ img[src*="*.jpg"] {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgba(13,13,13,0.75);
+  background:
+    linear-gradient(180deg, rgba(8, 10, 16, 0.68), rgba(5, 7, 12, 0.58)),
+    radial-gradient(circle at top center, rgba(255, 204, 102, 0.06), transparent 42%);
   z-index: 0;
 }
 
@@ -2081,10 +2084,13 @@ tr.sub-behavior td:nth-child(3)       { color: #ffaaee; }
 }
 .playermap-frame-wrap {
   margin: 0;
+  display: flex;
+  justify-content: center;
 }
 .playermap-frame {
   display: block;
-  width: 100%;
+  width: min(100%, 966px);
+  max-width: 966px;
   height: 740px;
   border: 0;
   background: #05070d;
@@ -10414,6 +10420,7 @@ textarea.editor {
   border-radius: 18px;
   border: 1px solid rgba(255, 204, 72, 0.14);
   background: rgba(5, 8, 18, 0.82);
+  padding: 18px;
 }
 
 .playermap-frame {

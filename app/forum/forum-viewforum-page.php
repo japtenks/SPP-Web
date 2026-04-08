@@ -24,6 +24,11 @@ if (!function_exists('spp_forum_load_viewforum_page_state')) {
             $state['__stop'] = true;
             return $state;
         }
+        if (!spp_forum_can_view_forum($state['this_forum'], $user)) {
+            output_message('alert', 'This forum does not exist.');
+            $state['__stop'] = true;
+            return $state;
+        }
 
         $state['this_forum']['linktonewtopic'] = spp_forum_url_with_site_href('post', array(
             'action' => 'newtopic',

@@ -6,6 +6,31 @@ if (!function_exists('spp_forum_action_url')) {
     }
 }
 
+if (!function_exists('spp_forum_can_manage_hidden_forums')) {
+    function spp_forum_can_manage_hidden_forums(array $user = array()): bool
+    {
+        return (int)($user['g_forum_moderate'] ?? 0) === 1
+            || (int)($user['gmlevel'] ?? 0) >= 3
+            || (int)($user['g_is_admin'] ?? 0) === 1
+            || (int)($user['g_is_supadmin'] ?? 0) === 1;
+    }
+}
+
+if (!function_exists('spp_forum_can_view_forum')) {
+    function spp_forum_can_view_forum(array $forum = array(), array $user = array()): bool
+    {
+        if ((int)($forum['forum_id'] ?? 0) <= 0) {
+            return false;
+        }
+
+        if ((int)($forum['hidden'] ?? 0) !== 1) {
+            return true;
+        }
+
+        return spp_forum_can_manage_hidden_forums($user);
+    }
+}
+
 if (!function_exists('spp_forum_url')) {
     function spp_forum_url(string $sub = 'index', array $params = array(), bool $encodeEntities = true): string
     {

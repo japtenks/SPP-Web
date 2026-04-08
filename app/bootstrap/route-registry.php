@@ -530,7 +530,7 @@ if (!function_exists('spp_main_navigation_registry')) {
                 0 => array('Forums', 'index.php?n=forum', ''),
                 1 => array('General', spp_forum_general_menu_url(), ''),
                 2 => array('Guild Recruitment', spp_forum_guild_menu_url(), ''),
-                3 => array('Help', 'index.php?n=forum&sub=viewcategory&catid=5', ''),
+                3 => array('Help', spp_forum_help_menu_url(), ''),
             ),
             '7-Armory' => array(
                 0 => array('Characters', 'index.php?n=server&sub=chars', ''),

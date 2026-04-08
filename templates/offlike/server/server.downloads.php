@@ -9,8 +9,6 @@ builddiv_start(1, 'Downloads', 0);
     <div class="feature-actions">
       <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
     </div>
-    <p class="feature-note">Suggested Linux host folders: <span class="feature-code">/var/www/html/downloads/addons</span> and <span class="feature-code">/var/www/html/downloads/tools</span>.</p>
-    <p class="feature-note">Suggested Windows host folders: <span class="feature-code">/website/downloads/addons</span> and <span class="feature-code">/website/downloads/tools</span>.</p>
   </section>
 
   <div class="downloads-grid">
