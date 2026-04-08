@@ -147,13 +147,18 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
             <th>Chars</th>
             <th>Address</th>
             <th>Status</th>
+            <th>Manage</th>
           </tr>
         </thead>
         <tbody>
         <?php foreach ((array)$items as $item) { ?>
           <tr>
             <td><?php echo (int)$item['id']; ?></td>
-            <td><a class="realm-admin__name" href="index.php?n=admin&amp;sub=realms&amp;action=edit&amp;id=<?php echo (int)$item['id']; ?>"><?php echo htmlspecialchars((string)$item['name']); ?></a></td>
+            <td>
+              <a class="realm-admin__name" href="index.php?n=admin&amp;sub=realms&amp;action=edit&amp;id=<?php echo (int)$item['id']; ?>">
+                <?php echo htmlspecialchars(trim((string)($item['name'] ?? '')) !== '' ? (string)$item['name'] : 'Runtime Slot ' . (int)$item['id']); ?>
+              </a>
+            </td>
             <td><?php echo !empty($item['is_config_only']) ? 'Config-only' : 'DB-backed'; ?></td>
             <td><?php echo htmlspecialchars((string)($item['realmd'] ?? '')); ?></td>
             <td><?php echo htmlspecialchars((string)($item['world'] ?? '')); ?></td>
@@ -176,6 +181,7 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
                 echo htmlspecialchars(implode(' | ', $statusBits));
               ?>
             </td>
+            <td><a class="realm-admin__button realm-admin__button--secondary" href="index.php?n=admin&amp;sub=realms&amp;action=edit&amp;id=<?php echo (int)$item['id']; ?>">Manage</a></td>
           </tr>
         <?php } ?>
         </tbody>
@@ -260,7 +266,13 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
                 <td><?php echo htmlspecialchars((string)($scanItem['label'] ?? 'Schema check')); ?></td>
                 <td><?php echo !empty($scanItem['ok']) ? 'OK' : 'Missing'; ?></td>
                 <td><?php echo !empty($scanItem['ok']) ? '<span class="realm-admin__muted">None</span>' : '<code>' . htmlspecialchars(implode(', ', (array)($scanItem['missing'] ?? array()))) . '</code>'; ?></td>
-                <td><?php echo htmlspecialchars((string)($scanItem['notes'] ?? '')); ?></td>
+                <td>
+                  <?php echo htmlspecialchars((string)($scanItem['notes'] ?? '')); ?>
+                  <?php if (empty($scanItem['ok']) && !empty($scanItem['fix_href'])) { ?>
+                    <br>
+                    <a class="realm-admin__name" href="<?php echo htmlspecialchars((string)$scanItem['fix_href']); ?>"><?php echo htmlspecialchars((string)($scanItem['fix_label'] ?? 'Open Tool')); ?></a>
+                  <?php } ?>
+                </td>
               </tr>
             <?php } ?>
           </tbody>

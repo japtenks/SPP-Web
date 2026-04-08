@@ -3,11 +3,21 @@
 if (!function_exists('spp_admin_load_index_page_state')) {
     function spp_admin_load_index_page_state(): array
     {
+        $launcherRuntime = $GLOBALS['launcherRuntime'] ?? array();
+        $launcherVersion = (string)($launcherRuntime['version'] ?? 'unknown');
+        $launcherGitBranch = (string)($launcherRuntime['git_branch'] ?? 'unknown');
+        $launcherGitCommit = (string)($launcherRuntime['git_commit'] ?? 'unknown');
+
         return array(
             'intro' => array(
                 'eyebrow' => 'Control Center',
                 'title' => 'MangosWeb Enhanced Admin',
                 'body' => 'Use these tools to manage members, forums, realms, and launcher-parity operations from one admin surface.',
+            ),
+            'launcher_status' => array(
+                'label' => 'Launcher Runtime',
+                'version' => $launcherVersion,
+                'git' => $launcherGitBranch . '@' . $launcherGitCommit,
             ),
             'sections' => array(
                 array(

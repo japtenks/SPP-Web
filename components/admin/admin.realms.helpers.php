@@ -268,22 +268,22 @@ if (!function_exists('spp_admin_realms_runtime_state')) {
     {
         $configuredRealmDbMap = (array)($GLOBALS['allConfiguredRealmDbMap'] ?? $realmDbMap);
         $options = spp_admin_realms_runtime_realm_options($realmsPdo, $realmDbMap);
-        $validRealmIds = array_map('intval', array_keys($options));
+        $allRealmIds = array_map('intval', array_keys($options));
         $runtimeState = function_exists('spp_realm_runtime_state')
             ? spp_realm_runtime_state($configuredRealmDbMap)
             : array(
                 'multirealm' => 0,
-                'default_realm_id' => !empty($validRealmIds) ? (int)$validRealmIds[0] : 0,
-                'enabled_realm_ids' => $validRealmIds,
+                'default_realm_id' => !empty($allRealmIds) ? (int)$allRealmIds[0] : 0,
+                'enabled_realm_ids' => $allRealmIds,
                 'selection_mode' => 'manual',
             );
 
         $runtimeState['enabled_realm_ids'] = function_exists('spp_realm_runtime_normalize_enabled_ids')
             ? spp_realm_runtime_normalize_enabled_ids($runtimeState['enabled_realm_ids'], $realmDbMap)
             : $runtimeState['enabled_realm_ids'];
-        $runtimeState['enabled_realm_ids'] = array_values(array_values(array_intersect($runtimeState['enabled_realm_ids'], $validRealmIds)));
+        $runtimeState['enabled_realm_ids'] = array_values(array_values(array_intersect($runtimeState['enabled_realm_ids'], $allRealmIds)));
         if (empty($runtimeState['enabled_realm_ids'])) {
-            $runtimeState['enabled_realm_ids'] = $validRealmIds;
+            $runtimeState['enabled_realm_ids'] = $allRealmIds;
         }
         if (!in_array((int)$runtimeState['default_realm_id'], $runtimeState['enabled_realm_ids'], true)) {
             $runtimeState['default_realm_id'] = !empty($runtimeState['enabled_realm_ids'])
@@ -294,9 +294,22 @@ if (!function_exists('spp_admin_realms_runtime_state')) {
             $runtimeState['selection_mode'] = 'manual';
         }
 
+        $visibleOptions = array();
+        foreach ($options as $realmId => $option) {
+            $realmId = (int)$realmId;
+            $isConfigOnly = !empty($option['is_config_only']);
+            $isEnabled = in_array($realmId, (array)$runtimeState['enabled_realm_ids'], true);
+
+            if ($isConfigOnly && !$isEnabled) {
+                continue;
+            }
+
+            $visibleOptions[$realmId] = $option;
+        }
+
         return array(
             'runtime_settings' => $runtimeState,
-            'runtime_realm_options' => $options,
+            'runtime_realm_options' => $visibleOptions,
             'runtime_selection_modes' => spp_admin_realms_runtime_selection_modes(),
             'runtime_catalog' => spp_admin_realms_runtime_catalog($configuredRealmDbMap),
         );

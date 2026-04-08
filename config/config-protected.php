@@ -143,6 +143,12 @@ $realmRuntime = [
     'multirealm' => (int)spp_env('SPP_MULTIREALM', $config['realmRuntime']['multirealm'] ?? 0),
 ];
 
+$launcherRuntime = [
+    'version' => (string)($config['launcherRuntime']['version'] ?? 'unknown'),
+    'git_branch' => (string)($config['launcherRuntime']['git_branch'] ?? 'unknown'),
+    'git_commit' => (string)($config['launcherRuntime']['git_commit'] ?? 'unknown'),
+];
+
 $forumRuntime = [
     'news_forum_id' => (int)spp_env('SPP_NEWS_FORUM_ID', $config['forumRuntime']['news_forum_id'] ?? 1),
     'bugs_forum_id' => (int)spp_env('SPP_BUGS_FORUM_ID', $config['forumRuntime']['bugs_forum_id'] ?? 5),
@@ -171,13 +177,6 @@ $realmDbMap = $config['realmDbMap'] ?? [
         'chars' => 'tbccharacters',
         'armory' => 'tbcarmory',
         'bots' => 'tbcplayerbots',
-    ],
-    3 => [
-        'realmd' => 'classicrealmd',
-        'world' => 'wotlkmangos',
-        'chars' => 'wotlkcharacters',
-        'armory' => 'wotlkarmory',
-        'bots' => 'wotlkplayerbots',
     ],
 ];
 
@@ -309,6 +308,7 @@ $GLOBALS['adminRuntime'] = $adminRuntime;
 $GLOBALS['genericRuntime'] = $genericRuntime;
 $GLOBALS['armoryRuntime'] = $armoryRuntime;
 $GLOBALS['realmRuntime'] = $realmRuntime;
+$GLOBALS['launcherRuntime'] = $launcherRuntime;
 $GLOBALS['forumRuntime'] = $forumRuntime;
 $GLOBALS['runtimeConfig'] = $runtimeConfig;
 $GLOBALS['spp_bootstrap_state'] = $bootstrapState;

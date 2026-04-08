@@ -4,6 +4,13 @@
     <p class="admin-home__eyebrow feature-eyebrow"><?php echo htmlspecialchars((string)($intro['eyebrow'] ?? 'Control Center')); ?></p>
     <h2 class="admin-home__title"><?php echo htmlspecialchars((string)($intro['title'] ?? 'MangosWeb Enhanced Admin')); ?></h2>
     <p class="admin-home__body feature-copy"><?php echo htmlspecialchars((string)($intro['body'] ?? '')); ?></p>
+    <?php if (!empty($launcher_status)) { ?>
+    <div class="admin-home__launcher-status" style="margin-top:16px;padding:12px 16px;border:1px solid rgba(255,191,73,0.35);border-radius:12px;background:rgba(9,18,37,0.7);display:inline-block;">
+      <strong><?php echo htmlspecialchars((string)($launcher_status['label'] ?? 'Launcher Runtime')); ?>:</strong>
+      <span><?php echo htmlspecialchars('v.' . (string)($launcher_status['version'] ?? 'unknown')); ?></span>
+      <span style="margin-left:12px;opacity:0.9;"><?php echo htmlspecialchars((string)($launcher_status['git'] ?? 'unknown@unknown')); ?></span>
+    </div>
+    <?php } ?>
   </div>
 
   <div class="admin-home__grid">

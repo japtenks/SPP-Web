@@ -85,6 +85,8 @@ if (!function_exists('spp_admin_realms_schema_requirements')) {
                         'table' => 'f_posts',
                         'columns' => array('poster_identity_id'),
                         'notes' => 'Enables forum posts to resolve speaking identities instead of only raw character ids.',
+                        'fix_href' => 'index.php?n=admin&sub=identities',
+                        'fix_label' => 'Open Identity Tools',
                     ),
                     array(
                         'label' => 'Forum topic identity column',
@@ -92,13 +94,17 @@ if (!function_exists('spp_admin_realms_schema_requirements')) {
                         'table' => 'f_topics',
                         'columns' => array('topic_poster_identity_id'),
                         'notes' => 'Allows topic headers to stay aligned with identity-aware forum posting.',
+                        'fix_href' => 'index.php?n=admin&sub=identities',
+                        'fix_label' => 'Open Identity Tools',
                     ),
                     array(
                         'label' => 'PM identity columns',
                         'type' => 'columns',
                         'table' => 'website_pms',
-                        'columns' => array('sender_identity_id', 'receiver_identity_id'),
+                        'columns' => array('sender_identity_id', 'recipient_identity_id'),
                         'notes' => 'Needed for PM identity backfills and sender/receiver rendering.',
+                        'fix_href' => 'index.php?n=admin&sub=identities',
+                        'fix_label' => 'Open Identity Tools',
                     ),
                 ),
             ),
@@ -305,6 +311,8 @@ if (!function_exists('spp_admin_realms_schema_evaluate_check')) {
             'table' => $tableName,
             'columns' => array_values((array)($check['columns'] ?? array())),
             'notes' => (string)($check['notes'] ?? ''),
+            'fix_href' => (string)($check['fix_href'] ?? ''),
+            'fix_label' => (string)($check['fix_label'] ?? 'Open Tool'),
             'ok' => $ok,
             'missing' => $missing,
         );
@@ -327,6 +335,8 @@ if (!function_exists('spp_admin_realms_schema_scan_db')) {
                     'table' => (string)($check['table'] ?? ''),
                     'columns' => array_values((array)($check['columns'] ?? array())),
                     'notes' => (string)($check['notes'] ?? ''),
+                    'fix_href' => (string)($check['fix_href'] ?? ''),
+                    'fix_label' => (string)($check['fix_label'] ?? 'Open Tool'),
                     'ok' => false,
                     'missing' => (string)($check['type'] ?? 'table') === 'table'
                         ? array((string)($check['table'] ?? ''))
