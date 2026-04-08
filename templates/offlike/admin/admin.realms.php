@@ -111,6 +111,64 @@
     </p>
   </div>
 
+  <?php $schemaScan = (array)($schema_scan ?? array()); ?>
+  <?php $schemaSummary = (array)($schemaScan['summary'] ?? array()); ?>
+  <div class="realm-admin__card feature-panel">
+    <h3>Schema Scan</h3>
+    <p>Checks the site database plus each configured realm for the tables and columns this website currently expects.</p>
+    <p class="realm-admin__muted">
+      Databases scanned: <?php echo (int)($schemaSummary['database_count'] ?? 0); ?> |
+      Checks: <?php echo (int)($schemaSummary['check_count'] ?? 0); ?> |
+      Healthy scopes: <?php echo (int)($schemaSummary['healthy_count'] ?? 0); ?> |
+      Missing items: <?php echo (int)($schemaSummary['missing_count'] ?? 0); ?>
+    </p>
+
+    <?php foreach ((array)($schemaScan['databases'] ?? array()) as $databaseScan) { ?>
+      <?php
+        $scopeStatus = (string)($databaseScan['status'] ?? 'warn');
+        $statusLabel = $scopeStatus === 'ok' ? 'OK' : ($scopeStatus === 'error' ? 'Connection Error' : 'Needs Attention');
+      ?>
+      <div class="realm-admin__advanced">
+        <p class="realm-admin__advanced-title">
+          <?php echo htmlspecialchars((string)($databaseScan['label'] ?? 'Database')); ?>
+          <span class="realm-admin__muted"> | <?php echo htmlspecialchars($statusLabel); ?> | Missing checks: <?php echo (int)($databaseScan['missing_count'] ?? 0); ?></span>
+        </p>
+        <?php if (!empty($databaseScan['detail'])) { ?>
+          <p class="realm-admin__muted"><?php echo htmlspecialchars((string)$databaseScan['detail']); ?></p>
+        <?php } ?>
+        <?php if (!empty($databaseScan['error'])) { ?>
+          <p class="realm-admin__muted"><?php echo htmlspecialchars((string)$databaseScan['error']); ?></p>
+        <?php } ?>
+        <table class="realm-admin__table">
+          <thead>
+            <tr>
+              <th>Check</th>
+              <th>Status</th>
+              <th>Missing</th>
+              <th>Why It Matters</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php foreach ((array)($databaseScan['items'] ?? array()) as $scanItem) { ?>
+              <tr>
+                <td><?php echo htmlspecialchars((string)($scanItem['label'] ?? 'Schema check')); ?></td>
+                <td><?php echo !empty($scanItem['ok']) ? 'OK' : 'Missing'; ?></td>
+                <td>
+                  <?php if (!empty($scanItem['ok'])) { ?>
+                    <span class="realm-admin__muted">None</span>
+                  <?php } else { ?>
+                    <code><?php echo htmlspecialchars(implode(', ', (array)($scanItem['missing'] ?? array()))); ?></code>
+                  <?php } ?>
+                </td>
+                <td><?php echo htmlspecialchars((string)($scanItem['notes'] ?? '')); ?></td>
+              </tr>
+            <?php } ?>
+          </tbody>
+        </table>
+      </div>
+    <?php } ?>
+  </div>
+
   <div class="realm-admin__card feature-panel">
     <h3>Create New Realm</h3>
     <p>Add a realm entry with the supported <code>realmlist</code> columns only.</p>

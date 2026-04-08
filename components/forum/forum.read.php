@@ -296,7 +296,7 @@ function spp_forum_hydrate_topic_posts(
     return $posts;
 }
 
-function spp_forum_build_index_items(PDO $realmPdo, array $user): array
+function spp_forum_build_index_items(PDO $realmPdo, array $user, bool $respectHiddenForumPreference = true): array
 {
     global $yesterday_ts, $realmDbMap;
 
@@ -317,11 +317,18 @@ function spp_forum_build_index_items(PDO $realmPdo, array $user): array
         $queryParams = [];
     }
 
-    $canModerateHiddenForums = ((int)($user['g_forum_moderate'] ?? 0) === 1)
-        || ((int)($user['gmlevel'] ?? 0) >= 3)
-        || ((int)($user['g_is_admin'] ?? 0) === 1)
-        || ((int)($user['g_is_supadmin'] ?? 0) === 1);
-    $showHiddenForums = $canModerateHiddenForums;
+    $showHiddenForums = $respectHiddenForumPreference
+        ? (
+            function_exists('spp_forum_should_show_hidden_forums')
+                ? spp_forum_should_show_hidden_forums($realmPdo, $user)
+                : (
+                    ((int)($user['g_forum_moderate'] ?? 0) === 1)
+                    || ((int)($user['gmlevel'] ?? 0) >= 3)
+                    || ((int)($user['g_is_admin'] ?? 0) === 1)
+                    || ((int)($user['g_is_supadmin'] ?? 0) === 1)
+                )
+        )
+        : spp_forum_can_manage_hidden_forums($user);
 
     if (!$showHiddenForums) {
         $queryparts .= " WHERE hidden!=1 ";

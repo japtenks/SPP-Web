@@ -107,31 +107,38 @@ if (!function_exists('spp_admin_identity_health_collect_missing_account_rows')) 
     }
 }
 
-if (!function_exists('spp_admin_identity_health_collect_website_only_accounts')) {
-    function spp_admin_identity_health_collect_website_only_accounts(PDO $masterPdo, array $accessibleCharsPdos) {
-        if (!spp_admin_identity_health_table_exists($masterPdo, 'website_accounts')) {
-            return array();
-        }
-
-        $websiteAccounts = array();
-        try {
-            $sql = "SELECT wa.`account_id`, COALESCE(a.`gmlevel`, 0) AS gmlevel
-                    FROM `website_accounts` wa
-                    LEFT JOIN `account` a ON a.`id` = wa.`account_id`
-                    WHERE wa.`account_id` > 0";
-            foreach ($masterPdo->query($sql)->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $accountId = (int)($row['account_id'] ?? 0);
-                if ($accountId <= 0) {
-                    continue;
-                }
-                if ((int)($row['gmlevel'] ?? 0) >= 4) {
-                    continue;
-                }
-                $websiteAccounts[$accountId] = true;
-            }
-        } catch (Throwable $e) {
-            spp_admin_identity_health_log('Website account orphan preview failed: ' . $e->getMessage());
-            return array();
+	if (!function_exists('spp_admin_identity_health_collect_website_only_accounts')) {
+	    function spp_admin_identity_health_collect_website_only_accounts(PDO $masterPdo, array $accessibleCharsPdos) {
+	        if (!spp_admin_identity_health_table_exists($masterPdo, 'website_accounts')) {
+	            return array();
+	        }
+	
+	        $websiteAccounts = array();
+	        try {
+	            $accountTable = spp_admin_identity_health_table_exists($masterPdo, 'account') ? 'account' : null;
+	            if ($accountTable === null) {
+	                return array();
+	            }
+	            $sql = "SELECT wa.`account_id`, COALESCE(a.`gmlevel`, 0) AS gmlevel, LOWER(COALESCE(a.`username`, '')) AS username
+	                    FROM `website_accounts` wa
+	                    INNER JOIN `" . $accountTable . "` a ON a.`id` = wa.`account_id`
+	                    WHERE wa.`account_id` > 0";
+	            foreach ($masterPdo->query($sql)->fetchAll(PDO::FETCH_ASSOC) as $row) {
+	                $accountId = (int)($row['account_id'] ?? 0);
+	                if ($accountId <= 0) {
+	                    continue;
+	                }
+	                if ((int)($row['gmlevel'] ?? 0) >= 4) {
+	                    continue;
+	                }
+	                if (strpos((string)($row['username'] ?? ''), 'rndbot') !== 0) {
+	                    continue;
+	                }
+	                $websiteAccounts[$accountId] = true;
+	            }
+	        } catch (Throwable $e) {
+	            spp_admin_identity_health_log('Website account orphan preview failed: ' . $e->getMessage());
+	            return array();
         }
 
         if (empty($websiteAccounts)) {

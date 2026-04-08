@@ -1,5 +1,6 @@
 <?php
 
+require_once __DIR__ . '/../support/db-schema.php';
 require_once __DIR__ . '/../../components/admin/admin.realms.helpers.php';
 require_once __DIR__ . '/../../components/admin/admin.operations.helpers.php';
 require_once __DIR__ . '/admin-realms-actions.php';
@@ -13,7 +14,7 @@ if (!function_exists('spp_admin_realms_load_page_state')) {
 
         $actionState = spp_admin_realms_handle_action($realmsPdo, $realmDbMap);
 
-        $view = spp_admin_realms_build_view($realmsPdo);
+        $view = spp_admin_realms_build_view($realmsPdo, $realmDbMap);
         $runtimeView = spp_admin_realms_runtime_state($realmsPdo, $realmDbMap);
         $runtimeSettings = (array)($runtimeView['runtime_settings'] ?? array());
         $runtimeForm = !empty($actionState['runtime_form'])

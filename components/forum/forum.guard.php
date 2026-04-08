@@ -31,6 +31,42 @@ if (!function_exists('spp_forum_can_view_forum')) {
     }
 }
 
+if (!function_exists('spp_forum_should_show_hidden_forums')) {
+    function spp_forum_should_show_hidden_forums(PDO $forumPdo, array $user = array()): bool
+    {
+        if (!spp_forum_can_manage_hidden_forums($user)) {
+            return false;
+        }
+
+        if (array_key_exists('show_hidden_forums', $user)) {
+            return !empty($user['show_hidden_forums']);
+        }
+
+        $accountId = (int)($user['id'] ?? 0);
+        if ($accountId <= 0) {
+            return true;
+        }
+
+        try {
+            if (function_exists('spp_db_column_exists') && !spp_db_column_exists($forumPdo, 'website_accounts', 'show_hidden_forums')) {
+                return true;
+            }
+
+            $stmt = $forumPdo->prepare("SELECT `show_hidden_forums` FROM `website_accounts` WHERE `account_id` = ? LIMIT 1");
+            $stmt->execute(array($accountId));
+            $value = $stmt->fetchColumn();
+            if ($value === false) {
+                return true;
+            }
+
+            return (int)$value === 1;
+        } catch (Throwable $e) {
+            error_log('[forum.guard] Hidden forum preference lookup failed: ' . $e->getMessage());
+            return true;
+        }
+    }
+}
+
 if (!function_exists('spp_forum_url')) {
     function spp_forum_url(string $sub = 'index', array $params = array(), bool $encodeEntities = true): string
     {
