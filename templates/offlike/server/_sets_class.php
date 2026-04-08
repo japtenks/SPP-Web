@@ -2,6 +2,7 @@
 require_once(dirname(__FILE__, 4).'/core/xfer/bootstrap.php');
 //require_once($_SERVER['DOCUMENT_ROOT'].'/xfer/includes/page_header.php');
 require_once(dirname(__FILE__, 4).'/core/xfer/helpers.php');
+require_once(dirname(__FILE__, 4).'/core/xfer/item_set_shared.php');
 
 ?>
 
@@ -125,6 +126,8 @@ if ($maxTier >= 10) { $tierOrder = array_merge($tierOrder, ['T7','T8','T9','T10'
 <?php
 
 function get_itemset_data(int $setId): array {
+    return spp_shared_get_itemset_data($setId);
+
     // --- Pull the set row ---
     $row = armory_query("SELECT * FROM dbc_itemset WHERE id={$setId} LIMIT 1", 1);
     if (!$row) {
@@ -267,10 +270,13 @@ function render_set_bonus_tip_html(array $setData): string {
         $pieces = (int)$b['pieces'];
 
         // Run description through spell token replacer if possible
-        $descRaw = (string)($b['desc'] ?? '');
-        $desc    = ($descRaw !== '' && isset($b['spell']))
-                   ? replace_spell_tokens($descRaw, $b['spell'])
-                   : $descRaw;
+        $desc = (string)($b['resolved_desc'] ?? '');
+        if ($desc === '') {
+          $descRaw = (string)($b['raw_desc'] ?? $b['desc'] ?? '');
+          $desc    = ($descRaw !== '' && isset($b['spell']))
+                     ? replace_spell_tokens($descRaw, $b['spell'])
+                     : $descRaw;
+        }
 
         // Escape for HTML output
         $desc = htmlspecialchars($desc);
@@ -451,6 +457,8 @@ function render_item_tip_html(array $item): string {
  *   get_spell_proc_charges(), _stack_amount_for_spell().
  */
 function replace_spell_tokens(string $desc, array $sp): string {
+  return spp_shared_item_set_bonus_description($sp);
+
   /* ---------- tiny formatters ---------- */
   $fmt = static function($v): string {
     $s = number_format((float)$v, 1, '.', '');

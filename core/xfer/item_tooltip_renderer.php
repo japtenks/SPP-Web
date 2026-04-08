@@ -1,4 +1,6 @@
 <?php
+require_once(__DIR__ . '/item_set_shared.php');
+
 if (!function_exists('spp_item_tooltip_item_class_name')) {
     function spp_item_tooltip_item_class_name($class, $subclass) {
         $class = (int)$class;
@@ -224,56 +226,8 @@ if (!function_exists('spp_item_tooltip_set_data')) {
             return null;
         }
 
-        $row = armory_query("SELECT * FROM dbc_itemset WHERE id={$setId} LIMIT 1", 1);
-        if (!$row) {
-            return null;
-        }
-
-        $items = [];
-        for ($i = 1; $i <= 10; $i++) {
-            $itemId = (int)($row['item_' . $i] ?? 0);
-            if ($itemId <= 0) {
-                continue;
-            }
-            $item = world_query("SELECT entry, name, InventoryType, displayid, Quality FROM item_template WHERE entry={$itemId} LIMIT 1", 1);
-            if (!$item) {
-                continue;
-            }
-            $items[] = [
-                'entry' => (int)$item['entry'],
-                'slot' => (int)$item['InventoryType'],
-                'name' => (string)$item['name'],
-                'q' => (int)$item['Quality'],
-            ];
-        }
-
-        usort($items, function ($a, $b) {
-            return slot_order((int)$a['slot']) <=> slot_order((int)$b['slot']);
-        });
-
-        $bonuses = [];
-        for ($b = 1; $b <= 8; $b++) {
-            $bonusId = (int)($row['bonus_' . $b] ?? 0);
-            $pieces = (int)($row['pieces_' . $b] ?? 0);
-            if ($bonusId <= 0 || $pieces <= 0) {
-                continue;
-            }
-            $spell = armory_query("SELECT * FROM dbc_spell WHERE id={$bonusId} LIMIT 1", 1);
-            if (!$spell) {
-                continue;
-            }
-            $bonuses[] = [
-                'pieces' => $pieces,
-                'desc' => (string)($spell['description'] ?? ''),
-                'spell' => $spell,
-            ];
-        }
-
-        return [
-            'name' => (string)($row['name'] ?? 'Unknown Set'),
-            'items' => $items,
-            'bonuses' => $bonuses,
-        ];
+        $setData = spp_shared_get_itemset_data($setId);
+        return !empty($setData) ? $setData : null;
     }
 }
 
@@ -304,8 +258,11 @@ if (!function_exists('spp_item_tooltip_render_set_lines')) {
             $html .= '<div style="margin-top:12px"></div>';
             foreach ($setData['bonuses'] as $bonus) {
                 $pieces = (int)($bonus['pieces'] ?? 0);
-                $description = (string)($bonus['desc'] ?? '');
-                if ($description !== '' && isset($bonus['spell']) && is_array($bonus['spell'])) {
+                $description = (string)($bonus['resolved_desc'] ?? '');
+                if ($description === '') {
+                    $description = (string)($bonus['raw_desc'] ?? $bonus['desc'] ?? '');
+                }
+                if ($description !== '' && empty($bonus['resolved_desc']) && isset($bonus['spell']) && is_array($bonus['spell'])) {
                     $description = spp_item_tooltip_replace_spell_tokens($description, $bonus['spell']);
                 }
                 if ($description === '') {

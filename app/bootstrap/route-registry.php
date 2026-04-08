@@ -335,7 +335,7 @@ if (!function_exists('spp_route_page_contracts')) {
                     'template_role' => 'render',
                     'assets' => array(
                         'style_paths' => array('css/armory-tooltips.css', 'css/paperdoll.css'),
-                        'scripts' => array('server.character.js'),
+                        'scripts' => array('item-tooltips.js', 'server.character.js'),
                     ),
                 ),
                 'guilds' => array(
@@ -373,6 +373,7 @@ if (!function_exists('spp_route_page_contracts')) {
                     'component_role' => 'adapter',
                     'template_role' => 'render',
                     'assets' => array(
+                        'scripts' => array('item-tooltips.js'),
                         'script_paths' => array('server/server.items.js'),
                     ),
                 ),
@@ -394,7 +395,7 @@ if (!function_exists('spp_route_page_contracts')) {
                     'component_role' => 'adapter',
                     'template_role' => 'render',
                     'assets' => array(
-                        'scripts' => array('server.ah.js'),
+                        'scripts' => array('item-tooltips.js', 'server.ah.js'),
                     ),
                 ),
                 'downloads' => array(

@@ -1,7 +1,4 @@
 (function () {
-  let modernTooltipNode = null;
-  const modernTooltipCache = new Map();
-  let modernTooltipRequestToken = 0;
   const professionDetailCache = new Map();
   let activeSearchToken = 0;
 
@@ -9,96 +6,6 @@
     return window.marketplaceConfig && typeof window.marketplaceConfig.iconBaseUrl === 'string'
       ? window.marketplaceConfig.iconBaseUrl
       : (document.documentElement.getAttribute('data-marketplace-icon-base-url') || '/');
-  }
-
-  function modernTooltipEnsure() {
-    if (!modernTooltipNode) {
-      modernTooltipNode = document.createElement('div');
-      modernTooltipNode.id = 'modern-item-tooltip';
-      modernTooltipNode.className = 'talent-tt';
-      document.body.appendChild(modernTooltipNode);
-    }
-    return modernTooltipNode;
-  }
-
-  function modernShowTooltip(event, html) {
-    const tip = modernTooltipEnsure();
-    tip.innerHTML = html;
-    tip.style.display = 'block';
-    modernMoveTooltip(event);
-  }
-
-  function modernTooltipLoadingHtml() {
-    return '<div class="modern-item-tooltip modern-item-tooltip-loading">Loading item tooltip...</div>';
-  }
-
-  function modernTooltipErrorHtml() {
-    return '<div class="modern-item-tooltip modern-item-tooltip-loading">Unable to load item tooltip.</div>';
-  }
-
-  function modernRequestTooltip(event, itemId, realmId, itemGuid) {
-    const cacheKey = realmId + ':' + itemId;
-    if (modernTooltipCache.has(cacheKey)) {
-      modernShowTooltip(event, modernTooltipCache.get(cacheKey));
-      return;
-    }
-
-    modernShowTooltip(event, modernTooltipLoadingHtml());
-    modernTooltipRequestToken += 1;
-    const token = modernTooltipRequestToken;
-    let url = 'index.php?n=server&sub=itemtooltip&nobody=1&item=' + encodeURIComponent(itemId) + '&realm=' + encodeURIComponent(realmId);
-    if (itemGuid) {
-      url += '&guid=' + encodeURIComponent(itemGuid);
-    }
-
-    fetch(url, {
-      credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-      .then(function (response) {
-        if (!response.ok) {
-          throw new Error('tooltip request failed');
-        }
-        return response.text();
-      })
-      .then(function (html) {
-        const safeHtml = html && html.trim() !== '' ? html : modernTooltipErrorHtml();
-        modernTooltipCache.set(cacheKey, safeHtml);
-        if (token === modernTooltipRequestToken) {
-          modernShowTooltip(event, safeHtml);
-        }
-      })
-      .catch(function () {
-        if (token === modernTooltipRequestToken) {
-          modernShowTooltip(event, modernTooltipErrorHtml());
-        }
-      });
-  }
-
-  function modernMoveTooltip(event) {
-    const tip = modernTooltipEnsure();
-    if (tip.style.display === 'none') return;
-    const offset = 18;
-    const rect = tip.getBoundingClientRect();
-    const spaceRight = window.innerWidth - event.clientX - offset - 12;
-    const spaceLeft = event.clientX - offset - 12;
-    const spaceBelow = window.innerHeight - event.clientY - offset - 12;
-    const spaceAbove = event.clientY - offset - 12;
-    let left = spaceRight >= rect.width || spaceRight >= spaceLeft
-      ? event.clientX + offset
-      : event.clientX - rect.width - offset;
-    let top = spaceBelow >= rect.height || spaceBelow >= spaceAbove
-      ? event.clientY + offset
-      : event.clientY - rect.height - offset;
-    left = Math.max(12, Math.min(left, window.innerWidth - rect.width - 12));
-    top = Math.max(12, Math.min(top, window.innerHeight - rect.height - 12));
-    tip.style.left = left + 'px';
-    tip.style.top = top + 'px';
-  }
-
-  function modernHideTooltip() {
-    modernTooltipRequestToken += 1;
-    if (modernTooltipNode) modernTooltipNode.style.display = 'none';
   }
 
   function professionUrl(name, realmId, tab) {
@@ -300,21 +207,11 @@
   }
 
   function bindTooltipDelegation(root) {
-    if (!root) return;
-    root.addEventListener('mouseover', function (event) {
-      const target = event.target.closest('[data-tooltip-item]');
-      if (!target) return;
-      modernRequestTooltip(event, Number(target.getAttribute('data-tooltip-item')), window.marketplaceConfig.realmId);
-    });
-    root.addEventListener('mousemove', function (event) {
-      const target = event.target.closest('[data-tooltip-item]');
-      if (!target) return;
-      modernMoveTooltip(event);
-    });
-    root.addEventListener('mouseout', function (event) {
-      const target = event.target.closest('[data-tooltip-item]');
-      if (!target) return;
-      modernHideTooltip();
+    if (!root || !window.sppItemTooltips) return;
+    window.sppItemTooltips.bindDelegation(root, '[data-tooltip-item]', {
+      realmId: window.marketplaceConfig.realmId,
+      loadingMessage: 'Loading item tooltip...',
+      errorMessage: 'Unable to load item tooltip.'
     });
   }
 
@@ -411,10 +308,6 @@
       debounceTimer = window.setTimeout(applySearch, 220);
     });
   }
-
-  window.modernRequestTooltip = modernRequestTooltip;
-  window.modernMoveTooltip = modernMoveTooltip;
-  window.modernHideTooltip = modernHideTooltip;
 
   function init() {
     bindTooltipDelegation(document.body);

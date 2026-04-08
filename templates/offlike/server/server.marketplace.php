@@ -21,6 +21,7 @@ window.marketplaceConfig = {
 };
 document.documentElement.setAttribute('data-marketplace-icon-base-url', <?php echo json_encode(spp_modern_icon_url('')); ?>);
 </script>
+<script src="<?php echo htmlspecialchars(spp_template_asset_url('js/item-tooltips.js'), ENT_QUOTES); ?>"></script>
 <script src="<?php echo htmlspecialchars(spp_template_asset_url('js/marketplace.js'), ENT_QUOTES); ?>"></script>
 
 <div class="marketplace-shell feature-shell">

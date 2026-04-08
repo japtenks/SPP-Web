@@ -36,7 +36,11 @@ function render_rank_bonus_snippet(array $setData, string $rankKey): string {
 
     foreach ($setData['bonuses'] as $b) {
         if ((int)$b['pieces'] === $needed) {
-            $desc = replace_spell_tokens($b['desc'], $b['spell']);
+            $desc = (string)($b['resolved_desc'] ?? '');
+            if ($desc === '') {
+                $descRaw = (string)($b['raw_desc'] ?? $b['desc'] ?? '');
+                $desc = ($descRaw !== '' && !empty($b['spell'])) ? replace_spell_tokens($descRaw, $b['spell']) : $descRaw;
+            }
             return "<div class='set-note'>(<b>{$needed}</b>) {$desc}</div>";
         }
     }

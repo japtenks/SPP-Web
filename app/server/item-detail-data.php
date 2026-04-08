@@ -1,5 +1,7 @@
 <?php
 
+require_once dirname(__DIR__, 2) . '/core/xfer/item_set_shared.php';
+
 if (!function_exists('spp_item_detail_load_core_data')) {
     function spp_item_detail_load_core_data(array $args): array
     {
@@ -247,50 +249,33 @@ if (!function_exists('spp_item_detail_load_core_data')) {
 
             $itemSetId = (int)($itemRow['itemset'] ?? 0);
             if ($itemSetId > 0) {
-                $setStmt = $armoryPdo->prepare('SELECT * FROM `dbc_itemset` WHERE `id` = ? LIMIT 1');
-                $setStmt->execute([$itemSetId]);
-                $setRow = $setStmt->fetch(PDO::FETCH_ASSOC);
-                if ($setRow) {
+                $setData = spp_shared_get_itemset_data($itemSetId, $realmId);
+                if (!empty($setData)) {
                     $itemSet = [
-                        'id' => (int)($setRow['id'] ?? 0),
-                        'name' => (string)($setRow['name'] ?? 'Item Set'),
+                        'id' => (int)($setData['id'] ?? $itemSetId),
+                        'name' => (string)($setData['name'] ?? 'Item Set'),
                         'pieces' => [],
                         'bonuses' => [],
-                        'detail_url' => function_exists('spp_sets_detail_url') ? spp_sets_detail_url((int)$realmId, (string)($setRow['name'] ?? 'Item Set')) : ('index.php?n=server&sub=item&type=sets&realm=' . (int)$realmId . '&set=' . urlencode((string)($setRow['name'] ?? 'Item Set'))),
+                        'detail_url' => function_exists('spp_sets_detail_url') ? spp_sets_detail_url((int)$realmId, (string)($setData['name'] ?? 'Item Set')) : ('index.php?n=server&sub=item&type=sets&realm=' . (int)$realmId . '&set=' . urlencode((string)($setData['name'] ?? 'Item Set'))),
                     ];
 
-                    for ($setIndex = 1; $setIndex <= 10; $setIndex++) {
-                        $setItemId = (int)($setRow['item_' . $setIndex] ?? 0);
-                        if ($setItemId <= 0) {
-                            continue;
-                        }
-                        $setItemStmt = $worldPdo->prepare('SELECT `entry`, `name` FROM `item_template` WHERE `entry` = ? LIMIT 1');
-                        $setItemStmt->execute([$setItemId]);
-                        $setItemRow = $setItemStmt->fetch(PDO::FETCH_ASSOC);
-                        if ($setItemRow) {
-                            $itemSet['pieces'][] = [
-                                'entry' => (int)$setItemRow['entry'],
-                                'name' => (string)$setItemRow['name'],
-                                'active' => ((int)$setItemRow['entry'] === $itemId),
-                            ];
-                        }
+                    foreach ((array)($setData['items'] ?? []) as $setItemRow) {
+                        $itemSet['pieces'][] = [
+                            'entry' => (int)($setItemRow['entry'] ?? 0),
+                            'name' => (string)($setItemRow['name'] ?? ''),
+                            'active' => ((int)($setItemRow['entry'] ?? 0) === $itemId),
+                        ];
                     }
 
-                    for ($bonusIndex = 1; $bonusIndex <= 8; $bonusIndex++) {
-                        $bonusSpellId = (int)($setRow['bonus_' . $bonusIndex] ?? 0);
-                        $bonusPieces = (int)($setRow['pieces_' . $bonusIndex] ?? 0);
-                        if ($bonusSpellId <= 0 || $bonusPieces <= 0) {
+                    foreach ((array)($setData['bonuses'] ?? []) as $bonusRow) {
+                        $bonusDescription = trim((string)($bonusRow['resolved_desc'] ?? $bonusRow['raw_desc'] ?? ''));
+                        if ($bonusDescription === '') {
                             continue;
                         }
-                        $bonusStmt = $armoryPdo->prepare('SELECT `description` FROM `dbc_spell` WHERE `id` = ? LIMIT 1');
-                        $bonusStmt->execute([$bonusSpellId]);
-                        $bonusDescription = trim((string)$bonusStmt->fetchColumn());
-                        if ($bonusDescription !== '') {
-                            $itemSet['bonuses'][] = [
-                                'pieces' => $bonusPieces,
-                                'description' => $bonusDescription,
-                            ];
-                        }
+                        $itemSet['bonuses'][] = [
+                            'pieces' => (int)($bonusRow['pieces'] ?? 0),
+                            'description' => $bonusDescription,
+                        ];
                     }
                 }
             }
