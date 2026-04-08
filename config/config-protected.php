@@ -2,6 +2,51 @@
 
 require_once __DIR__ . '/bootstrap.php';
 
+if (!function_exists('spp_detect_git_runtime')) {
+    function spp_detect_git_runtime(string $repoRoot): array
+    {
+        $runtime = [
+            'branch' => 'unknown',
+            'commit' => 'unknown',
+            'date' => 'unknown',
+        ];
+
+        if (!is_dir($repoRoot . DIRECTORY_SEPARATOR . '.git')) {
+            return $runtime;
+        }
+
+        $disabled = array_map('trim', explode(',', (string)ini_get('disable_functions')));
+        $execDisabled = in_array('exec', $disabled, true);
+        if ($execDisabled) {
+            return $runtime;
+        }
+
+        $branchOutput = [];
+        $commitOutput = [];
+        $dateOutput = [];
+        $branchCode = 1;
+        $commitCode = 1;
+        $dateCode = 1;
+        $repoArg = escapeshellarg($repoRoot);
+
+        exec("git -C {$repoArg} rev-parse --abbrev-ref HEAD 2>/dev/null", $branchOutput, $branchCode);
+        exec("git -C {$repoArg} rev-parse --short=12 HEAD 2>/dev/null", $commitOutput, $commitCode);
+        exec("git -C {$repoArg} log -1 --date=short --format=%cd 2>/dev/null", $dateOutput, $dateCode);
+
+        if ($branchCode === 0 && !empty($branchOutput[0])) {
+            $runtime['branch'] = trim((string)$branchOutput[0]);
+        }
+        if ($commitCode === 0 && !empty($commitOutput[0])) {
+            $runtime['commit'] = trim((string)$commitOutput[0]);
+        }
+        if ($dateCode === 0 && !empty($dateOutput[0])) {
+            $runtime['date'] = trim((string)$dateOutput[0]);
+        }
+
+        return $runtime;
+    }
+}
+
 $exampleConfig = spp_load_config_array(__DIR__ . '/config-protected.example.php');
 $localConfig = spp_load_config_array(__DIR__ . '/config-protected.local.php');
 $config = spp_merge_config_arrays($exampleConfig, $localConfig);
@@ -143,11 +188,7 @@ $realmRuntime = [
     'multirealm' => (int)spp_env('SPP_MULTIREALM', $config['realmRuntime']['multirealm'] ?? 0),
 ];
 
-$launcherRuntime = [
-    'version' => (string)($config['launcherRuntime']['version'] ?? 'unknown'),
-    'git_branch' => (string)($config['launcherRuntime']['git_branch'] ?? 'unknown'),
-    'git_commit' => (string)($config['launcherRuntime']['git_commit'] ?? 'unknown'),
-];
+$siteBuildRuntime = spp_detect_git_runtime(dirname(__DIR__));
 
 $forumRuntime = [
     'news_forum_id' => (int)spp_env('SPP_NEWS_FORUM_ID', $config['forumRuntime']['news_forum_id'] ?? 1),
@@ -308,7 +349,7 @@ $GLOBALS['adminRuntime'] = $adminRuntime;
 $GLOBALS['genericRuntime'] = $genericRuntime;
 $GLOBALS['armoryRuntime'] = $armoryRuntime;
 $GLOBALS['realmRuntime'] = $realmRuntime;
-$GLOBALS['launcherRuntime'] = $launcherRuntime;
+$GLOBALS['siteBuildRuntime'] = $siteBuildRuntime;
 $GLOBALS['forumRuntime'] = $forumRuntime;
 $GLOBALS['runtimeConfig'] = $runtimeConfig;
 $GLOBALS['spp_bootstrap_state'] = $bootstrapState;

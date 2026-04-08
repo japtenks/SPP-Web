@@ -3,10 +3,19 @@
 if (!function_exists('spp_admin_load_index_page_state')) {
     function spp_admin_load_index_page_state(): array
     {
-        $launcherRuntime = $GLOBALS['launcherRuntime'] ?? array();
-        $launcherVersion = (string)($launcherRuntime['version'] ?? 'unknown');
-        $launcherGitBranch = (string)($launcherRuntime['git_branch'] ?? 'unknown');
-        $launcherGitCommit = (string)($launcherRuntime['git_commit'] ?? 'unknown');
+        $siteBuildRuntime = $GLOBALS['siteBuildRuntime'] ?? array();
+        $siteBuildCommit = (string)($siteBuildRuntime['commit'] ?? 'unknown');
+        $siteBuildDate = (string)($siteBuildRuntime['date'] ?? 'unknown');
+
+        $siteBuildStatus = array();
+        $isLinux = defined('PHP_OS_FAMILY') ? PHP_OS_FAMILY === 'Linux' : stripos(PHP_OS, 'Linux') !== false;
+        if ($isLinux && $siteBuildCommit !== '' && $siteBuildCommit !== 'unknown' && $siteBuildDate !== '' && $siteBuildDate !== 'unknown') {
+            $siteBuildStatus = array(
+                'label' => 'SPP-Web Build',
+                'commit' => $siteBuildCommit,
+                'date' => $siteBuildDate,
+            );
+        }
 
         return array(
             'intro' => array(
@@ -14,11 +23,7 @@ if (!function_exists('spp_admin_load_index_page_state')) {
                 'title' => 'MangosWeb Enhanced Admin',
                 'body' => 'Use these tools to manage members, forums, realms, and launcher-parity operations from one admin surface.',
             ),
-            'launcher_status' => array(
-                'label' => 'Launcher Runtime',
-                'version' => $launcherVersion,
-                'git' => $launcherGitBranch . '@' . $launcherGitCommit,
-            ),
+            'site_build_status' => $siteBuildStatus,
             'sections' => array(
                 array(
                     'title' => 'Operations',

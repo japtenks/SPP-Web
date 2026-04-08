@@ -55,11 +55,6 @@ return [
         'default_realm_id' => 1,
         'multirealm' => 0,
     ],
-    'launcherRuntime' => [
-        'version' => '22',
-        'git_branch' => 'unknown',
-        'git_commit' => 'unknown',
-    ],
     'forumRuntime' => [
         'news_forum_id' => 1,
         'bugs_forum_id' => 5,
