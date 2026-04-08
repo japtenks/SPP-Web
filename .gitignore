@@ -36,7 +36,8 @@ uploads/**
 /config/storage/logs
 /config/storage/cache
 /core/cache
-/core/cache_class
+/core/cache_class/test1.php
+/core/cache_class/test2.php
 /downloads/addons/**
 !/downloads/addons/
 !/downloads/addons/.gitkeep
