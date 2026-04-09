@@ -24,7 +24,7 @@ if (!$isAdmin) {
 }
 
 $file = spp_admin_backup_basename((string)($_GET['file'] ?? ''));
-if ($file === '' || !preg_match('/\.sql$/i', $file)) {
+if ($file === '' || !preg_match('/\.(sql|txt|bat|vbs)$/i', $file)) {
     http_response_code(404);
     exit('File not found');
 }
@@ -35,7 +35,13 @@ if (!is_file($path) || !is_readable($path)) {
     exit('File not found');
 }
 
-header('Content-Type: application/sql; charset=utf-8');
+$extension = strtolower((string)pathinfo($path, PATHINFO_EXTENSION));
+$contentType = 'text/plain; charset=utf-8';
+if ($extension === 'sql') {
+    $contentType = 'application/sql; charset=utf-8';
+}
+
+header('Content-Type: ' . $contentType);
 header('Content-Length: ' . (string)filesize($path));
 header('Content-Disposition: attachment; filename="' . str_replace('"', '', $file) . '"');
 readfile($path);

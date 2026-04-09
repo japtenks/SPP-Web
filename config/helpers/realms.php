@@ -698,6 +698,9 @@ if (!function_exists('spp_get_armory_realm_name')) {
         }
 
         $fallback = null;
+        if (!empty($realmDbMap[$resolvedRealmId]['name'])) {
+            $fallback = (string)$realmDbMap[$resolvedRealmId]['name'];
+        }
         $realmdDb = $realmDbMap[$resolvedRealmId]['realmd'] ?? null;
         if (!$realmdDb) {
             return $cache[$resolvedRealmId] = $fallback;
@@ -717,10 +720,6 @@ if (!function_exists('spp_get_armory_realm_name')) {
             $stmt = $pdo->prepare("SELECT `name` FROM `realmlist` WHERE `id` = ? LIMIT 1");
             $stmt->execute([(int)$resolvedRealmId]);
             $row = $stmt->fetch();
-
-            if (!$row) {
-                $row = $pdo->query("SELECT `name` FROM `realmlist` ORDER BY `id` ASC LIMIT 1")->fetch();
-            }
 
             $cache[$resolvedRealmId] = !empty($row['name']) ? $row['name'] : $fallback;
             return $cache[$resolvedRealmId];

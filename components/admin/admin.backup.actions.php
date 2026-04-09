@@ -14,6 +14,12 @@ function spp_admin_backup_state_defaults(): array
     );
 }
 
+function spp_admin_backup_is_vmangos_transform_route(array $view): bool
+{
+    $selectedRoute = (array)($view['selected_xfer_route'] ?? array());
+    return !empty($selectedRoute['target_is_vmangos']) && empty($selectedRoute['source_is_vmangos']);
+}
+
 function spp_admin_backup_result_with_files(string $message, array $writeSet): array
 {
     if (empty($writeSet['ok'])) {
@@ -654,6 +660,310 @@ function spp_admin_backup_create_backup_package(array $view): array
     return spp_admin_backup_export_character($sourceRealmdPdo, $sourceCharsPdo, $view);
 }
 
+function spp_admin_backup_vmangos_converter_parts(): array
+{
+    $parts = array();
+    $converterFiles = array(
+        'pdump_convert' => array(
+            'path' => 'C:\\Git\\vmangos\\pdump_convert.txt',
+            'extension' => 'vbs',
+        ),
+        'pdump_converter' => array(
+            'path' => 'C:\\Git\\vmangos\\pdump_convertert.txt',
+            'extension' => 'bat',
+        ),
+    );
+
+    foreach ($converterFiles as $lane => $meta) {
+        $path = (string)($meta['path'] ?? '');
+        if ($path === '' || !is_file($path) || !is_readable($path)) {
+            continue;
+        }
+
+        $content = (string)file_get_contents($path);
+        $parts[$lane] = array(
+            'extension' => (string)($meta['extension'] ?? 'txt'),
+            'lines' => preg_split("/\r\n|\r|\n/", $content),
+        );
+    }
+
+    return $parts;
+}
+
+function spp_admin_backup_vmangos_manifest_lines(array $view, array $scope): array
+{
+    $lines = array(
+        'vMaNGOS Transform-Export Manifest',
+        'Generated: ' . date('Y-m-d H:i:s'),
+        'Route: ' . (string)($view['source_realm_name'] ?? 'Unknown') . ' -> ' . (string)($view['target_realm_name'] ?? 'Unknown'),
+        'Entity: ' . spp_admin_backup_entity_label((string)($scope['entity_type'] ?? 'account')),
+        'Label: ' . (string)($scope['label'] ?? ''),
+        'Accounts resolved: ' . count((array)($scope['account_ids'] ?? array())),
+        'Characters resolved: ' . count((array)($scope['character_rows'] ?? array())),
+    );
+
+    $guildSummary = (array)(($scope['meta']['guild_summary'] ?? array()));
+    if (!empty($guildSummary)) {
+        $lines[] = 'Guild members resolved: ' . (int)($guildSummary['member_count'] ?? 0);
+        $lines[] = 'Guild account mix: ' . (int)($guildSummary['human_account_count'] ?? 0) . ' human / ' . (int)($guildSummary['bot_account_count'] ?? 0) . ' bot';
+    }
+
+    $lines[] = '';
+    $lines[] = 'Apply order';
+    $lines[] = '1. Review realmd.sql and chars.sql before importing anything.';
+    $lines[] = '2. Apply realmd.sql to the target realmd/auth database.';
+    $lines[] = '3. Apply chars.sql to the target characters database.';
+    $lines[] = '4. This package is manual-review and manual-apply only. No live transfer is performed.';
+    $lines[] = '';
+    $lines[] = 'Converter assets';
+    $lines[] = '- Mirrored pdump converter helper files are included beside this manifest.';
+    $lines[] = '- The generated SQL already targets the validated target schema, so the mirrored converter files are operator reference material rather than an automatic step.';
+
+    return $lines;
+}
+
+function spp_admin_backup_vmangos_guild_lines(PDO $sourceCharsPdo, PDO $targetCharsPdo, array $guildRow, array $memberRows, array $characterVarMap): array
+{
+    $targetGuildColumns = spp_admin_backup_target_columns($targetCharsPdo, 'guild');
+    $targetGuildRankColumns = spp_admin_backup_target_columns($targetCharsPdo, 'guild_rank');
+    $targetGuildMemberColumns = spp_admin_backup_target_columns($targetCharsPdo, 'guild_member');
+
+    $lines = array(
+        spp_admin_backup_comment('Guild package'),
+        'SET @target_guild_id := (SELECT COALESCE(MAX(`guildid`), 0) + 1 FROM `guild`);',
+        '',
+    );
+
+    $leaderGuid = (int)($guildRow['leaderguid'] ?? 0);
+    $leaderVar = $characterVarMap[$leaderGuid] ?? '';
+    if ($leaderVar === '') {
+        $lines[] = spp_admin_backup_comment('Guild leader was not part of the resolved character scope. Adjust leaderguid manually if needed.');
+    }
+
+    $guildInsertRow = $guildRow;
+    $guildInsertRow['guildid'] = '@target_guild_id';
+    if ($leaderVar !== '') {
+        $guildInsertRow['leaderguid'] = $leaderVar;
+    }
+    $guildInsertRow = spp_admin_backup_filter_row_to_target_columns($guildInsertRow, $targetGuildColumns);
+    if (!empty($guildInsertRow)) {
+        $rawColumns = array('guildid' => true);
+        if ($leaderVar !== '') {
+            $rawColumns['leaderguid'] = true;
+        }
+        $lines[] = spp_admin_backup_insert_sql_raw('guild', $guildInsertRow, $rawColumns);
+        $lines[] = '';
+    }
+
+    $rankStmt = $sourceCharsPdo->prepare("SELECT * FROM guild_rank WHERE guildid=? ORDER BY rid ASC");
+    $rankStmt->execute(array((int)($guildRow['guildid'] ?? 0)));
+    foreach ($rankStmt->fetchAll(PDO::FETCH_ASSOC) as $rankRow) {
+        $rankRow['guildid'] = '@target_guild_id';
+        $rankRow = spp_admin_backup_filter_row_to_target_columns($rankRow, $targetGuildRankColumns);
+        if (!empty($rankRow)) {
+            $lines[] = spp_admin_backup_insert_sql_raw('guild_rank', $rankRow, array('guildid' => true));
+        }
+    }
+    $lines[] = '';
+
+    foreach ($memberRows as $memberRow) {
+        $sourceGuid = (int)($memberRow['guid'] ?? 0);
+        $characterVar = $characterVarMap[$sourceGuid] ?? '';
+        if ($characterVar === '') {
+            continue;
+        }
+
+        $memberInsertRow = $memberRow;
+        $memberInsertRow['guildid'] = '@target_guild_id';
+        $memberInsertRow['guid'] = $characterVar;
+        $memberInsertRow = spp_admin_backup_filter_row_to_target_columns($memberInsertRow, $targetGuildMemberColumns);
+        if (!empty($memberInsertRow)) {
+            $lines[] = spp_admin_backup_insert_sql_raw('guild_member', $memberInsertRow, array('guildid' => true, 'guid' => true));
+        }
+    }
+    $lines[] = '';
+
+    return $lines;
+}
+
+function spp_admin_backup_xfer_vmangos_package(array $view): array
+{
+    $sourceRealmId = (int)($view['source_realm_id'] ?? 0);
+    $targetRealmId = (int)($view['target_realm_id'] ?? 0);
+    if ($sourceRealmId <= 0 || $targetRealmId <= 0 || $sourceRealmId === $targetRealmId) {
+        return array('ok' => false, 'message' => 'Choose a valid source and target realm.');
+    }
+
+    $sourceRealmdPdo = spp_get_pdo('realmd', $sourceRealmId);
+    $sourceCharsPdo = spp_get_pdo('chars', $sourceRealmId);
+    $targetRealmdPdo = spp_get_pdo('realmd', $targetRealmId);
+    $targetCharsPdo = spp_get_pdo('chars', $targetRealmId);
+
+    $validation = spp_admin_backup_vmangos_character_validation($sourceCharsPdo, $targetCharsPdo);
+    if (empty($validation['ok'])) {
+        return $validation;
+    }
+
+    $scope = spp_admin_backup_resolve_xfer_scope($sourceRealmdPdo, $sourceCharsPdo, $view);
+    if (empty($scope['ok'])) {
+        return $scope;
+    }
+    if (empty($scope['character_rows'])) {
+        return array('ok' => false, 'message' => 'The selected transfer scope did not resolve any characters.');
+    }
+    if (empty($scope['account_ids'])) {
+        return array('ok' => false, 'message' => 'The selected transfer scope did not resolve any source accounts.');
+    }
+
+    $targetAccountColumns = spp_admin_backup_target_columns($targetRealmdPdo, 'account');
+    $entityLabel = spp_admin_backup_entity_label((string)($scope['entity_type'] ?? 'account'));
+    $realmdLines = array(
+        spp_admin_backup_comment($entityLabel . ' transform-export package'),
+        spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
+        spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
+        spp_admin_backup_comment('This realmd.sql file contains manual account/auth/security rows for the transform-export package.'),
+        spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
+        '',
+    );
+    $charsLines = array(
+        spp_admin_backup_comment($entityLabel . ' transform-export package'),
+        spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
+        spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
+        spp_admin_backup_comment('This chars.sql file contains review-first vMaNGOS character-side SQL only. No live apply is performed.'),
+        spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
+        '',
+    );
+
+    $accountVariableMap = array();
+    $characterVarMap = array();
+    $existingTargetStmt = $targetRealmdPdo->prepare("SELECT id FROM account WHERE username=? LIMIT 1");
+
+    $accountIndex = 0;
+    foreach ((array)$scope['account_ids'] as $accountId) {
+        $accountId = (int)$accountId;
+        $accountRow = (array)($scope['account_rows_by_id'][$accountId] ?? array());
+        if ($accountId <= 0 || empty($accountRow)) {
+            return array('ok' => false, 'message' => 'A resolved source account could not be loaded for export.');
+        }
+
+        $accountIndex++;
+        $accountVar = '@target_account_id_' . $accountIndex;
+        $accountVariableMap[$accountId] = $accountVar;
+
+        $existingTargetStmt->execute(array((string)($accountRow['username'] ?? '')));
+        $existingTargetId = (int)$existingTargetStmt->fetchColumn();
+        $realmdLines[] = spp_admin_backup_comment('Account: ' . (string)($accountRow['username'] ?? ('ID ' . $accountId)));
+
+        if ($existingTargetId > 0) {
+            $realmdLines[] = 'SET ' . $accountVar . ' := ' . $existingTargetId . ';';
+            if (in_array('current_realm', $targetAccountColumns, true)) {
+                $realmdLines[] = 'UPDATE `account` SET `current_realm` = ' . $targetRealmId . ' WHERE `id` = ' . $accountVar . ' LIMIT 1;';
+            } elseif (in_array('active_realm_id', $targetAccountColumns, true)) {
+                $realmdLines[] = 'UPDATE `account` SET `active_realm_id` = ' . $targetRealmId . ' WHERE `id` = ' . $accountVar . ' LIMIT 1;';
+            }
+            $realmdLines[] = spp_admin_backup_comment('Existing target account matched by username and will be reused.');
+            $realmdLines[] = '';
+            continue;
+        }
+
+        $realmdLines[] = 'SET ' . $accountVar . ' := (SELECT COALESCE(MAX(`id`), 0) + 1 FROM `account`);';
+        $targetAccountRow = spp_admin_backup_vmangos_target_account_row($accountRow, $targetRealmId, $targetAccountColumns, $accountVar);
+        $realmdLines[] = spp_admin_backup_insert_sql_raw(
+            'account',
+            spp_admin_backup_filter_row_to_target_columns($targetAccountRow, $targetAccountColumns),
+            array('id' => true)
+        );
+
+        foreach (spp_admin_backup_fetch_account_related_rows($sourceRealmdPdo, $accountId) as $table => $rows) {
+            if ($table === 'realmcharacters') {
+                continue;
+            }
+
+            $targetColumns = spp_admin_backup_target_columns($targetRealmdPdo, $table);
+            foreach ($rows as $row) {
+                if (isset($row['id'])) {
+                    $row['id'] = $accountVar;
+                }
+                if (isset($row['acctid'])) {
+                    $row['acctid'] = $accountVar;
+                }
+                $filtered = spp_admin_backup_filter_row_to_target_columns($row, $targetColumns);
+                if (!empty($filtered)) {
+                    $realmdLines[] = spp_admin_backup_insert_sql_raw($table, $filtered, array('id' => true, 'acctid' => true));
+                }
+            }
+            if (!empty($rows)) {
+                $realmdLines[] = '';
+            }
+        }
+        $realmdLines[] = '';
+    }
+
+    foreach ((array)$scope['character_rows'] as $characterRow) {
+        $sourceGuid = (int)($characterRow['guid'] ?? 0);
+        $sourceAccountId = (int)($characterRow['account'] ?? 0);
+        $accountVar = (string)($accountVariableMap[$sourceAccountId] ?? '');
+        if ($sourceGuid <= 0 || $accountVar === '') {
+            continue;
+        }
+
+        $bundle = spp_admin_backup_fetch_character_bundle($sourceCharsPdo, $sourceGuid, $sourceAccountId);
+        if (empty($bundle)) {
+            return array('ok' => false, 'message' => 'A resolved character bundle could not be loaded for export.');
+        }
+
+        $characterVar = '@resolved_character_guid_' . $sourceGuid;
+        $characterVarMap[$sourceGuid] = $characterVar;
+        $charsLines[] = spp_admin_backup_comment('Character: ' . (string)($characterRow['name'] ?? ('GUID ' . $sourceGuid)) . ' | Source account #' . $sourceAccountId);
+        $charsLines = array_merge($charsLines, spp_admin_backup_character_bundle_xfer_lines($bundle, $targetCharsPdo, $accountVar, ''));
+        $charsLines[] = 'SET ' . $characterVar . ' := @target_character_guid;';
+        $charsLines[] = '';
+    }
+
+    if ((string)($scope['entity_type'] ?? '') === 'guild') {
+        $guildRow = (array)($scope['meta']['guild_row'] ?? array());
+        $guildSummary = (array)($scope['meta']['guild_summary'] ?? array());
+        if (!empty($guildRow)) {
+            $charsLines = array_merge(
+                $charsLines,
+                spp_admin_backup_vmangos_guild_lines(
+                    $sourceCharsPdo,
+                    $targetCharsPdo,
+                    $guildRow,
+                    (array)($guildSummary['member_rows'] ?? array()),
+                    $characterVarMap
+                )
+            );
+        }
+    }
+
+    $parts = array(
+        'manifest' => array(
+            'extension' => 'txt',
+            'lines' => spp_admin_backup_vmangos_manifest_lines($view, $scope),
+        ),
+        'realmd' => array(
+            'extension' => 'sql',
+            'lines' => $realmdLines,
+        ),
+        'chars' => array(
+            'extension' => 'sql',
+            'lines' => $charsLines,
+        ),
+    );
+    $parts = array_merge($parts, spp_admin_backup_vmangos_converter_parts());
+
+    return spp_admin_backup_result_with_files(
+        'vMaNGOS ' . strtolower($entityLabel) . ' transform-export created as a manual package with manifest, realmd.sql, and chars.sql.',
+        spp_admin_backup_write_output_set(
+            'xfer',
+            (string)($scope['entity_type'] ?? 'account'),
+            (string)($scope['label'] ?? 'vmangos'),
+            $parts
+        )
+    );
+}
+
 function spp_admin_backup_xfer_character(array $view): array
 {
     $sourceRealmId = (int)($view['source_realm_id'] ?? 0);
@@ -691,11 +1001,13 @@ function spp_admin_backup_xfer_character(array $view): array
     }
 
     $characterLabel = $newName !== '' ? $newName : (string)($bundle['character']['name'] ?? ('guid_' . $characterGuid));
+    $isVmangosTransformRoute = spp_admin_backup_is_vmangos_transform_route($view);
     $charsLines = array(
-        spp_admin_backup_comment('Character xfer package'),
+        spp_admin_backup_comment($isVmangosTransformRoute ? 'Character transform-export package' : 'Character xfer package'),
         spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
         spp_admin_backup_comment('Target account id: ' . $targetAccountId),
+        spp_admin_backup_comment($isVmangosTransformRoute ? 'This chars.sql file is a review-first vMaNGOS transform export. It does not live-apply or move the character automatically.' : 'Generated for manual review and apply.'),
         spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
         '',
         'SET @target_account_id := ' . $targetAccountId . ';',
@@ -706,11 +1018,11 @@ function spp_admin_backup_xfer_character(array $view): array
     $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
     $targetCharsDbName = (string)($realmDbMap[$targetRealmId]['chars'] ?? '');
     $realmdLines = array(
-        spp_admin_backup_comment('Character xfer package (realmd companion)'),
+        spp_admin_backup_comment($isVmangosTransformRoute ? 'Character transform-export package (realmd companion)' : 'Character xfer package (realmd companion)'),
         spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
         spp_admin_backup_comment('Target account id: ' . $targetAccountId),
-        spp_admin_backup_comment('Run this after the chars package so realmcharacters reflects the imported character count.'),
+        spp_admin_backup_comment($isVmangosTransformRoute ? 'Run this after manually applying chars.sql so realmcharacters reflects the imported character count.' : 'Run this after the chars package so realmcharacters reflects the imported character count.'),
         spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
         '',
         'SET @target_account_id := ' . $targetAccountId . ';',
@@ -723,7 +1035,9 @@ function spp_admin_backup_xfer_character(array $view): array
     }
 
     return spp_admin_backup_result_with_files(
-        'Character xfer package created.',
+        $isVmangosTransformRoute
+            ? 'vMaNGOS character transform-export created as manual-apply realmd.sql and chars.sql files.'
+            : 'Character xfer package created.',
         spp_admin_backup_write_output_set(
             'xfer',
             'character',
@@ -763,19 +1077,21 @@ function spp_admin_backup_xfer_account(array $view): array
     $targetIsVmangos = function_exists('spp_admin_backup_is_vmangos_realm')
         ? spp_admin_backup_is_vmangos_realm($realmOptions, $targetRealmId)
         : false;
+    $isVmangosTransformRoute = spp_admin_backup_is_vmangos_transform_route($view);
     $targetAccountColumns = spp_admin_backup_target_columns($targetRealmdPdo, 'account');
     $characterRows = spp_admin_backup_fetch_characters($sourceCharsPdo, $accountId);
 
     $realmdLines = array(
-        spp_admin_backup_comment('Account xfer package'),
+        spp_admin_backup_comment($isVmangosTransformRoute ? 'Account transform-export package' : 'Account xfer package'),
         spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
         spp_admin_backup_comment('Target account: ' . (string)($accountRow['username'] ?? ('ID ' . $accountId))),
+        spp_admin_backup_comment($isVmangosTransformRoute ? 'This realmd.sql file is a manual transform export for vMaNGOS auth/account data.' : 'Generated for manual review and apply.'),
         spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
         '',
     );
     $charsLines = array(
-        spp_admin_backup_comment('Account xfer package (chars)'),
+        spp_admin_backup_comment($isVmangosTransformRoute ? 'Account transform-export package (chars companion)' : 'Account xfer package (chars)'),
         spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
         spp_admin_backup_comment('Target account: ' . (string)($accountRow['username'] ?? ('ID ' . $accountId))),
@@ -839,13 +1155,13 @@ function spp_admin_backup_xfer_account(array $view): array
     $realmdLines = array_merge($realmdLines, spp_admin_backup_realmcharacters_sync_lines($targetRealmdPdo, $targetRealmId, '@target_account_id', $targetCharsDbName));
 
     if ($targetIsVmangos) {
-        $charsLines[] = spp_admin_backup_comment('vMaNGOS keeps character transfer separate from account xfer.');
-        $charsLines[] = spp_admin_backup_comment('Use the character xfer action to generate the companion chars SQL package.');
+        $charsLines[] = spp_admin_backup_comment('vMaNGOS keeps account transform-export separate from character transform-export.');
+        $charsLines[] = spp_admin_backup_comment('Use character Xfer to generate the manual chars.sql package for character data.');
         $charsLines[] = '';
         $charsLines[] = 'SELECT 1;';
         $charsLines[] = '';
         return spp_admin_backup_result_with_files(
-            'vMaNGOS account xfer package created. Character transfer remains a separate step.',
+            'vMaNGOS account transform-export created. Character transform-export remains a separate manual step.',
             spp_admin_backup_write_output_set(
                 'xfer',
                 'account',
@@ -999,6 +1315,9 @@ function spp_admin_backup_create_xfer_package(array $view): array
     $supportedEntities = array_values((array)($selectedRoute['supported_entities'] ?? array()));
     if (!empty($supportedEntities) && !in_array($entityType, $supportedEntities, true)) {
         return array('ok' => false, 'message' => 'That transfer type is not enabled for the selected realm route.');
+    }
+    if (spp_admin_backup_is_vmangos_transform_route($view)) {
+        return spp_admin_backup_xfer_vmangos_package($view);
     }
     if ($entityType === 'account') {
         return spp_admin_backup_xfer_account($view);

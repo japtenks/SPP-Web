@@ -3,6 +3,8 @@ if (INCLUDED !== true) {
     exit;
 }
 
+require_once dirname(__DIR__, 2) . '/app/support/db-schema.php';
+
 function spp_admin_backup_output_dir(): string
 {
     return dirname(__DIR__, 2) . DIRECTORY_SEPARATOR . 'core' . DIRECTORY_SEPARATOR . 'cache' . DIRECTORY_SEPARATOR . 'sql_backups';
@@ -27,6 +29,15 @@ function spp_admin_backup_entity_options(): array
     );
 }
 
+function spp_admin_backup_xfer_entity_options(): array
+{
+    return array(
+        'character' => 'Character',
+        'account' => 'Account',
+        'guild' => 'Guild',
+    );
+}
+
 function spp_admin_backup_route_option(array $source, array $target): array
 {
     $sourceExpansion = (string)($source['expansion_key'] ?? '');
@@ -35,7 +46,9 @@ function spp_admin_backup_route_option(array $source, array $target): array
     $sourceIsVmangos = ($sourceExpansion === 'vmangos');
     $supportedEntities = array('character', 'account', 'guild');
 
-    if ($targetIsVmangos || $sourceIsVmangos) {
+    if ($targetIsVmangos && !$sourceIsVmangos) {
+        $supportedEntities = array('account', 'guild');
+    } elseif ($targetIsVmangos || $sourceIsVmangos) {
         $supportedEntities = array('character', 'account');
     }
 
@@ -59,7 +72,7 @@ function spp_admin_backup_route_option(array $source, array $target): array
 
 function spp_admin_backup_route_entity_options(?array $routeOption): array
 {
-    $entityOptions = spp_admin_backup_entity_options();
+    $entityOptions = spp_admin_backup_xfer_entity_options();
     if (empty($routeOption['supported_entities']) || !is_array($routeOption['supported_entities'])) {
         return $entityOptions;
     }
@@ -82,11 +95,11 @@ function spp_admin_backup_route_help(?array $routeOption): string
     }
 
     if (!empty($routeOption['target_is_vmangos']) && empty($routeOption['source_is_vmangos'])) {
-        return 'For CMaNGOS -> vMaNGOS, run account xfer first, then run character xfer separately. Guild xfer is not offered on vMaNGOS routes.';
+        return 'For CMaNGOS -> vMaNGOS, Xfer builds one manual transform-export package per job. Account and guild resolve into reviewable realmd.sql plus chars.sql, with a manifest and mirrored converter helpers for the operator workflow. Individual character export is intentionally not offered on this route.';
     }
 
     if (!empty($routeOption['target_is_vmangos']) || !empty($routeOption['source_is_vmangos'])) {
-        return 'vMaNGOS routes only offer account and character packages. Character SQL stays separate and is schema-validated before export.';
+        return 'vMaNGOS routes only offer account and character transform-export packages. realmd.sql and chars.sql stay separate, manual apply is expected, and character export remains schema-validated.';
     }
 
     return 'Account xfer includes character SQL on standard CMaNGOS routes. Guild xfer assumes member characters already exist on the target realm.';
@@ -160,8 +173,26 @@ function spp_admin_backup_realm_options(array $realmDbMap): array
 
 function spp_admin_backup_entity_label(string $entityType): string
 {
-    $options = spp_admin_backup_entity_options();
+    $options = array_merge(spp_admin_backup_entity_options(), spp_admin_backup_xfer_entity_options());
     return $options[$entityType] ?? ucfirst($entityType);
+}
+
+function spp_admin_backup_is_random_bot_account_name(?string $username): bool
+{
+    $username = strtolower(trim((string)$username));
+    return $username !== '' && strpos($username, 'rndbot') === 0;
+}
+
+function spp_admin_backup_is_bot_account_name(?string $username): bool
+{
+    $username = strtolower(trim((string)$username));
+    if ($username === '') {
+        return false;
+    }
+
+    return strpos($username, 'rndbot') === 0
+        || strpos($username, 'aibot') === 0
+        || strpos($username, 'npc') === 0;
 }
 
 function spp_admin_backup_xfer_route_options(array $realmOptions): array
@@ -206,13 +237,13 @@ function spp_admin_backup_is_vmangos_realm(array $realmOptions, int $realmId): b
     return false;
 }
 
-function spp_admin_backup_vmangos_target_account_row(array $sourceAccountRow, int $targetRealmId, array $targetColumns): array
+function spp_admin_backup_vmangos_target_account_row(array $sourceAccountRow, int $targetRealmId, array $targetColumns, string $targetAccountExpr = '@target_account_id'): array
 {
     $row = array();
     foreach ($targetColumns as $column) {
         switch ($column) {
             case 'id':
-                $row[$column] = '@target_account_id';
+                $row[$column] = $targetAccountExpr;
                 break;
             case 'username':
                 $row[$column] = (string)($sourceAccountRow['username'] ?? '');
@@ -350,17 +381,40 @@ function spp_admin_backup_character_tables(): array
     );
 }
 
-function spp_admin_backup_fetch_accounts(PDO $realmdPdo): array
+function spp_admin_backup_fetch_accounts(PDO $realmdPdo, string $mode = 'human', bool $includeRandomBots = false): array
 {
     $stmt = $realmdPdo->query("
         SELECT id, username
         FROM account
-        WHERE username NOT LIKE 'RNDBOT%'
-          AND username NOT LIKE 'AIBOT%'
-          AND username NOT LIKE 'NPC%'
         ORDER BY username ASC, id ASC
     ");
-    return $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : array();
+    $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : array();
+    if ($mode === 'all') {
+        return $rows;
+    }
+
+    $filtered = array();
+    foreach ($rows as $row) {
+        $isBot = spp_admin_backup_is_bot_account_name((string)($row['username'] ?? ''));
+        $isRandomBot = spp_admin_backup_is_random_bot_account_name((string)($row['username'] ?? ''));
+
+        if ($mode === 'bot') {
+            if (!$isBot) {
+                continue;
+            }
+            if (!$includeRandomBots && $isRandomBot) {
+                continue;
+            }
+            $filtered[] = $row;
+            continue;
+        }
+
+        if (!$isBot) {
+            $filtered[] = $row;
+        }
+    }
+
+    return $filtered;
 }
 
 function spp_admin_backup_fetch_characters(PDO $charsPdo, int $accountId): array
@@ -369,7 +423,7 @@ function spp_admin_backup_fetch_characters(PDO $charsPdo, int $accountId): array
         return array();
     }
 
-    $stmt = $charsPdo->prepare("SELECT guid, name, race, class, level FROM characters WHERE account=? ORDER BY name ASC, guid ASC");
+    $stmt = $charsPdo->prepare("SELECT guid, account, name, race, class, level FROM characters WHERE account=? ORDER BY name ASC, guid ASC");
     $stmt->execute(array($accountId));
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -435,19 +489,178 @@ function spp_admin_backup_fetch_account_related_rows(PDO $realmdPdo, int $accoun
     }
 
     foreach (array('account_access' => 'id', 'account_banned' => 'id', 'realmcharacters' => 'acctid') as $table => $column) {
-        if (function_exists('spp_db_table_exists') && !spp_db_table_exists($realmdPdo, $table)) {
+        try {
+            if (function_exists('spp_db_table_exists') && !spp_db_table_exists($realmdPdo, $table)) {
+                $rows[$table] = array();
+                continue;
+            }
+
+            $stmt = $realmdPdo->prepare("SELECT * FROM `$table` WHERE `$column`=?");
+            $stmt->execute(array($accountId));
+            $rows[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            error_log('[admin.backup] Skipping optional auth table `' . $table . '`: ' . $e->getMessage());
             $rows[$table] = array();
-            continue;
         }
-        $stmt = $realmdPdo->prepare("SELECT * FROM `$table` WHERE `$column`=?");
-        $stmt->execute(array($accountId));
-        $rows[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     return $rows;
 }
 
-function spp_admin_backup_build_filename(string $prefix, string $entityType, string $label, string $lane = '', ?string $stamp = null): string
+function spp_admin_backup_fetch_guild_members(PDO $charsPdo, int $guildId): array
+{
+    if ($guildId <= 0) {
+        return array();
+    }
+
+    $stmt = $charsPdo->prepare("
+        SELECT gm.*, c.name AS member_name, c.account, c.level
+        FROM guild_member gm
+        LEFT JOIN characters c ON c.guid = gm.guid
+        WHERE gm.guildid=?
+        ORDER BY gm.rank ASC, gm.guid ASC
+    ");
+    $stmt->execute(array($guildId));
+    return $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+function spp_admin_backup_fetch_account_rows_by_ids(PDO $realmdPdo, array $accountIds): array
+{
+    $accountIds = array_values(array_filter(array_unique(array_map('intval', $accountIds))));
+    if (empty($accountIds)) {
+        return array();
+    }
+
+    $placeholders = implode(',', array_fill(0, count($accountIds), '?'));
+    $stmt = $realmdPdo->prepare("SELECT * FROM account WHERE id IN ($placeholders) ORDER BY username ASC, id ASC");
+    $stmt->execute($accountIds);
+
+    $rows = array();
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $rows[(int)($row['id'] ?? 0)] = $row;
+    }
+
+    return $rows;
+}
+
+function spp_admin_backup_fetch_guild_summary(PDO $realmdPdo, PDO $charsPdo, int $guildId): array
+{
+    $members = spp_admin_backup_fetch_guild_members($charsPdo, $guildId);
+    $accountIds = array();
+    foreach ($members as $member) {
+        $accountId = (int)($member['account'] ?? 0);
+        if ($accountId > 0) {
+            $accountIds[] = $accountId;
+        }
+    }
+    $accountIds = array_values(array_filter(array_unique($accountIds)));
+    $accountRows = spp_admin_backup_fetch_account_rows_by_ids($realmdPdo, $accountIds);
+
+    $botAccounts = 0;
+    $humanAccounts = 0;
+    foreach ($accountIds as $accountId) {
+        $accountRow = $accountRows[$accountId] ?? array();
+        $username = (string)($accountRow['username'] ?? '');
+        if (spp_admin_backup_is_bot_account_name($username)) {
+            $botAccounts++;
+        } else {
+            $humanAccounts++;
+        }
+    }
+
+    return array(
+        'member_count' => count($members),
+        'account_count' => count($accountIds),
+        'bot_account_count' => $botAccounts,
+        'human_account_count' => $humanAccounts,
+        'member_rows' => $members,
+        'account_ids' => $accountIds,
+    );
+}
+
+function spp_admin_backup_resolve_xfer_scope(PDO $sourceRealmdPdo, PDO $sourceCharsPdo, array $view): array
+{
+    $entityType = (string)($view['xfer_entity_type'] ?? 'character');
+    $characterRows = array();
+    $accountIds = array();
+    $meta = array();
+    $label = '';
+
+    if ($entityType === 'character') {
+        $characterGuid = (int)($view['selected_character_guid'] ?? 0);
+        $accountId = (int)($view['selected_account_id'] ?? 0);
+        $characterRow = spp_admin_backup_fetch_character_row($sourceCharsPdo, $characterGuid, $accountId);
+        if (empty($characterRow)) {
+            return array('ok' => false, 'message' => 'Select a character first.');
+        }
+
+        $characterRows[] = $characterRow;
+        $accountIds[] = (int)($characterRow['account'] ?? $accountId);
+        $label = (string)($characterRow['name'] ?? ('guid_' . $characterGuid));
+    } elseif ($entityType === 'account' || $entityType === 'bot') {
+        $accountId = (int)($entityType === 'bot'
+            ? ($view['selected_bot_account_id'] ?? 0)
+            : ($view['selected_account_id'] ?? 0));
+        $accountRow = spp_admin_backup_fetch_account_row($sourceRealmdPdo, $accountId);
+        if (empty($accountRow)) {
+            return array('ok' => false, 'message' => 'Select a ' . ($entityType === 'bot' ? 'bot account' : 'source account') . ' first.');
+        }
+
+        $characterRows = spp_admin_backup_fetch_characters($sourceCharsPdo, $accountId);
+        $accountIds[] = $accountId;
+        $label = (string)($accountRow['username'] ?? ($entityType . '_' . $accountId));
+    } elseif ($entityType === 'guild') {
+        $guildId = (int)($view['selected_guild_id'] ?? 0);
+        $guildRow = spp_admin_backup_fetch_guild_row($sourceCharsPdo, $guildId);
+        if (empty($guildRow)) {
+            return array('ok' => false, 'message' => 'Select a guild first.');
+        }
+
+        $guildSummary = spp_admin_backup_fetch_guild_summary($sourceRealmdPdo, $sourceCharsPdo, $guildId);
+        foreach ((array)($guildSummary['member_rows'] ?? array()) as $memberRow) {
+            $guid = (int)($memberRow['guid'] ?? 0);
+            $accountId = (int)($memberRow['account'] ?? 0);
+            if ($guid <= 0 || $accountId <= 0) {
+                continue;
+            }
+
+            $characterRow = spp_admin_backup_fetch_character_row($sourceCharsPdo, $guid, $accountId);
+            if (!empty($characterRow)) {
+                $characterRows[] = $characterRow;
+                $accountIds[] = $accountId;
+            }
+        }
+
+        $label = (string)($guildRow['name'] ?? ('guild_' . $guildId));
+        $meta['guild_row'] = $guildRow;
+        $meta['guild_summary'] = $guildSummary;
+    }
+
+    $accountIds = array_values(array_filter(array_unique(array_map('intval', $accountIds))));
+    $characterRowsByGuid = array();
+    foreach ($characterRows as $characterRow) {
+        $guid = (int)($characterRow['guid'] ?? 0);
+        if ($guid > 0) {
+            $characterRowsByGuid[$guid] = $characterRow;
+        }
+    }
+    ksort($characterRowsByGuid);
+
+    $accountRowsById = spp_admin_backup_fetch_account_rows_by_ids($sourceRealmdPdo, $accountIds);
+
+    return array(
+        'ok' => true,
+        'entity_type' => $entityType,
+        'label' => $label !== '' ? $label : $entityType,
+        'character_rows' => array_values($characterRowsByGuid),
+        'character_guids' => array_keys($characterRowsByGuid),
+        'account_ids' => $accountIds,
+        'account_rows_by_id' => $accountRowsById,
+        'meta' => $meta,
+    );
+}
+
+function spp_admin_backup_build_filename(string $prefix, string $entityType, string $label, string $lane = '', ?string $stamp = null, string $extension = 'sql'): string
 {
     $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '_', trim($label)));
     $slug = trim($slug, '_');
@@ -458,7 +671,12 @@ function spp_admin_backup_build_filename(string $prefix, string $entityType, str
     $stamp = $stamp !== null && $stamp !== '' ? $stamp : date('Ymd_His');
     $lane = strtolower(trim($lane));
 
-    return $prefix . '_' . $entityType . '_' . $slug . ($lane !== '' ? '_' . $lane : '') . '_' . $stamp . '.sql';
+    $extension = strtolower(trim($extension));
+    if ($extension === '') {
+        $extension = 'sql';
+    }
+
+    return $prefix . '_' . $entityType . '_' . $slug . ($lane !== '' ? '_' . $lane : '') . '_' . $stamp . '.' . $extension;
 }
 
 function spp_admin_backup_write_output(string $filename, array $lines): array
@@ -487,7 +705,13 @@ function spp_admin_backup_write_output_set(string $prefix, string $entityType, s
             continue;
         }
 
-        $filename = spp_admin_backup_build_filename($prefix, $entityType, $label, $lane, $stamp);
+        $extension = 'sql';
+        if (is_array($lines) && array_key_exists('lines', $lines)) {
+            $extension = (string)($lines['extension'] ?? 'sql');
+            $lines = (array)$lines['lines'];
+        }
+
+        $filename = spp_admin_backup_build_filename($prefix, $entityType, $label, $lane, $stamp, $extension);
         $writeResult = spp_admin_backup_write_output($filename, (array)$lines);
         if (empty($writeResult['ok'])) {
             return $writeResult;
@@ -527,9 +751,12 @@ function spp_admin_backup_list_files(int $limit = 20): array
         return array();
     }
 
-    $items = glob($dir . DIRECTORY_SEPARATOR . '*.sql');
-    if (!is_array($items)) {
-        return array();
+    $items = array();
+    foreach (array('sql', 'txt', 'bat', 'vbs') as $extension) {
+        $matched = glob($dir . DIRECTORY_SEPARATOR . '*.' . $extension);
+        if (is_array($matched)) {
+            $items = array_merge($items, $matched);
+        }
     }
 
     usort($items, function ($a, $b) {

@@ -80,9 +80,77 @@ if (!function_exists('spp_realmstatus_cache_ttl_minutes')) {
 }
 
 if (!function_exists('spp_realmstatus_cache_key')) {
-    function spp_realmstatus_cache_key(int $selectedRealmId, bool $debugMode, bool $useLocalIpPortTest): string
+    function spp_realmstatus_cache_key(int $selectedRealmId, int $sourceRealmId, bool $debugMode, bool $useLocalIpPortTest, array $targetRealmIds = array()): string
     {
-        return 'realmstatus:' . $selectedRealmId . ':debug:' . (int)$debugMode . ':local:' . (int)$useLocalIpPortTest;
+        return 'realmstatus:' . $selectedRealmId . ':source:' . $sourceRealmId . ':ids:' . implode('-', array_map('intval', $targetRealmIds)) . ':debug:' . (int)$debugMode . ':local:' . (int)$useLocalIpPortTest;
+    }
+}
+
+if (!function_exists('spp_realmstatus_target_realm_ids')) {
+    function spp_realmstatus_target_realm_ids(array $realmMap, array $get = array()): array
+    {
+        $requestedIds = array();
+        $rawIds = trim((string)($get['realm_ids'] ?? ''));
+        if ($rawIds !== '') {
+            foreach (preg_split('/[\s,;]+/', $rawIds) as $candidate) {
+                $realmId = (int)$candidate;
+                if ($realmId > 0 && isset($realmMap[$realmId])) {
+                    $requestedIds[] = $realmId;
+                }
+            }
+        }
+
+        if (!empty($requestedIds)) {
+            return array_values(array_unique($requestedIds));
+        }
+
+        $preferredIds = array(1, 2, 4);
+        $resolved = array();
+        foreach ($preferredIds as $realmId) {
+            if (isset($realmMap[$realmId])) {
+                $resolved[] = $realmId;
+            }
+        }
+
+        if (!empty($resolved)) {
+            return $resolved;
+        }
+
+        return !empty($realmMap) ? array((int)spp_default_realm_id($realmMap)) : array(1);
+    }
+}
+
+if (!function_exists('spp_realmstatus_fetch_realmlist_row')) {
+    function spp_realmstatus_fetch_realmlist_row(PDO $realmPdo, int $configRealmId): array
+    {
+        $stmt = $realmPdo->prepare("SELECT * FROM `realmlist` WHERE `id` = ? LIMIT 1");
+        $stmt->execute(array($configRealmId));
+        $realm = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (is_array($realm)) {
+            return $realm;
+        }
+
+        $fallback = $realmPdo->query("SELECT * FROM `realmlist` ORDER BY `id` ASC LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+        return is_array($fallback) ? $fallback : array();
+    }
+}
+
+if (!function_exists('spp_realmstatus_realm_name')) {
+    function spp_realmstatus_realm_name(int $configRealmId, array $realmRow): string
+    {
+        $name = trim((string)($realmRow['name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+
+        if (function_exists('spp_get_armory_realm_name')) {
+            $fallback = trim((string)spp_get_armory_realm_name($configRealmId));
+            if ($fallback !== '') {
+                return $fallback;
+            }
+        }
+
+        return 'Realm #' . $configRealmId;
     }
 }
 
@@ -463,32 +531,36 @@ if (!function_exists('spp_realmstatus_fetch_progression_states')) {
             'Naxx25' => 'uncleared', 'Ulduar' => 'uncleared', 'ICC' => 'uncleared',
         );
 
-        if ($exp === 'classic') {
-            $counts = $charPdo->query("\n                SELECT\n                  SUM(itemEntry IN (16866,16854,16867,16868,16865,16863,16861,16862)) AS mc_count,\n                  SUM(itemEntry IN (16963,16964,16965,16966,16967,16968,16969,16970)) AS ony_count,\n                  SUM(itemEntry IN (16911,16924,16932,16940,16945,16953,16961,16968)) AS bwl_count,\n                  SUM(itemEntry IN (19802,19854,19822,19862,19848,19910)) AS zg_count,\n                  SUM(itemEntry IN (21329,21330,21331,21332,21333,21220)) AS aq_count,\n                  SUM(itemEntry IN (22416,22417,22418,22419,22420,22421,22422,22423)) AS naxx_count\n                FROM `item_instance`\n            ")->fetch(PDO::FETCH_ASSOC);
-            if (is_array($counts)) {
-                $state['MC'] = spp_realmstatus_progression_state($counts['mc_count'] ?? 0, 3, 'cleared');
-                $state['Ony'] = spp_realmstatus_progression_state($counts['ony_count'] ?? 0, 3, 'cleared');
-                $state['BWL'] = spp_realmstatus_progression_state($counts['bwl_count'] ?? 0, 3, 'partial');
-                $state['ZG'] = spp_realmstatus_progression_state($counts['zg_count'] ?? 0, 3, 'cleared');
-                $state['AQ'] = spp_realmstatus_progression_state($counts['aq_count'] ?? 0, 3, 'partial');
-                $state['Naxx'] = spp_realmstatus_progression_state($counts['naxx_count'] ?? 0, 2, 'partial');
+        try {
+            if ($exp === 'classic') {
+                $counts = $charPdo->query("\n                SELECT\n                  SUM(itemEntry IN (16866,16854,16867,16868,16865,16863,16861,16862)) AS mc_count,\n                  SUM(itemEntry IN (16963,16964,16965,16966,16967,16968,16969,16970)) AS ony_count,\n                  SUM(itemEntry IN (16911,16924,16932,16940,16945,16953,16961,16968)) AS bwl_count,\n                  SUM(itemEntry IN (19802,19854,19822,19862,19848,19910)) AS zg_count,\n                  SUM(itemEntry IN (21329,21330,21331,21332,21333,21220)) AS aq_count,\n                  SUM(itemEntry IN (22416,22417,22418,22419,22420,22421,22422,22423)) AS naxx_count\n                FROM `item_instance`\n            ")->fetch(PDO::FETCH_ASSOC);
+                if (is_array($counts)) {
+                    $state['MC'] = spp_realmstatus_progression_state($counts['mc_count'] ?? 0, 3, 'cleared');
+                    $state['Ony'] = spp_realmstatus_progression_state($counts['ony_count'] ?? 0, 3, 'cleared');
+                    $state['BWL'] = spp_realmstatus_progression_state($counts['bwl_count'] ?? 0, 3, 'partial');
+                    $state['ZG'] = spp_realmstatus_progression_state($counts['zg_count'] ?? 0, 3, 'cleared');
+                    $state['AQ'] = spp_realmstatus_progression_state($counts['aq_count'] ?? 0, 3, 'partial');
+                    $state['Naxx'] = spp_realmstatus_progression_state($counts['naxx_count'] ?? 0, 2, 'partial');
+                }
+            } elseif ($exp === 'tbc') {
+                $counts = $charPdo->query("\n                SELECT\n                  SUM(itemEntry IN (29066,29067,29068,29069,29070)) AS kara_count,\n                  SUM(itemEntry IN (30245,30246,30247,30248,30249)) AS ssc_count,\n                  SUM(itemEntry IN (30233,30234,30235,30236,30237)) AS tk_count,\n                  SUM(itemEntry IN (30969,30970,30971,30972,30974)) AS bt_count,\n                  SUM(itemEntry IN (34332,34333,34334,34335,34336)) AS swp_count\n                FROM `item_instance`\n            ")->fetch(PDO::FETCH_ASSOC);
+                if (is_array($counts)) {
+                    $state['Kara'] = spp_realmstatus_progression_state($counts['kara_count'] ?? 0, 3, 'cleared');
+                    $state['SSC'] = spp_realmstatus_progression_state($counts['ssc_count'] ?? 0, 3, 'partial');
+                    $state['TK'] = spp_realmstatus_progression_state($counts['tk_count'] ?? 0, 3, 'partial');
+                    $state['BT'] = spp_realmstatus_progression_state($counts['bt_count'] ?? 0, 3, 'partial');
+                    $state['SWP'] = spp_realmstatus_progression_state($counts['swp_count'] ?? 0, 2, 'partial');
+                }
+            } elseif ($exp === 'wotlk') {
+                $counts = $charPdo->query("\n                SELECT\n                  SUM(itemEntry IN (40554,40557,40559,40560,40562)) AS naxx25_count,\n                  SUM(itemEntry IN (45340,45341,45342,45343,45344)) AS ulduar_count,\n                  SUM(itemEntry IN (51155,51156,51157,51158,51159)) AS icc_count\n                FROM `item_instance`\n            ")->fetch(PDO::FETCH_ASSOC);
+                if (is_array($counts)) {
+                    $state['Naxx25'] = spp_realmstatus_progression_state($counts['naxx25_count'] ?? 0, 3, 'cleared');
+                    $state['Ulduar'] = spp_realmstatus_progression_state($counts['ulduar_count'] ?? 0, 3, 'partial');
+                    $state['ICC'] = spp_realmstatus_progression_state($counts['icc_count'] ?? 0, 3, 'partial');
+                }
             }
-        } elseif ($exp === 'tbc') {
-            $counts = $charPdo->query("\n                SELECT\n                  SUM(itemEntry IN (29066,29067,29068,29069,29070)) AS kara_count,\n                  SUM(itemEntry IN (30245,30246,30247,30248,30249)) AS ssc_count,\n                  SUM(itemEntry IN (30233,30234,30235,30236,30237)) AS tk_count,\n                  SUM(itemEntry IN (30969,30970,30971,30972,30974)) AS bt_count,\n                  SUM(itemEntry IN (34332,34333,34334,34335,34336)) AS swp_count\n                FROM `item_instance`\n            ")->fetch(PDO::FETCH_ASSOC);
-            if (is_array($counts)) {
-                $state['Kara'] = spp_realmstatus_progression_state($counts['kara_count'] ?? 0, 3, 'cleared');
-                $state['SSC'] = spp_realmstatus_progression_state($counts['ssc_count'] ?? 0, 3, 'partial');
-                $state['TK'] = spp_realmstatus_progression_state($counts['tk_count'] ?? 0, 3, 'partial');
-                $state['BT'] = spp_realmstatus_progression_state($counts['bt_count'] ?? 0, 3, 'partial');
-                $state['SWP'] = spp_realmstatus_progression_state($counts['swp_count'] ?? 0, 2, 'partial');
-            }
-        } elseif ($exp === 'wotlk') {
-            $counts = $charPdo->query("\n                SELECT\n                  SUM(itemEntry IN (40554,40557,40559,40560,40562)) AS naxx25_count,\n                  SUM(itemEntry IN (45340,45341,45342,45343,45344)) AS ulduar_count,\n                  SUM(itemEntry IN (51155,51156,51157,51158,51159)) AS icc_count\n                FROM `item_instance`\n            ")->fetch(PDO::FETCH_ASSOC);
-            if (is_array($counts)) {
-                $state['Naxx25'] = spp_realmstatus_progression_state($counts['naxx25_count'] ?? 0, 3, 'cleared');
-                $state['Ulduar'] = spp_realmstatus_progression_state($counts['ulduar_count'] ?? 0, 3, 'partial');
-                $state['ICC'] = spp_realmstatus_progression_state($counts['icc_count'] ?? 0, 3, 'partial');
-            }
+        } catch (Throwable $e) {
+            error_log('[realmstatus] progression lookup skipped for ' . $exp . ': ' . $e->getMessage());
         }
 
         return $state;
@@ -528,6 +600,27 @@ if (!function_exists('spp_realmstatus_population_label')) {
             return '-';
         }
         return (string)(int)$item['pop'];
+    }
+}
+
+if (!function_exists('spp_realmstatus_population_badge')) {
+    function spp_realmstatus_population_badge(int $population): string
+    {
+        if (function_exists('population_view')) {
+            return (string)population_view($population);
+        }
+
+        if ($population <= 500) {
+            return '<span class="population-status population-status--low">Low</span>';
+        }
+        if ($population <= 700) {
+            return '<span class="population-status population-status--medium">Medium</span>';
+        }
+        if ($population <= 2000) {
+            return '<span class="population-status population-status--high">High</span>';
+        }
+
+        return '<span class="population-status population-status--full">Full</span>';
     }
 }
 
@@ -626,6 +719,77 @@ if (!function_exists('spp_realmstatus_prepare_item')) {
     }
 }
 
+if (!function_exists('spp_realmstatus_render_cards')) {
+    function spp_realmstatus_render_cards(array $items, bool $debugMode): string
+    {
+        ob_start();
+        foreach ($items as $realmItem):
+?>
+    <div class="realm-card <?php echo (int)$realmItem['res_color'] === 1 ? 'online' : 'offline'; ?><?php echo !empty($realmItem['is_offline_realm']) ? ' is-collapsed' : ''; ?>"<?php if (!empty($realmItem['is_offline_realm'])): ?> data-realm-collapse="card"<?php endif; ?>>
+      <div class="realm-card__header">
+        <img src="<?php echo htmlspecialchars($realmItem['img']); ?>" alt="<?php echo htmlspecialchars($realmItem['status_label']); ?>" class="realm-card__icon"/>
+        <span class="realm-card__name"><?php echo htmlspecialchars($realmItem['name']); ?></span>
+        <span class="realm-card__header-meta">
+          <?php if (!empty($realmItem['is_offline_realm'])): ?>
+            <button type="button" class="realm-card__collapse-toggle" data-realm-collapse="toggle" aria-expanded="false">Show Details</button>
+          <?php endif; ?>
+          <span class="realm-card__build">(Build: <?php echo htmlspecialchars($realmItem['build']); ?>)</span>
+        </span>
+      </div>
+
+      <div class="realm-card__body">
+        <div><strong>Uptime:</strong> <?php echo htmlspecialchars($realmItem['uptime_label']); ?></div>
+        <div><strong>Stable Avg Uptime (<?php echo htmlspecialchars($realmItem['stats_window_label']); ?>):</strong> <?php echo htmlspecialchars($realmItem['stable_avg_up_label']); ?></div>
+        <div><strong>Median Uptime (<?php echo htmlspecialchars($realmItem['stats_window_label']); ?>):</strong> <?php echo htmlspecialchars($realmItem['median_up_label']); ?></div>
+        <div><strong>Short Restarts (<?php echo htmlspecialchars($realmItem['stats_window_label']); ?>):</strong> <?php echo (int)$realmItem['short_restarts']; ?><?php echo !empty($realmItem['stable_runs']) ? ' (' . (int)$realmItem['stable_runs'] . ' stable runs kept)' : ''; ?></div>
+        <div><strong>Restarts Today:</strong> <?php echo (int)$realmItem['restarts']; ?></div>
+        <div><strong>Type:</strong> <?php echo htmlspecialchars($realmItem['type']); ?></div>
+        <div><strong>Population:</strong> <?php if (!empty($realmItem['has_char_data'])): ?><?php echo htmlspecialchars($realmItem['population_label']); ?> (<?php echo spp_realmstatus_population_badge((int)$realmItem['pop']); ?>)<?php else: ?>-<?php endif; ?></div>
+        <div><strong>Online:</strong> <?php echo htmlspecialchars($realmItem['online_label']); ?></div>
+        <div><strong>Players Online:</strong> <?php echo htmlspecialchars($realmItem['player_count_label']); ?></div>
+
+          <?php if (!empty($realmItem['balance'])): ?>
+            <div class="faction-labels">
+              <span class="alliance">Alliance (<?php echo (int)$realmItem['alli']; ?>)</span>
+              <span class="horde">Horde (<?php echo (int)$realmItem['horde']; ?>)</span>
+            </div>
+            <div class="faction-bar">
+              <div class="alliance" style="width:<?php echo (int)$realmItem['balance']['alliance_width']; ?>%"></div>
+              <div class="horde" style="width:<?php echo (int)$realmItem['balance']['horde_width']; ?>%"></div>
+            </div>
+            <div class="faction-balance <?php echo htmlspecialchars($realmItem['balance']['balance_class']); ?>">
+              <?php echo htmlspecialchars($realmItem['balance']['balance_text']); ?>
+            </div>
+          <?php endif; ?>
+        </div>
+
+        <div class="realm-card__meta"><strong>Avg Online / Avg Total / Max Level:</strong> <?php echo htmlspecialchars($realmItem['avg_online_total_max_level_label']); ?></div>
+
+        <div class="realm-card__progression">
+          <strong>Progression:</strong>
+          <?php foreach ($realmItem['progression_badges'] as $badge): ?>
+            <span class="<?php echo htmlspecialchars($badge['class']); ?>"><?php echo htmlspecialchars($badge['label']); ?></span>
+          <?php endforeach; ?>
+          <span class="realm-card__avg-ilvl"><strong>Avg iLvl Online / Total:</strong> <?php echo htmlspecialchars($realmItem['avg_ilvl_online_total_label']); ?></span>
+        </div>
+
+        <?php if ($debugMode): ?>
+        <div class="realm-card__progression realm-card__debug" style="margin-top:10px;">
+          <strong>Debug:</strong>
+          <div style="margin-top:6px;color:#cdb88a;font-size:.92rem;line-height:1.55;">
+            <?php echo htmlspecialchars($realmItem['debug_summary']); ?>
+          </div>
+        </div>
+        <?php endif; ?>
+      </div>
+    </div>
+<?php
+        endforeach;
+
+        return (string)ob_get_clean();
+    }
+}
+
 if (!function_exists('spp_realmstatus_apply_status_state')) {
     function spp_realmstatus_apply_status_state(array $item, bool $isOnline): array
     {
@@ -644,20 +808,29 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
     {
         $realmMap = (array)($args['realm_map'] ?? ($GLOBALS['realmDbMap'] ?? array()));
         $get = (array)($args['get'] ?? $_GET);
+        $skipCache = !empty($args['skip_cache']);
         $debugMode = !empty($get['debug']);
         $useLocalIpPortTest = spp_config_generic_bool('use_local_ip_port_test', false);
         $selectedRealmId = !empty($realmMap) ? (int)spp_resolve_realm_id($realmMap) : 1;
-        $cacheKey = spp_realmstatus_cache_key(0, $debugMode, $useLocalIpPortTest);
-        $cachedState = spp_realmstatus_cache_read($cacheKey);
-        if (is_array($cachedState)) {
-            return $cachedState;
+        $targetRealmIds = spp_realmstatus_target_realm_ids($realmMap, $get);
+        $sourceRealmId = !empty($targetRealmIds) ? (int)$targetRealmIds[0] : 1;
+        $cacheKey = spp_realmstatus_cache_key($selectedRealmId, $sourceRealmId, $debugMode, $useLocalIpPortTest, $targetRealmIds);
+        if (!$skipCache) {
+            $cachedState = spp_realmstatus_cache_read($cacheKey);
+            if (is_array($cachedState)) {
+                return $cachedState;
+            }
         }
 
-        $realmPdo = spp_get_pdo('realmd', $selectedRealmId);
-        $realms = $realmPdo->query("SELECT * FROM `realmlist` ORDER BY `id` ASC")->fetchAll(PDO::FETCH_ASSOC);
         $items = array();
 
-        foreach ($realms as $realm) {
+        foreach ($targetRealmIds as $configRealmId) {
+            $realmPdo = spp_get_pdo('realmd', $configRealmId);
+            $realm = spp_realmstatus_fetch_realmlist_row($realmPdo, $configRealmId);
+            if (empty($realm)) {
+                continue;
+            }
+
             if ($useLocalIpPortTest) {
                 $realm['address'] = '127.0.0.1';
             }
@@ -667,12 +840,11 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
             $exp = spp_realmstatus_expansion_for_build($buildVersion);
             $realmHost = trim((string)($realm['address'] ?? ''));
             $realmPort = (int)($realm['port'] ?? 0);
-            $isSelectedRealm = false;
 
             $charCfg = null;
             $worldCfg = null;
-            try { $charCfg = spp_get_db_config('chars', $realmId); } catch (Throwable $e) { $charCfg = null; }
-            try { $worldCfg = spp_get_db_config('world', $realmId); } catch (Throwable $e) { $worldCfg = null; }
+            try { $charCfg = spp_get_db_config('chars', $configRealmId); } catch (Throwable $e) { $charCfg = null; }
+            try { $worldCfg = spp_get_db_config('world', $configRealmId); } catch (Throwable $e) { $worldCfg = null; }
 
             $charDbName = $charCfg['name'] ?? '';
             $worldDbName = $worldCfg['name'] ?? '';
@@ -683,7 +855,7 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
             $hasCharData = 0;
             $hasWorldData = 0;
             try {
-                $charPdo = spp_get_pdo('chars', $realmId);
+                $charPdo = spp_get_pdo('chars', $configRealmId);
             } catch (Throwable $e) {
                 $charPdo = null;
             }
@@ -700,8 +872,9 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
             }
 
             $item = array(
-                'id' => $realmId,
-                'name' => (string)($realm['name'] ?? ''),
+                'id' => $configRealmId,
+                'realmlist_id' => $realmId,
+                'name' => spp_realmstatus_realm_name($configRealmId, $realm),
                 'type' => spp_realmstatus_type_label($realm),
                 'build' => $buildVersion,
                 'exp' => $exp,
@@ -769,11 +942,18 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
 
         $pageState = array(
             'selectedRealmId' => $selectedRealmId,
+            'realmstatusSourceRealmId' => $sourceRealmId,
+            'realmstatusTargetRealmIds' => $targetRealmIds,
             'realmstatusDebug' => $debugMode,
             'realmstatusItems' => $items,
+            'realmstatusListHtml' => spp_realmstatus_render_cards($items, $debugMode),
+            'realmstatusPollUrl' => 'index.php?n=server&sub=realmstatus&ajax=1&realm_ids=' . implode(',', $targetRealmIds) . ($debugMode ? '&debug=1' : ''),
+            'realmstatusPolledAtLabel' => date('Y-m-d H:i:s'),
         );
 
-        spp_realmstatus_cache_write($cacheKey, $pageState);
+        if (!$skipCache) {
+            spp_realmstatus_cache_write($cacheKey, $pageState);
+        }
 
         return $pageState;
     }

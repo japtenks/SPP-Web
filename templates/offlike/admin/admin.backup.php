@@ -4,7 +4,7 @@
   <section class="backup-admin__panel">
     <p class="backup-admin__eyebrow">Backup Tooling</p>
     <h2 class="backup-admin__title">Backup And Xfer Packages</h2>
-    <p class="backup-admin__copy">This page now builds SQL packages for controlled backups and cross-realm transfers. It models the character side after CMaNGOS `pdump` ideas, but writes website-generated SQL files into a local cache folder so you can review and apply them deliberately.</p>
+    <p class="backup-admin__copy">This page builds reviewable SQL artifacts for two different jobs. Backup means same-schema snapshot/export from the selected realm. Xfer means a target-ready export, and on vMaNGOS routes that means manual transform-export SQL for review and manual apply, not live realm-to-realm movement.</p>
     <div class="backup-admin__grid">
       <div class="backup-admin__mini">
         <strong><?php echo htmlspecialchars((string)($backupView['source_realm_name'] ?? '')); ?></strong>
@@ -37,6 +37,13 @@
   <?php endif; ?>
   <?php if (!empty($backupActionState['error'])): ?>
     <div class="backup-admin__msg error"><?php echo htmlspecialchars((string)$backupActionState['error']); ?></div>
+  <?php endif; ?>
+  <?php if (!empty($backupView['warnings'])): ?>
+    <div class="backup-admin__msg error">
+      <?php foreach ((array)$backupView['warnings'] as $warning): ?>
+        <div><?php echo htmlspecialchars((string)$warning); ?></div>
+      <?php endforeach; ?>
+    </div>
   <?php endif; ?>
 
   <section class="backup-admin__panel">
@@ -72,68 +79,103 @@
   <section class="backup-admin__panel">
     <p class="backup-admin__eyebrow">Backup Export</p>
     <h2 class="backup-admin__title">Create Backup SQL</h2>
-    <p class="backup-admin__note">Backup exports preserve the selected entity as-is from the source realm. Use this for safe snapshots of a single character, full account, or guild before doing maintenance or promotion work.</p>
+    <p class="backup-admin__note">Backup preserves the selected entity in its current schema. Use it for same-schema snapshots and reviewable exports before maintenance, migration prep, or manual recovery work.</p>
 
     <form method="post" action="<?php echo htmlspecialchars((string)$backup_action_url, ENT_QUOTES, 'UTF-8'); ?>">
       <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)$admin_backup_csrf_token); ?>">
       <input type="hidden" name="backup_action" value="create_backup_package">
       <div class="backup-admin__form">
-        <label for="backup_source_realm_id">Source Realm</label>
-        <select id="backup_source_realm_id" name="source_realm_id">
-          <?php foreach ((array)$backupView['realm_options'] as $realmOption): ?>
-            <option value="<?php echo (int)$realmOption['id']; ?>"<?php if ((int)$realmOption['id'] === (int)$backupView['source_realm_id']) echo ' selected'; ?>>
-              <?php echo htmlspecialchars((string)$realmOption['name']); ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-
-        <label for="backup_entity_type">Entity Type</label>
-        <select id="backup_entity_type" name="backup_entity_type">
-          <?php foreach ((array)$backupView['entity_options'] as $entityKey => $entityLabel): ?>
-            <option value="<?php echo htmlspecialchars((string)$entityKey); ?>"<?php if ((string)$entityKey === (string)$backupView['backup_entity_type']) echo ' selected'; ?>>
-              <?php echo htmlspecialchars((string)$entityLabel); ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-
-        <label for="backup_source_account_id">Source Account</label>
-        <select id="backup_source_account_id" name="source_account_id">
-          <?php foreach ((array)$backupView['source_account_options'] as $accountOption): ?>
-            <option value="<?php echo (int)$accountOption['id']; ?>"<?php if ((int)$accountOption['id'] === (int)$backupView['selected_account_id']) echo ' selected'; ?>>
-              <?php echo '#' . (int)$accountOption['id'] . ' - ' . htmlspecialchars((string)$accountOption['username']); ?>
-            </option>
-          <?php endforeach; ?>
-        </select>
-
-        <label for="backup_source_character_guid">Character</label>
-        <select id="backup_source_character_guid" name="source_character_guid">
-          <?php if (!empty($backupView['source_character_options'])): ?>
-            <?php foreach ((array)$backupView['source_character_options'] as $characterOption): ?>
-              <option value="<?php echo (int)$characterOption['guid']; ?>"<?php if ((int)$characterOption['guid'] === (int)$backupView['selected_character_guid']) echo ' selected'; ?>>
-                <?php echo htmlspecialchars((string)$characterOption['name'] . ' (Lvl ' . (int)$characterOption['level'] . ')'); ?>
+        <div class="backup-admin__pair backup-field" data-entities="character,account,guild">
+          <label for="backup_source_realm_id">Source Realm</label>
+          <select id="backup_source_realm_id" name="source_realm_id">
+            <?php foreach ((array)$backupView['realm_options'] as $realmOption): ?>
+              <option value="<?php echo (int)$realmOption['id']; ?>"<?php if ((int)$realmOption['id'] === (int)$backupView['source_realm_id']) echo ' selected'; ?>>
+                <?php echo htmlspecialchars((string)$realmOption['name']); ?>
               </option>
             <?php endforeach; ?>
-          <?php else: ?>
-            <option value="0">No characters on this account</option>
-          <?php endif; ?>
-        </select>
+          </select>
+        </div>
 
-        <label for="backup_source_guild_id">Guild</label>
-        <select id="backup_source_guild_id" name="source_guild_id">
-          <?php if (!empty($backupView['source_guild_options'])): ?>
-            <?php foreach ((array)$backupView['source_guild_options'] as $guildOption): ?>
-              <option value="<?php echo (int)$guildOption['guildid']; ?>"<?php if ((int)$guildOption['guildid'] === (int)$backupView['selected_guild_id']) echo ' selected'; ?>>
-                <?php echo htmlspecialchars((string)$guildOption['name'] . (!empty($guildOption['leader_name']) ? ' (Leader: ' . $guildOption['leader_name'] . ')' : '')); ?>
+        <div class="backup-admin__pair backup-field" data-entities="character,account,guild">
+          <label for="backup_entity_type">Entity Type</label>
+          <select id="backup_entity_type" name="backup_entity_type">
+            <?php foreach ((array)$backupView['entity_options'] as $entityKey => $entityLabel): ?>
+              <option value="<?php echo htmlspecialchars((string)$entityKey); ?>"<?php if ((string)$entityKey === (string)$backupView['backup_entity_type']) echo ' selected'; ?>>
+                <?php echo htmlspecialchars((string)$entityLabel); ?>
               </option>
             <?php endforeach; ?>
-          <?php else: ?>
-            <option value="0">No guilds found on this realm</option>
-          <?php endif; ?>
-        </select>
+          </select>
+        </div>
+
+        <div class="backup-admin__pair backup-field" data-entities="character,account">
+          <label for="backup_source_account_id">Source Account</label>
+          <select id="backup_source_account_id" name="source_account_id">
+            <?php foreach ((array)$backupView['source_account_options'] as $accountOption): ?>
+              <option value="<?php echo (int)$accountOption['id']; ?>"<?php if ((int)$accountOption['id'] === (int)$backupView['selected_account_id']) echo ' selected'; ?>>
+                <?php echo '#' . (int)$accountOption['id'] . ' - ' . htmlspecialchars((string)$accountOption['username']); ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <div class="backup-admin__muted" id="backup_account_hint">
+            <?php
+              $selectedAccountUsername = (string)($backupView['selected_account_row']['username'] ?? '');
+              $selectedAccountId = (int)($backupView['selected_account_id'] ?? 0);
+              $characterCount = count((array)($backupView['source_character_options'] ?? array()));
+              if ($selectedAccountId > 0) {
+                echo htmlspecialchars('Selected account #' . $selectedAccountId . ($selectedAccountUsername !== '' ? ' (' . $selectedAccountUsername . ')' : '') . ' | Characters found: ' . $characterCount);
+              } else {
+                echo 'No source account selected.';
+              }
+            ?>
+          </div>
+        </div>
+
+        <div class="backup-admin__pair backup-field" data-entities="character">
+          <label for="backup_source_character_guid">Character</label>
+          <select id="backup_source_character_guid" name="source_character_guid">
+            <?php if (!empty($backupView['source_character_options'])): ?>
+              <?php foreach ((array)$backupView['source_character_options'] as $characterOption): ?>
+                <option value="<?php echo (int)$characterOption['guid']; ?>"<?php if ((int)$characterOption['guid'] === (int)$backupView['selected_character_guid']) echo ' selected'; ?>>
+                  <?php echo htmlspecialchars((string)$characterOption['name'] . ' (Lvl ' . (int)$characterOption['level'] . ')'); ?>
+                </option>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <option value="0">No characters on this account</option>
+            <?php endif; ?>
+          </select>
+          <div class="backup-admin__muted" id="backup_character_hint">
+            <?php echo empty($backupView['source_character_options']) ? 'Choose another account or switch entity type.' : 'Select one character to export.'; ?>
+          </div>
+        </div>
+
+        <div class="backup-admin__pair backup-field" data-entities="guild">
+          <label for="backup_source_guild_id">Guild</label>
+          <select id="backup_source_guild_id" name="source_guild_id">
+            <?php if (!empty($backupView['source_guild_options'])): ?>
+              <?php foreach ((array)$backupView['source_guild_options'] as $guildOption): ?>
+                <option value="<?php echo (int)$guildOption['guildid']; ?>"<?php if ((int)$guildOption['guildid'] === (int)$backupView['selected_guild_id']) echo ' selected'; ?>>
+                  <?php echo htmlspecialchars((string)$guildOption['name'] . (!empty($guildOption['leader_name']) ? ' (Leader: ' . $guildOption['leader_name'] . ')' : '')); ?>
+                </option>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <option value="0">No guilds found on this realm</option>
+            <?php endif; ?>
+          </select>
+        </div>
       </div>
 
       <div class="backup-admin__actions">
-        <input type="submit" value="Create Backup SQL" <?php if (empty($backupView['output_dir_writable'])) echo 'disabled="disabled"'; ?>>
+        <?php
+          $backupDisabled = empty($backupView['output_dir_writable']);
+          if ((string)$backupView['backup_entity_type'] === 'character' && empty($backupView['source_character_options'])) {
+            $backupDisabled = true;
+          } elseif ((string)$backupView['backup_entity_type'] === 'account' && empty($backupView['source_account_options'])) {
+            $backupDisabled = true;
+          } elseif ((string)$backupView['backup_entity_type'] === 'guild' && empty($backupView['source_guild_options'])) {
+            $backupDisabled = true;
+          }
+        ?>
+        <input id="backup_submit" type="submit" value="Create Backup SQL" <?php if ($backupDisabled) echo 'disabled="disabled"'; ?>>
       </div>
     </form>
   </section>
@@ -141,7 +183,7 @@
   <section class="backup-admin__panel">
     <p class="backup-admin__eyebrow">Realm Xfer</p>
     <h2 class="backup-admin__title">Create Xfer SQL</h2>
-    <p class="backup-admin__note">Xfer packages are target-ready SQL bundles for `Classic -> TBC -> WotLK` style promotion. Characters are remapped to new GUID ranges on the target realm, accounts reuse an existing username when possible, and guild packages assume the member characters have already been transferred with the same names. vMaNGOS account SQL stays separate from character SQL, and vMaNGOS character xfer now requires a live schema validation pass before a package is trusted.</p>
+    <p class="backup-admin__note">Xfer builds target-ready SQL artifacts. Standard CMaNGOS routes still package manual cross-realm SQL, while `CMaNGOS -> vMaNGOS` builds transformed export files for manual inspection and apply. vMaNGOS keeps `realmd.sql` and `chars.sql` separate, adds a manifest, supports account/bot/guild scopes, does not live-apply anything, and still requires schema validation before character-side export is trusted.</p>
     <?php if (!empty($backupView['xfer_route_help'])): ?>
       <p class="backup-admin__note" id="xfer_route_help"><?php echo htmlspecialchars((string)$backupView['xfer_route_help']); ?></p>
     <?php endif; ?>
@@ -181,6 +223,18 @@
             </option>
           <?php endforeach; ?>
           </select>
+          <div class="backup-admin__muted" id="xfer_account_hint">
+            <?php
+              $selectedXferAccountUsername = (string)($backupView['selected_account_row']['username'] ?? '');
+              $selectedXferAccountId = (int)($backupView['selected_account_id'] ?? 0);
+              $xferCharacterCount = count((array)($backupView['source_character_options'] ?? array()));
+              if ($selectedXferAccountId > 0) {
+                echo htmlspecialchars('Selected account #' . $selectedXferAccountId . ($selectedXferAccountUsername !== '' ? ' (' . $selectedXferAccountUsername . ')' : '') . ' | Characters found: ' . $xferCharacterCount);
+              } else {
+                echo 'No source account selected.';
+              }
+            ?>
+          </div>
         </div>
 
         <div class="backup-admin__pair xfer-field" data-entities="character">
@@ -196,6 +250,9 @@
             <option value="0">No characters on this account</option>
           <?php endif; ?>
           </select>
+          <div class="backup-admin__muted" id="xfer_character_hint">
+            <?php echo empty($backupView['source_character_options']) ? 'Choose another account or switch transfer type.' : 'Select one character to export for the target realm.'; ?>
+          </div>
         </div>
 
         <div class="backup-admin__pair xfer-field" data-entities="guild">
@@ -211,9 +268,23 @@
             <option value="0">No guilds found on this realm</option>
           <?php endif; ?>
           </select>
+          <div class="backup-admin__muted" id="xfer_guild_hint">
+            <?php
+              $guildSummary = (array)($backupView['selected_guild_summary'] ?? array());
+              $guildMemberCount = (int)($guildSummary['member_count'] ?? 0);
+              $guildAccountCount = (int)($guildSummary['account_count'] ?? 0);
+              $guildHumanCount = (int)($guildSummary['human_account_count'] ?? 0);
+              $guildBotCount = (int)($guildSummary['bot_account_count'] ?? 0);
+              if (!empty($backupView['selected_guild_id'])) {
+                echo htmlspecialchars('Guild members: ' . $guildMemberCount . ' | Owning accounts: ' . $guildAccountCount . ' | Mix: ' . $guildHumanCount . ' human / ' . $guildBotCount . ' bot');
+              } else {
+                echo 'No guild selected.';
+              }
+            ?>
+          </div>
         </div>
 
-        <div class="backup-admin__pair xfer-field" data-entities="character">
+        <div class="backup-admin__pair xfer-field xfer-field--target-account<?php if (!empty($backupView['selected_xfer_route']['target_is_vmangos']) && empty($backupView['selected_xfer_route']['source_is_vmangos'])) echo ' is-hidden'; ?>" data-entities="character">
           <label for="xfer_target_account_id">Target Account</label>
           <select id="xfer_target_account_id" name="target_account_id">
           <?php if (!empty($backupView['target_account_options'])): ?>
@@ -228,14 +299,26 @@
           </select>
         </div>
 
-        <div class="backup-admin__pair xfer-field" data-entities="character">
+        <div class="backup-admin__pair xfer-field xfer-field--target-name<?php if (!empty($backupView['selected_xfer_route']['target_is_vmangos']) && empty($backupView['selected_xfer_route']['source_is_vmangos'])) echo ' is-hidden'; ?>" data-entities="character">
           <label for="target_character_name">Target Character Name</label>
           <input type="text" id="target_character_name" name="target_character_name" value="<?php echo htmlspecialchars((string)$target_character_name, ENT_QUOTES, 'UTF-8'); ?>" maxlength="12">
         </div>
       </div>
 
       <div class="backup-admin__actions">
-        <input type="submit" value="Create Xfer SQL" <?php if (empty($backupView['output_dir_writable']) || empty($backupView['has_target_realm'])) echo 'disabled="disabled"'; ?>>
+        <?php
+          $xferDisabled = empty($backupView['output_dir_writable']) || empty($backupView['has_target_realm']);
+          if ((string)$backupView['xfer_entity_type'] === 'character') {
+            $xferDisabled = $xferDisabled
+              || empty($backupView['source_character_options'])
+              || ((empty($backupView['selected_xfer_route']['target_is_vmangos']) || !empty($backupView['selected_xfer_route']['source_is_vmangos'])) && empty($backupView['target_account_options']));
+          } elseif ((string)$backupView['xfer_entity_type'] === 'account') {
+            $xferDisabled = $xferDisabled || empty($backupView['source_account_options']);
+          } elseif ((string)$backupView['xfer_entity_type'] === 'guild') {
+            $xferDisabled = $xferDisabled || empty($backupView['source_guild_options']);
+          }
+        ?>
+        <input id="xfer_submit" type="submit" value="Create Xfer SQL" <?php if ($xferDisabled) echo 'disabled="disabled"'; ?>>
       </div>
     </form>
   </section>
