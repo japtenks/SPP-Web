@@ -1181,7 +1181,19 @@ function spp_admin_backup_basename(string $path): string
 
 function spp_admin_backup_download_url(string $filename): string
 {
-    return 'components/admin/admin.backup.download.php?file=' . rawurlencode($filename);
+    $siteHref = '/';
+    if (function_exists('spp_config_temp_string')) {
+        $siteHref = (string)spp_config_temp_string('site_href', '/');
+    }
+    $siteHref = trim(str_replace('\\', '/', $siteHref));
+    if ($siteHref === '' || strpos($siteHref, ':') !== false || $siteHref[0] !== '/') {
+        $siteHref = '/';
+    }
+    if (substr($siteHref, -1) !== '/') {
+        $siteHref .= '/';
+    }
+
+    return $siteHref . 'components/admin/admin.backup.download.php?file=' . rawurlencode($filename);
 }
 
 function spp_admin_backup_list_files(int $limit = 20): array
