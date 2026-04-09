@@ -44,8 +44,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     timer = setTimeout(function () {
-      fetch('modules/account/pm_user_search.php?q=' + encodeURIComponent(val))
-        .then(function (r) { return r.json(); })
+      window.sppAsync.getJson('modules/account/pm_user_search.php?q=' + encodeURIComponent(val), {
+        errorMessage: 'Recipient lookup failed.'
+      })
         .then(function (names) {
           box.innerHTML = names.map(function (n) {
             return '<div class="suggestion-item">' + n + '</div>';

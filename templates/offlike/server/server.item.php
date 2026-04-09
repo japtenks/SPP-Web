@@ -1097,19 +1097,9 @@ if (!function_exists('spp_item_detail_render_comment_html')) {
 builddiv_start(1, 'Item Detail', 1);
 ?>
 <link rel="stylesheet" type="text/css" href="<?php echo htmlspecialchars(spp_template_asset_url('css/armory-tooltips.css'), ENT_QUOTES); ?>" />
+<script src="<?php echo htmlspecialchars(spp_template_asset_url('js/spp.async.js'), ENT_QUOTES); ?>"></script>
 <script src="<?php echo htmlspecialchars(spp_template_asset_url('js/item-tooltips.js'), ENT_QUOTES); ?>"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-  var panel = document.getElementById('item-detail-tooltip-panel');
-  if (!panel) return;
-  var itemId = panel.getAttribute('data-item-id');
-  var realmId = panel.getAttribute('data-realm-id');
-  fetch('index.php?n=server&sub=itemtooltip&nobody=1&item=' + encodeURIComponent(itemId) + '&realm=' + encodeURIComponent(realmId), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-    .then(function (response) { if (!response.ok) throw new Error('tooltip request failed'); return response.text(); })
-    .then(function (html) { panel.innerHTML = html && html.trim() !== '' ? html : '<div class="item-detail-tooltip-loading">The tooltip renderer returned no item details.</div>'; })
-    .catch(function () { panel.innerHTML = '<div class="item-detail-tooltip-loading">Unable to load the full item details.</div>'; });
-});
-
 document.addEventListener('DOMContentLoaded', function () {
   var tabButtons = document.querySelectorAll('[data-item-tab-target]');
   if (!tabButtons.length) return;
@@ -1310,7 +1300,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       <div class="item-detail-panel item-detail-tooltip-shell">
         <h2 class="item-detail-panel-title">Item Stats</h2>
-        <div id="item-detail-tooltip-panel" data-item-id="<?php echo (int)$item['id']; ?>" data-realm-id="<?php echo (int)$realmId; ?>"><div class="item-detail-tooltip-loading">Loading full item details...</div></div>
+        <div id="item-detail-tooltip-panel" data-item-tooltip-panel="1" data-item-tooltip-panel-class="item-detail-tooltip-loading" data-item-id="<?php echo (int)$item['id']; ?>" data-realm-id="<?php echo (int)$realmId; ?>"><div class="item-detail-tooltip-loading">Loading full item details...</div></div>
       </div>
     </section>
 

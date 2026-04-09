@@ -1,5 +1,9 @@
 (function () {
   function initSetsTooltips() {
+    if (!window.sppItemTooltips) {
+      return;
+    }
+
     const realmId = parseInt(document.body.getAttribute('data-spp-sets-realm') || '0', 10);
     const tip = document.createElement('div');
     tip.className = 'talent-tt';
@@ -7,7 +11,6 @@
     document.body.appendChild(tip);
 
     let anchor = null;
-    const itemTipCache = new Map();
 
     function place(el) {
       const pad = 8;
@@ -37,24 +40,13 @@
     function show(el) {
       const itemId = parseInt(el.getAttribute('data-item-id') || '0', 10);
       if (itemId > 0) {
-        if (itemTipCache.has(itemId)) {
-          showHtml(el, itemTipCache.get(itemId));
-          return;
-        }
         showHtml(el, '<div class="tt-item"><h5>Loading...</h5></div>');
-        fetch('index.php?n=server&sub=itemtooltip&nobody=1&item=' + encodeURIComponent(itemId) + '&realm=' + encodeURIComponent(realmId), {
-          credentials: 'same-origin',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        window.sppItemTooltips.fetchTooltipHtml(itemId, realmId, 0, {
+          errorMessage: 'Item unavailable'
         })
-          .then(function (response) {
-            if (!response.ok) throw new Error('tooltip request failed');
-            return response.text();
-          })
           .then(function (html) {
-            const safeHtml = html && html.trim() !== '' ? html : '<div class="tt-item"><h5>Item unavailable</h5></div>';
-            itemTipCache.set(itemId, safeHtml);
             if (anchor === el) {
-              showHtml(el, safeHtml);
+              showHtml(el, html);
             }
           })
           .catch(function () {

@@ -77,14 +77,12 @@
     ?>
 
     <form method="get" action="<?php echo htmlspecialchars((string)$backup_action_url, ENT_QUOTES, 'UTF-8'); ?>">
-      <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)$admin_backup_csrf_token); ?>">
-      <input type="hidden" name="backup_action" value="create_xfer_package">
       <input type="hidden" name="n" value="admin">
       <input type="hidden" name="sub" value="backup">
       <div class="backup-admin__form">
         <div class="backup-admin__pair xfer-field" data-entities="character,account,guild">
           <label for="xfer_entity_type">Type</label>
-          <select id="xfer_entity_type" name="xfer_entity_type" onchange="this.form.submit()">
+          <select id="xfer_entity_type" name="xfer_entity_type">
             <?php foreach ((array)$backupView['xfer_entity_options'] as $entityKey => $entityLabel): ?>
               <option value="<?php echo htmlspecialchars((string)$entityKey); ?>"<?php if ((string)$entityKey === (string)$backupView['xfer_entity_type']) echo ' selected'; ?>>
                 <?php echo htmlspecialchars((string)$entityLabel); ?>
@@ -95,7 +93,7 @@
 
         <div class="backup-admin__pair xfer-field" data-entities="character,account,guild">
           <label for="xfer_route">Realm Route</label>
-          <select id="xfer_route" name="xfer_route" onchange="this.form.submit()">
+          <select id="xfer_route" name="xfer_route">
           <?php foreach ((array)$backupView['xfer_route_options'] as $routeOption): ?>
             <option value="<?php echo htmlspecialchars((string)$routeOption['id']); ?>"<?php if ((string)$routeOption['id'] === (string)$backupView['selected_xfer_route_id']) echo ' selected'; ?>>
               <?php echo htmlspecialchars((string)$routeOption['label']); ?>
@@ -107,7 +105,7 @@
         <?php if ($selectedXferType === 'character' || $selectedXferType === 'account'): ?>
           <div class="backup-admin__pair xfer-field" data-entities="character,account">
             <label for="xfer_source_account_id">Source Account</label>
-            <select id="xfer_source_account_id" name="source_account_id" onchange="this.form.submit()">
+            <select id="xfer_source_account_id" name="source_account_id">
             <?php foreach ((array)$backupView['source_account_options'] as $accountOption): ?>
               <option value="<?php echo (int)$accountOption['id']; ?>"<?php if ((int)$accountOption['id'] === (int)$backupView['selected_account_id']) echo ' selected'; ?>>
                 <?php echo '#' . (int)$accountOption['id'] . ' - ' . htmlspecialchars((string)$accountOption['username']); ?>
@@ -132,7 +130,7 @@
         <?php if ($selectedXferType === 'character'): ?>
           <div class="backup-admin__pair xfer-field" data-entities="character">
             <label for="xfer_source_character_guid">Character</label>
-            <select id="xfer_source_character_guid" name="source_character_guid" onchange="this.form.submit()">
+            <select id="xfer_source_character_guid" name="source_character_guid">
             <?php if (!empty($backupView['source_character_options'])): ?>
               <?php foreach ((array)$backupView['source_character_options'] as $characterOption): ?>
                 <option value="<?php echo (int)$characterOption['guid']; ?>"<?php if ((int)$characterOption['guid'] === (int)$backupView['selected_character_guid']) echo ' selected'; ?>>
@@ -152,7 +150,7 @@
         <?php if ($selectedXferType === 'guild'): ?>
           <div class="backup-admin__pair xfer-field" data-entities="guild">
             <label for="xfer_source_guild_id">Guild</label>
-            <select id="xfer_source_guild_id" name="source_guild_id" onchange="this.form.submit()">
+            <select id="xfer_source_guild_id" name="source_guild_id">
             <?php if (!empty($backupView['source_guild_options'])): ?>
               <?php foreach ((array)$backupView['source_guild_options'] as $guildOption): ?>
                 <option value="<?php echo (int)$guildOption['guildid']; ?>"<?php if ((int)$guildOption['guildid'] === (int)$backupView['selected_guild_id']) echo ' selected'; ?>>
@@ -184,7 +182,7 @@
         <?php if ($selectedXferType === 'character' && !$isVmangosTransformRoute): ?>
           <div class="backup-admin__pair xfer-field xfer-field--target-account" data-entities="character">
             <label for="xfer_target_account_id">Target Account</label>
-            <select id="xfer_target_account_id" name="target_account_id" onchange="this.form.submit()">
+            <select id="xfer_target_account_id" name="target_account_id">
             <?php if (!empty($backupView['target_account_options'])): ?>
               <?php foreach ((array)$backupView['target_account_options'] as $accountOption): ?>
                 <option value="<?php echo (int)$accountOption['id']; ?>"<?php if ((int)$accountOption['id'] === (int)$backupView['selected_target_account_id']) echo ' selected'; ?>>
@@ -207,6 +205,24 @@
       </div>
 
       <div class="backup-admin__actions">
+        <button type="submit">Refresh Selection</button>
+      </div>
+    </form>
+
+    <form method="post" action="<?php echo htmlspecialchars((string)$backup_action_url, ENT_QUOTES, 'UTF-8'); ?>">
+      <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)$admin_backup_csrf_token); ?>">
+      <input type="hidden" name="backup_action" value="create_xfer_package">
+      <input type="hidden" name="n" value="admin">
+      <input type="hidden" name="sub" value="backup">
+      <input type="hidden" name="xfer_entity_type" value="<?php echo htmlspecialchars((string)$backupView['xfer_entity_type']); ?>">
+      <input type="hidden" name="xfer_route" value="<?php echo htmlspecialchars((string)$backupView['selected_xfer_route_id']); ?>">
+      <input type="hidden" name="source_realm_id" value="<?php echo (int)($backupView['source_realm_id'] ?? 0); ?>">
+      <input type="hidden" name="source_account_id" value="<?php echo (int)($backupView['selected_account_id'] ?? 0); ?>">
+      <input type="hidden" name="source_character_guid" value="<?php echo (int)($backupView['selected_character_guid'] ?? 0); ?>">
+      <input type="hidden" name="source_guild_id" value="<?php echo (int)($backupView['selected_guild_id'] ?? 0); ?>">
+      <input type="hidden" name="target_account_id" value="<?php echo (int)($backupView['selected_target_account_id'] ?? 0); ?>">
+      <input type="hidden" name="target_character_name" value="<?php echo htmlspecialchars((string)$target_character_name, ENT_QUOTES, 'UTF-8'); ?>">
+      <div class="backup-admin__actions">
         <?php
           $xferDisabled = empty($backupView['output_dir_writable']) || empty($backupView['has_target_realm']);
           if ((string)$backupView['xfer_entity_type'] === 'character') {
@@ -219,7 +235,7 @@
             $xferDisabled = $xferDisabled || empty($backupView['source_guild_options']);
           }
         ?>
-        <input id="xfer_submit" type="submit" value="Create Xfer SQL" formmethod="post" <?php if ($xferDisabled) echo 'disabled="disabled"'; ?>>
+        <button id="xfer_submit" type="submit"<?php if ($xferDisabled) echo ' disabled="disabled"'; ?>>Create Xfer SQL</button>
       </div>
     </form>
   </section>

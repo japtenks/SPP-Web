@@ -215,18 +215,6 @@
     });
   }
 
-  function fetchJson(url) {
-    return fetch(url, {
-      credentials: 'same-origin',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    }).then(function (response) {
-      if (!response.ok) {
-        throw new Error('request failed');
-      }
-      return response.json();
-    });
-  }
-
   function initProfessionDetails() {
     const detailCards = document.querySelectorAll('.marketplace-profession-detail-toggle[data-skill-id]');
     detailCards.forEach(function (card) {
@@ -245,7 +233,9 @@
         }
 
         mount.innerHTML = '<div class="marketplace-loading feature-panel">Loading profession details...</div>';
-        fetchJson(window.marketplaceConfig.apiUrl + '&action=profession&skill=' + encodeURIComponent(skillId))
+        window.sppAsync.getJson(window.marketplaceConfig.apiUrl + '&action=profession&skill=' + encodeURIComponent(skillId), {
+          errorMessage: 'Unable to load profession details right now.'
+        })
           .then(function (payload) {
             const markup = payload && payload.error
               ? '<div class="marketplace-bot-empty">' + escapeHtml(payload.error) + '</div>'
@@ -286,7 +276,9 @@
       grid.hidden = true;
       results.innerHTML = '<div class="marketplace-loading feature-panel">Searching marketplace...</div>';
 
-      fetchJson(window.marketplaceConfig.apiUrl + '&action=search&q=' + encodeURIComponent(query))
+      window.sppAsync.getJson(window.marketplaceConfig.apiUrl + '&action=search&q=' + encodeURIComponent(query), {
+        errorMessage: 'Search is unavailable right now.'
+      })
         .then(function (payload) {
           if (token !== activeSearchToken) {
             return;

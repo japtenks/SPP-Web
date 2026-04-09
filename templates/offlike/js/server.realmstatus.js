@@ -29,6 +29,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   let pollInFlight = false;
+  let lastSuccessfulPolledAt = '';
+
   function updateLegend(polledAt) {
     const legend = document.querySelector('[data-realmstatus-polled-at]');
     if (!legend || !polledAt) {
@@ -36,7 +38,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     const realmIds = Array.isArray(config.targetRealmIds) ? config.targetRealmIds.join(', ') : '';
+    lastSuccessfulPolledAt = polledAt;
     legend.textContent = 'Polling realms: ' + realmIds + ', updated ' + polledAt;
+  }
+
+  function markLegendFailure() {
+    const legend = document.querySelector('[data-realmstatus-polled-at]');
+    if (!legend) {
+      return;
+    }
+
+    const realmIds = Array.isArray(config.targetRealmIds) ? config.targetRealmIds.join(', ') : '';
+    legend.textContent = lastSuccessfulPolledAt
+      ? 'Polling realms: ' + realmIds + ', last refresh ' + lastSuccessfulPolledAt + ' (retrying)'
+      : 'Polling realms: ' + realmIds + ', refresh failed (retrying)';
   }
 
   function pollRealmStatus() {
@@ -45,16 +60,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     pollInFlight = true;
-    fetch(config.pollUrl, {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      credentials: 'same-origin'
+    window.sppAsync.getJson(config.pollUrl, {
+      errorMessage: 'Realm status refresh failed.'
     })
-      .then(function (response) {
-        if (!response.ok) {
-          throw new Error('Realm status refresh failed.');
-        }
-        return response.json();
-      })
       .then(function (payload) {
         if (!payload || payload.ok !== true || typeof payload.html !== 'string') {
           throw new Error('Realm status payload was invalid.');
@@ -65,6 +73,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateLegend(payload.polledAt || '');
       })
       .catch(function () {
+        markLegendFailure();
       })
       .finally(function () {
         pollInFlight = false;

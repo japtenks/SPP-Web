@@ -2,6 +2,7 @@
   const state = {
     node: null,
     cache: new Map(),
+    pending: new Map(),
     requestToken: 0,
     activeAnchor: null
   };
@@ -31,6 +32,13 @@
 
   function errorHtml(message) {
     return '<div class="modern-item-tooltip modern-item-tooltip-loading">' + escapeHtml(message || 'Unable to load item tooltip.') + '</div>';
+  }
+
+  function panelMessageHtml(panel, defaultClassName, message) {
+    const className = panel && panel.getAttribute('data-item-tooltip-panel-class')
+      ? panel.getAttribute('data-item-tooltip-panel-class')
+      : defaultClassName;
+    return '<div class="' + escapeHtml(className) + '">' + escapeHtml(message) + '</div>';
   }
 
   function moveTooltip(event) {
@@ -66,9 +74,49 @@
     }
   }
 
+  function tooltipUrl(itemId, realmId, itemGuid) {
+    let url = 'index.php?n=server&sub=itemtooltip&nobody=1&item=' + encodeURIComponent(itemId) + '&realm=' + encodeURIComponent(realmId);
+    if (itemGuid) {
+      url += '&guid=' + encodeURIComponent(itemGuid);
+    }
+    return url;
+  }
+
+  function tooltipCacheKey(itemId, realmId, itemGuid) {
+    return String(realmId) + ':' + String(itemId) + ':' + String(itemGuid || 0);
+  }
+
+  function fetchTooltipHtml(itemId, realmId, itemGuid, options) {
+    const normalizedOptions = options || {};
+    const cacheKey = tooltipCacheKey(itemId, realmId, itemGuid);
+    if (state.cache.has(cacheKey)) {
+      return Promise.resolve(state.cache.get(cacheKey));
+    }
+
+    if (state.pending.has(cacheKey)) {
+      return state.pending.get(cacheKey);
+    }
+
+    const request = window.sppAsync.getText(tooltipUrl(itemId, realmId, itemGuid), {
+      errorMessage: 'Unable to load item tooltip.',
+      timeoutMs: normalizedOptions.timeoutMs || 8000
+    }).then(function (html) {
+      const safeHtml = html && html.trim() !== '' ? html : errorHtml(normalizedOptions.errorMessage);
+      state.cache.set(cacheKey, safeHtml);
+      state.pending.delete(cacheKey);
+      return safeHtml;
+    }).catch(function () {
+      state.pending.delete(cacheKey);
+      throw new Error('tooltip request failed');
+    });
+
+    state.pending.set(cacheKey, request);
+    return request;
+  }
+
   function requestTooltip(event, itemId, realmId, itemGuid, options) {
     const normalizedOptions = options || {};
-    const cacheKey = String(realmId) + ':' + String(itemId) + ':' + String(itemGuid || 0);
+    const cacheKey = tooltipCacheKey(itemId, realmId, itemGuid);
     if (state.cache.has(cacheKey)) {
       showTooltip(event, state.cache.get(cacheKey));
       return;
@@ -77,28 +125,10 @@
     showTooltip(event, loadingHtml(normalizedOptions.loadingMessage));
     state.requestToken += 1;
     const token = state.requestToken;
-    let url = 'index.php?n=server&sub=itemtooltip&nobody=1&item=' + encodeURIComponent(itemId) + '&realm=' + encodeURIComponent(realmId);
-    if (itemGuid) {
-      url += '&guid=' + encodeURIComponent(itemGuid);
-    }
-
-    fetch(url, {
-      credentials: 'same-origin',
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest'
-      }
-    })
-      .then(function (response) {
-        if (!response.ok) {
-          throw new Error('tooltip request failed');
-        }
-        return response.text();
-      })
+    fetchTooltipHtml(itemId, realmId, itemGuid, normalizedOptions)
       .then(function (html) {
-        const safeHtml = html && html.trim() !== '' ? html : errorHtml(normalizedOptions.errorMessage);
-        state.cache.set(cacheKey, safeHtml);
         if (token === state.requestToken) {
-          showTooltip(event, safeHtml);
+          showTooltip(event, html);
         }
       })
       .catch(function () {
@@ -153,6 +183,37 @@
     });
   }
 
+  function bindPanel(panel, options) {
+    if (!panel || panel.dataset.tooltipPanelBound === '1') {
+      return;
+    }
+
+    const normalizedOptions = options || {};
+    const itemId = panel.getAttribute('data-item-id');
+    const realmId = panel.getAttribute('data-realm-id') || normalizedOptions.realmId;
+    const itemGuid = panel.getAttribute('data-item-guid') || normalizedOptions.itemGuid;
+    if (!itemId || !realmId) {
+      return;
+    }
+
+    panel.dataset.tooltipPanelBound = '1';
+    panel.innerHTML = panelMessageHtml(panel, 'modern-item-tooltip modern-item-tooltip-loading', normalizedOptions.loadingMessage || 'Loading full item details...');
+
+    fetchTooltipHtml(itemId, realmId, itemGuid, normalizedOptions)
+      .then(function (html) {
+        panel.innerHTML = html;
+      })
+      .catch(function () {
+        panel.innerHTML = panelMessageHtml(panel, 'modern-item-tooltip modern-item-tooltip-loading', normalizedOptions.errorMessage || 'Unable to load the full item details.');
+      });
+  }
+
+  function bindPanels(selector, options) {
+    document.querySelectorAll(selector).forEach(function (panel) {
+      bindPanel(panel, options);
+    });
+  }
+
   function bindDelegation(root, selector, options) {
     if (!root) {
       return;
@@ -203,12 +264,23 @@
     errorHtml: errorHtml,
     moveTooltip: moveTooltip,
     hideTooltip: hideTooltip,
+    fetchTooltipHtml: fetchTooltipHtml,
     requestTooltip: requestTooltip,
     bindSelector: bindSelector,
-    bindDelegation: bindDelegation
+    bindDelegation: bindDelegation,
+    bindPanel: bindPanel,
+    bindPanels: bindPanels
   };
 
   window.modernRequestTooltip = requestTooltip;
   window.modernMoveTooltip = moveTooltip;
   window.modernHideTooltip = hideTooltip;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+      bindPanels('[data-item-tooltip-panel]');
+    }, { once: true });
+  } else {
+    bindPanels('[data-item-tooltip-panel]');
+  }
 })();

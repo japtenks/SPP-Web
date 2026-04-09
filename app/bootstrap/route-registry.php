@@ -165,7 +165,7 @@ if (!function_exists('spp_route_page_contracts')) {
                     'component_role' => 'adapter',
                     'template_role' => 'render',
                     'assets' => array(
-                        'scripts' => array('account.pms.js'),
+                        'scripts' => array('spp.async.js', 'account.pms.js'),
                     ),
                 ),
                 'userlist' => array(
@@ -356,7 +356,7 @@ if (!function_exists('spp_route_page_contracts')) {
                     'template_role' => 'render',
                     'assets' => array(
                         'style_paths' => array('css/armory-tooltips.css', 'css/paperdoll.css'),
-                        'scripts' => array('item-tooltips.js', 'server.character.js'),
+                        'scripts' => array('spp.async.js', 'item-tooltips.js', 'server.character.js'),
                     ),
                 ),
                 'guilds' => array(
@@ -394,7 +394,7 @@ if (!function_exists('spp_route_page_contracts')) {
                     'component_role' => 'adapter',
                     'template_role' => 'render',
                     'assets' => array(
-                        'scripts' => array('item-tooltips.js'),
+                        'scripts' => array('spp.async.js', 'item-tooltips.js'),
                         'script_paths' => array('server/server.items.js'),
                     ),
                 ),
@@ -403,7 +403,7 @@ if (!function_exists('spp_route_page_contracts')) {
                     'component_role' => 'adapter',
                     'template_role' => 'render',
                     'assets' => array(
-                        'scripts' => array('server.realmstatus.js'),
+                        'scripts' => array('spp.async.js', 'server.realmstatus.js'),
                     ),
                 ),
                 'statistic' => array(
@@ -416,7 +416,7 @@ if (!function_exists('spp_route_page_contracts')) {
                     'component_role' => 'adapter',
                     'template_role' => 'render',
                     'assets' => array(
-                        'scripts' => array('item-tooltips.js', 'server.ah.js'),
+                        'scripts' => array('spp.async.js', 'item-tooltips.js', 'server.ah.js'),
                     ),
                 ),
                 'downloads' => array(
