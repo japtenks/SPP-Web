@@ -58,9 +58,7 @@ if (!function_exists('spp_admin_members_build_detail_view')) {
                 continue;
             }
 
-            $realmName = function_exists('spp_get_armory_realm_name')
-                ? (spp_get_armory_realm_name((int)$candidateRealmId) ?? ('Realm ' . (int)$candidateRealmId))
-                : ('Realm ' . (int)$candidateRealmId);
+            $realmName = spp_realm_display_name((int)$candidateRealmId, $realmDbMap);
 
             foreach ($realmChars as $realmChar) {
                 $realmChar['realm_id'] = (int)$candidateRealmId;

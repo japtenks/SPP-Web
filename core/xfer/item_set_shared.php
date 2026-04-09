@@ -1,5 +1,7 @@
 <?php
 
+require_once dirname(__DIR__, 2) . '/app/server/realm-capabilities.php';
+
 if (!function_exists('spp_shared_item_set_realm_id')) {
     function spp_shared_item_set_realm_id($realmId = null): int
     {
@@ -81,6 +83,57 @@ if (!function_exists('spp_shared_item_set_fetch_one')) {
     }
 }
 
+if (!function_exists('spp_shared_item_set_fetch_one_from_candidates')) {
+    function spp_shared_item_set_fetch_one_from_candidates(array $databases, string $tableName, string $sql, array $params, $realmId = null): ?array
+    {
+        $realmId = spp_shared_item_set_realm_id($realmId);
+        foreach ($databases as $database) {
+            try {
+                if (function_exists('spp_get_pdo')) {
+                    $pdo = spp_get_pdo((string)$database, $realmId);
+                    if ($pdo instanceof PDO && spp_realm_capability_table_exists($pdo, $tableName)) {
+                        $stmt = $pdo->prepare($sql);
+                        $stmt->execute($params);
+                        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                        if (is_array($row)) {
+                            return $row;
+                        }
+                    }
+                }
+            } catch (Throwable $e) {
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('spp_shared_item_set_fetch_all_from_candidates')) {
+    function spp_shared_item_set_fetch_all_from_candidates(array $databases, string $tableName, string $sql, array $params, $realmId = null): array
+    {
+        $realmId = spp_shared_item_set_realm_id($realmId);
+        foreach ($databases as $database) {
+            try {
+                if (function_exists('spp_get_pdo')) {
+                    $pdo = spp_get_pdo((string)$database, $realmId);
+                    if ($pdo instanceof PDO && spp_realm_capability_table_exists($pdo, $tableName)) {
+                        $stmt = $pdo->prepare($sql);
+                        $stmt->execute($params);
+                        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                        if (is_array($rows) && !empty($rows)) {
+                            return $rows;
+                        }
+                        return [];
+                    }
+                }
+            } catch (Throwable $e) {
+            }
+        }
+
+        return [];
+    }
+}
+
 if (!function_exists('spp_shared_item_set_duration_seconds')) {
     function spp_shared_item_set_duration_seconds(int $durationId, $realmId = null): int
     {
@@ -89,8 +142,9 @@ if (!function_exists('spp_shared_item_set_duration_seconds')) {
             return 0;
         }
 
-        $row = spp_shared_item_set_fetch_one(
-            'armory',
+        $row = spp_shared_item_set_fetch_one_from_candidates(
+            ['armory', 'world'],
+            'dbc_spellduration',
             'SELECT `duration1`, `duration2` FROM `dbc_spellduration` WHERE `id` = ? LIMIT 1',
             [$durationId],
             $realmId
@@ -111,8 +165,9 @@ if (!function_exists('spp_shared_item_set_radius_text')) {
             return '0';
         }
 
-        $row = spp_shared_item_set_fetch_one(
-            'armory',
+        $row = spp_shared_item_set_fetch_one_from_candidates(
+            ['armory', 'world'],
+            'dbc_spellradius',
             'SELECT `radius1` FROM `dbc_spellradius` WHERE `id` = ? LIMIT 1',
             [$radiusId],
             $realmId
@@ -213,8 +268,9 @@ if (!function_exists('spp_shared_item_set_bonus_description')) {
                 return null;
             }
 
-            return spp_shared_item_set_fetch_one(
-                'armory',
+            return spp_shared_item_set_fetch_one_from_candidates(
+                ['armory', 'world'],
+                'dbc_spell',
                 'SELECT * FROM `dbc_spell` WHERE `id` = ? LIMIT 1',
                 [$spellId],
                 $sourceRealmId
@@ -372,8 +428,9 @@ if (!function_exists('spp_shared_get_itemset_data')) {
             return ['id' => $setId, 'name' => 'Unknown Set', 'items' => [], 'bonuses' => []];
         }
 
-        $row = spp_shared_item_set_fetch_one(
-            'armory',
+        $row = spp_shared_item_set_fetch_one_from_candidates(
+            ['armory', 'world'],
+            'dbc_itemset',
             'SELECT * FROM `dbc_itemset` WHERE `id` = ? LIMIT 1',
             [$setId],
             $realmId
@@ -393,9 +450,20 @@ if (!function_exists('spp_shared_get_itemset_data')) {
         $itemRows = [];
         if ($itemIds) {
             $placeholders = implode(',', array_fill(0, count($itemIds), '?'));
+            $worldPdo = null;
+            if (function_exists('spp_get_pdo')) {
+                try {
+                    $worldPdo = spp_get_pdo('world', $realmId);
+                } catch (Throwable $e) {
+                    $worldPdo = null;
+                }
+            }
+            $inventoryColumn = $worldPdo instanceof PDO ? (spp_realm_capability_pick_column($worldPdo, 'item_template', ['InventoryType', 'inventory_type']) ?? 'InventoryType') : 'InventoryType';
+            $displayColumn = $worldPdo instanceof PDO ? (spp_realm_capability_pick_column($worldPdo, 'item_template', ['displayid', 'display_id']) ?? 'displayid') : 'displayid';
+            $qualityColumn = $worldPdo instanceof PDO ? (spp_realm_capability_pick_column($worldPdo, 'item_template', ['Quality', 'quality']) ?? 'Quality') : 'Quality';
             $rows = spp_shared_item_set_fetch_all(
                 'world',
-                "SELECT `entry`, `name`, `InventoryType`, `displayid`, `Quality` FROM `item_template` WHERE `entry` IN ({$placeholders})",
+                "SELECT `entry`, `name`, `{$inventoryColumn}` AS `InventoryType`, `{$displayColumn}` AS `displayid`, `{$qualityColumn}` AS `Quality` FROM `item_template` WHERE `entry` IN ({$placeholders})",
                 $itemIds,
                 $realmId
             );
@@ -416,8 +484,9 @@ if (!function_exists('spp_shared_get_itemset_data')) {
         if ($displayIds) {
             $displayIdList = array_keys($displayIds);
             $placeholders = implode(',', array_fill(0, count($displayIdList), '?'));
-            $rows = spp_shared_item_set_fetch_all(
-                'armory',
+            $rows = spp_shared_item_set_fetch_all_from_candidates(
+                ['armory', 'world'],
+                'dbc_itemdisplayinfo',
                 "SELECT `id`, `name` FROM `dbc_itemdisplayinfo` WHERE `id` IN ({$placeholders})",
                 $displayIdList,
                 $realmId
@@ -466,8 +535,9 @@ if (!function_exists('spp_shared_get_itemset_data')) {
         $spellRows = [];
         if ($bonusSpellIds) {
             $placeholders = implode(',', array_fill(0, count($bonusSpellIds), '?'));
-            $rows = spp_shared_item_set_fetch_all(
-                'armory',
+            $rows = spp_shared_item_set_fetch_all_from_candidates(
+                ['armory', 'world'],
+                'dbc_spell',
                 "SELECT * FROM `dbc_spell` WHERE `id` IN ({$placeholders})",
                 $bonusSpellIds,
                 $realmId
@@ -489,8 +559,9 @@ if (!function_exists('spp_shared_get_itemset_data')) {
         if ($spellIconIds) {
             $spellIconIdList = array_keys($spellIconIds);
             $placeholders = implode(',', array_fill(0, count($spellIconIdList), '?'));
-            $rows = spp_shared_item_set_fetch_all(
-                'armory',
+            $rows = spp_shared_item_set_fetch_all_from_candidates(
+                ['armory', 'world'],
+                'dbc_spellicon',
                 "SELECT `id`, `name` FROM `dbc_spellicon` WHERE `id` IN ({$placeholders})",
                 $spellIconIdList,
                 $realmId

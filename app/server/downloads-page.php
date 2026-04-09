@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/realm-capabilities.php';
+require_once __DIR__ . '/realmlist-endpoint.php';
 
 if (!function_exists('spp_downloads_format_size')) {
     function spp_downloads_format_size($bytes): string
@@ -75,6 +76,7 @@ if (!function_exists('spp_server_downloads_load_page_state')) {
         $downloadsRealmId = !empty($realmMap) ? (int)spp_resolve_realm_id($realmMap, $requestedRealmId > 0 ? $requestedRealmId : null) : 1;
         $realmCapabilities = spp_realm_capabilities($realmMap, $downloadsRealmId);
         $realmlistHref = 'index.php?n=server&sub=realmlist&nobody=1&realm=' . $downloadsRealmId;
+        $realmlistOptions = spp_server_realmlist_download_options($realmMap, $downloadsRealmId);
 
         $sectionDefinitions = array(
             'addons' => array(
@@ -101,6 +103,7 @@ if (!function_exists('spp_server_downloads_load_page_state')) {
         return array(
             'downloadsRealmId' => $downloadsRealmId,
             'downloadsRealmlistHref' => $realmlistHref,
+            'downloadsRealmlistOptions' => $realmlistOptions,
             'downloadsSections' => $downloadsSections,
             'realmCapabilities' => $realmCapabilities,
             'pathway_info' => array(

@@ -100,6 +100,53 @@ if (!function_exists('spp_admin_forum_handle_action')) {
             exit;
         }
 
+        if ($action === 'spawnrealmforums') {
+            spp_require_csrf('admin_forum');
+            $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+            $realmId = (int)($_POST['realm_id'] ?? 0);
+            $result = spp_admin_forum_create_realm_forum_set($forumPdo, $realmDbMap, $realmId);
+            $notice = 'Realm forum set updated.';
+            if (!empty($result['missing_categories'])) {
+                $notice = 'Missing forum sections: ' . implode(', ', array_map('strval', (array)$result['missing_categories'])) . '.';
+            } elseif ((int)($result['created'] ?? 0) > 0 && (int)($result['skipped'] ?? 0) > 0) {
+                $notice = 'Created ' . (int)$result['created'] . ' realm forums for ' . (string)$result['realm_name'] . ' and skipped existing ones.';
+            } elseif ((int)($result['created'] ?? 0) > 0) {
+                $notice = 'Created ' . (int)$result['created'] . ' realm forums for ' . (string)$result['realm_name'] . '.';
+            } elseif ((int)($result['skipped'] ?? 0) > 0) {
+                $notice = 'Realm forums for ' . (string)$result['realm_name'] . ' already exist in the standard sections.';
+            }
+            redirect(spp_admin_forum_redirect_url_with_notice($requestData, $notice), 1);
+            exit;
+        }
+
+        if ($action === 'removerealmforums') {
+            spp_require_csrf('admin_forum');
+            $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+            $realmId = (int)($_POST['realm_id'] ?? 0);
+            $result = spp_admin_forum_remove_realm_forum_set($forumPdo, $realmDbMap, $realmId);
+            $notice = (int)($result['removed'] ?? 0) > 0
+                ? 'Removed ' . (int)$result['removed'] . ' managed realm forums for ' . (string)$result['realm_name'] . '.'
+                : 'No managed realm forums were found for ' . (string)$result['realm_name'] . '.';
+            redirect(spp_admin_forum_redirect_url_with_notice($requestData, $notice), 1);
+            exit;
+        }
+
+        if ($action === 'resetrealmforums') {
+            spp_require_csrf('admin_forum');
+            $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+            $realmId = (int)($_POST['realm_id'] ?? 0);
+            $removed = spp_admin_forum_remove_realm_forum_set($forumPdo, $realmDbMap, $realmId);
+            $created = spp_admin_forum_create_realm_forum_set($forumPdo, $realmDbMap, $realmId);
+            $notice = 'Reset realm forums for ' . (string)($created['realm_name'] ?? $removed['realm_name'] ?? ('Realm #' . $realmId)) . '.';
+            if (!empty($created['missing_categories'])) {
+                $notice = 'Reset removed ' . (int)($removed['removed'] ?? 0) . ' realm forums, but these sections are missing: ' . implode(', ', array_map('strval', (array)$created['missing_categories'])) . '.';
+            } else {
+                $notice = 'Reset realm forums for ' . (string)($created['realm_name'] ?? ('Realm #' . $realmId)) . ': removed ' . (int)($removed['removed'] ?? 0) . ', created ' . (int)($created['created'] ?? 0) . '.';
+            }
+            redirect(spp_admin_forum_redirect_url_with_notice($requestData, $notice), 1);
+            exit;
+        }
+
         if ($action === 'renameforum') {
             spp_require_csrf('admin_forum');
             $forumId = (int)($_POST['forum_id'] ?? 0);

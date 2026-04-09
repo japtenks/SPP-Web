@@ -24,11 +24,9 @@ if (!function_exists('server_talents_resolve_armory_realm_name')) {
     {
         $realmId = (int)$realmId;
 
-        if (function_exists('spp_get_armory_realm_name')) {
-            $resolved = spp_get_armory_realm_name($realmId);
-            if (is_string($resolved) && $resolved !== '') {
-                return $resolved;
-            }
+        $resolved = spp_realm_display_name($realmId, $realmMap, '');
+        if ($resolved !== '') {
+            return $resolved;
         }
 
         foreach ($legacyRealms as $realmName => $realmInfo) {
@@ -37,7 +35,7 @@ if (!function_exists('server_talents_resolve_armory_realm_name')) {
             }
         }
 
-        return 'Realm ' . $realmId;
+        return spp_realm_display_name($realmId, $realmMap);
     }
 }
 

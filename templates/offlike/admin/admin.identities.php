@@ -160,7 +160,7 @@ if (!function_exists('spp_admin_identity_health_template_excluded_text')) {
 
     <section class="feature-panel">
       <p class="admin-identity-health__eyebrow">Higher-Risk Reset Buckets</p>
-      <p class="admin-identity-health__metric"><?php echo htmlspecialchars((string)($identityHealthView['selected_realm_name'] ?? ('Realm ' . $identitySelectedRealmId)), ENT_QUOTES, 'UTF-8'); ?></p>
+      <p class="admin-identity-health__metric"><?php echo htmlspecialchars((string)($identityHealthView['selected_realm_name'] ?? spp_realm_display_name((int)$identitySelectedRealmId)), ENT_QUOTES, 'UTF-8'); ?></p>
       <p class="admin-identity-health__label">Preview-only scope for destructive wipe, reseed, or reset planning</p>
       <p class="admin-identity-health__note">Reset buckets answer a different question than repairs: if you intentionally wiped or rebuilt a system, how much data would that affect?</p>
       <div class="admin-identity-health__subgrid">
@@ -185,7 +185,7 @@ if (!function_exists('spp_admin_identity_health_template_excluded_text')) {
       <tbody>
         <?php foreach ($identityCoverageRows as $identityCoverageRow) { ?>
         <tr>
-          <td><strong><?php echo htmlspecialchars((string)$identityCoverageRow['realm_name'], ENT_QUOTES, 'UTF-8'); ?></strong><br /><span class="admin-identity-health__mono">Realm <?php echo (int)$identityCoverageRow['realm_id']; ?></span></td>
+          <td><strong><?php echo htmlspecialchars((string)$identityCoverageRow['realm_name'], ENT_QUOTES, 'UTF-8'); ?></strong><br /><span class="admin-identity-health__mono">ID #<?php echo (int)$identityCoverageRow['realm_id']; ?></span></td>
           <td><?php if (!empty($identityCoverageRow['available'])) { ?><span class="admin-identity-health__status<?php echo ($identityCoverageRow['health'] === 'attention' ? ' admin-identity-health__status--warn' : ''); ?>"><?php echo ($identityCoverageRow['health'] === 'attention' ? 'Needs Backfill' : 'Available'); ?></span><?php } else { ?><span class="admin-identity-health__status admin-identity-health__status--warn">Skipped</span><br /><span class="admin-identity-health__mono"><?php echo htmlspecialchars((string)$identityCoverageRow['skip_reason'], ENT_QUOTES, 'UTF-8'); ?></span><?php } ?></td>
           <td><?php echo number_format((int)$identityCoverageRow['account_identities']); ?> account<br /><?php echo number_format((int)$identityCoverageRow['character_identities']); ?> character<br /><?php echo number_format((int)$identityCoverageRow['bot_identities']); ?> bot</td>
           <td><?php echo htmlspecialchars(spp_admin_identity_health_template_coverage_text((int)$identityCoverageRow['posts_covered'], (int)$identityCoverageRow['posts_eligible']), ENT_QUOTES, 'UTF-8'); ?><br /><span class="admin-identity-health__mono"><?php echo htmlspecialchars(spp_admin_identity_health_format_percent((int)$identityCoverageRow['posts_covered'], (int)$identityCoverageRow['posts_eligible']), ENT_QUOTES, 'UTF-8'); ?></span><?php $identityExcludedPostsText = spp_admin_identity_health_template_excluded_text((int)$identityCoverageRow['posts_total'], (int)$identityCoverageRow['posts_eligible']); if ($identityExcludedPostsText !== '') { ?><br /><span class="admin-identity-health__mono"><?php echo htmlspecialchars($identityExcludedPostsText, ENT_QUOTES, 'UTF-8'); ?></span><?php } ?></td>

@@ -12,17 +12,53 @@ if (!function_exists('spp_admin_operations_root_path')) {
     }
 }
 
-if (!function_exists('spp_admin_operations_category_labels')) {
-    function spp_admin_operations_category_labels(): array
+if (!function_exists('spp_admin_operations_family_order')) {
+    function spp_admin_operations_family_order(): array
     {
         return array(
-            'export_import' => 'Export / Import',
-            'bot_maintenance' => 'Bot Maintenance',
-            'database_reset' => 'Database Reset',
-            'realm_settings' => 'Realm Settings',
-            'db_update_install' => 'DB Update / Install',
-            'conversion_tools' => 'Conversion Tools',
-            'member_security' => 'Member Security',
+            'realm_character_maintenance',
+            'realm_world_maintenance',
+            'realm_economy_maintenance',
+            'realm_guid_repairs',
+            'realm_integrity_cleanup',
+            'site_account_maintenance',
+            'site_identity_metadata_repair',
+            'conversion_import_export',
+            'related_native_tools',
+        );
+    }
+}
+
+if (!function_exists('spp_admin_operations_family_labels')) {
+    function spp_admin_operations_family_labels(): array
+    {
+        return array(
+            'realm_character_maintenance' => 'Realm Character Maintenance',
+            'realm_world_maintenance' => 'Realm World Maintenance',
+            'realm_economy_maintenance' => 'Realm Economy Maintenance',
+            'realm_guid_repairs' => 'Realm GUID / Sequence Repairs',
+            'realm_integrity_cleanup' => 'Realm Integrity / Orphan Cleanup',
+            'site_account_maintenance' => 'Site Account Maintenance',
+            'site_identity_metadata_repair' => 'Site Identity / Metadata Repair',
+            'conversion_import_export' => 'Conversion / Import / Export',
+            'related_native_tools' => 'Related Native Tools',
+        );
+    }
+}
+
+if (!function_exists('spp_admin_operations_family_descriptions')) {
+    function spp_admin_operations_family_descriptions(): array
+    {
+        return array(
+            'realm_character_maintenance' => 'Heavy realm-scoped character maintenance that stays in the reviewed website queue.',
+            'realm_world_maintenance' => 'Planned realm world maintenance wrappers. Visible here, but not executable in v1.',
+            'realm_economy_maintenance' => 'Separate destructive resets for high-growth realm economy systems.',
+            'realm_guid_repairs' => 'Reviewed reseed and identifier repair work without promising dense rewrites.',
+            'realm_integrity_cleanup' => 'Narrow cleanup and recount packages for provably invalid realm data.',
+            'site_account_maintenance' => 'Website-wide account resets with shared-impact warnings.',
+            'site_identity_metadata_repair' => 'Identity and metadata repair remains native to the dedicated admin surface.',
+            'conversion_import_export' => 'Lower-priority transfer, backup, and import/export workflows.',
+            'related_native_tools' => 'Native admin pages that remain the source of truth for their workflows.',
         );
     }
 }
@@ -50,7 +86,7 @@ if (!function_exists('spp_admin_operations_realm_options')) {
                 continue;
             }
             $realmRow = (array)($realmlistMap[$realmId] ?? array());
-            $name = (string)($realmRow['name'] ?? ($realmConfig['name'] ?? ('Realm ' . $realmId)));
+            $name = spp_realm_display_name($realmId, $realmDbMap);
             $options[] = array(
                 'id' => $realmId,
                 'label' => $name . ' (#' . $realmId . ')',
@@ -66,6 +102,49 @@ if (!function_exists('spp_admin_operations_realm_options')) {
     }
 }
 
+if (!function_exists('spp_admin_operations_descriptor_defaults')) {
+    function spp_admin_operations_descriptor_defaults(): array
+    {
+        return array(
+            'required_inputs' => array(),
+            'verification_rules' => array(),
+            'affected_tables' => array(),
+            'supports_dry_run' => true,
+            'blocking_rules' => array(),
+            'native_href' => '',
+            'asset_path' => '',
+            'prechecks' => array(),
+            'v1_status_note' => '',
+            'deferred_note' => '',
+            'ui_cta' => '',
+            'is_link_only' => false,
+            'is_deferred' => false,
+        );
+    }
+}
+
+if (!function_exists('spp_admin_operations_descriptor_build')) {
+    function spp_admin_operations_descriptor_build(array $descriptor): array
+    {
+        $descriptor = array_merge(spp_admin_operations_descriptor_defaults(), $descriptor);
+        if ((string)$descriptor['family_label'] === '') {
+            $familyLabels = spp_admin_operations_family_labels();
+            $descriptor['family_label'] = (string)($familyLabels[$descriptor['family_id']] ?? $descriptor['family_id']);
+        }
+        if ((string)$descriptor['ui_cta'] === '') {
+            if (!empty($descriptor['is_link_only'])) {
+                $descriptor['ui_cta'] = 'Open native tool';
+            } elseif (!empty($descriptor['is_deferred'])) {
+                $descriptor['ui_cta'] = 'Planned for later';
+            } else {
+                $descriptor['ui_cta'] = 'Queue job';
+            }
+        }
+
+        return $descriptor;
+    }
+}
+
 if (!function_exists('spp_admin_operations_descriptors')) {
     function spp_admin_operations_descriptors(array $realmDbMap): array
     {
@@ -76,176 +155,377 @@ if (!function_exists('spp_admin_operations_descriptors')) {
         }
 
         $assetRoot = spp_admin_operations_root_path();
+
         return $cache[$cacheKey] = array(
-            'backup_export' => array(
-                'id' => 'backup_export',
-                'label' => 'Character Backup Export',
-                'category' => 'export_import',
-                'risk_level' => 'safe',
-                'scope' => 'single_realm',
-                'execution_mode' => 'native_php',
-                'summary' => 'Existing website-native export flow for backup bundles and migration prep.',
-                'required_inputs' => array('source_realm_id'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Review generated SQL bundle before import.'),
-                'native_href' => 'index.php?n=admin&sub=backup',
-            ),
-            'password_reset' => array(
-                'id' => 'password_reset',
-                'label' => 'Account Password Reset',
-                'category' => 'member_security',
-                'risk_level' => 'safe',
-                'scope' => 'global',
-                'execution_mode' => 'native_php',
-                'summary' => 'Existing website-managed member security action.',
-                'required_inputs' => array('account_id'),
-                'supports_dry_run' => false,
-                'verification_rules' => array('Confirm account id and communicate the reset securely.'),
-                'native_href' => 'index.php?n=admin&sub=members',
-            ),
-            'apply_realm_name' => array(
-                'id' => 'apply_realm_name',
-                'label' => 'Apply Realm Name',
-                'category' => 'realm_settings',
-                'risk_level' => 'reviewed',
-                'scope' => 'single_realm',
-                'execution_mode' => 'sql_job',
-                'summary' => 'Queue a reviewed `realmlist` rename instead of editing the realm directory directly.',
-                'required_inputs' => array('realm_id', 'value'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Verify the matching `realmlist.name` row after maintenance.'),
-            ),
-            'apply_realm_address' => array(
-                'id' => 'apply_realm_address',
-                'label' => 'Apply Realm Address',
-                'category' => 'realm_settings',
-                'risk_level' => 'reviewed',
-                'scope' => 'single_realm',
-                'execution_mode' => 'sql_job',
-                'summary' => 'Queue a reviewed `realmlist` address update and keep shared-impact changes visible.',
-                'required_inputs' => array('realm_id', 'value'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Verify the matching `realmlist.address` row before reopening the realm.'),
-            ),
-            'reset_randombots' => array(
-                'id' => 'reset_randombots',
-                'label' => 'Reset Random Bots',
-                'category' => 'bot_maintenance',
-                'risk_level' => 'reviewed',
-                'scope' => 'single_realm',
-                'execution_mode' => 'sql_job',
-                'summary' => 'Launcher-parity bot reset job backed by reviewed SQL assets.',
-                'required_inputs' => array('realm_id'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Verify bot counts after reset and confirm the target characters DB.'),
-                'asset_path' => $assetRoot . '\\reset_randombots.sql',
-                'prechecks' => array('asset_exists'),
-            ),
-            'delete_randombots' => array(
-                'id' => 'delete_randombots',
-                'label' => 'Delete Random Bots',
-                'category' => 'bot_maintenance',
+            'character_reset_scoped' => spp_admin_operations_descriptor_build(array(
+                'id' => 'character_reset_scoped',
+                'label' => 'Scoped Character Reset',
+                'family_id' => 'realm_character_maintenance',
                 'risk_level' => 'destructive',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
                 'scope' => 'single_realm',
                 'execution_mode' => 'sql_job',
-                'summary' => 'Delete realm random bots through the reviewed launcher SQL flow.',
-                'required_inputs' => array('realm_id', 'confirmation_phrase'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Confirm bot rows are gone and the realm stayed offline during maintenance.'),
-                'prechecks' => array('server_offline', 'confirmation_phrase', 'asset_exists'),
-                'asset_path' => $assetRoot . '\\delete_randombots.sql',
-            ),
-            'delete_all_randombots' => array(
-                'id' => 'delete_all_randombots',
-                'label' => 'Delete All Random Bots',
-                'category' => 'bot_maintenance',
-                'risk_level' => 'destructive',
-                'scope' => 'global',
-                'execution_mode' => 'sql_job',
-                'summary' => 'Shared-impact realm maintenance that can affect more than one configured realm.',
-                'required_inputs' => array('realm_id', 'confirmation_phrase'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Review shared-impact messaging and validate each targeted realm after cleanup.'),
-                'prechecks' => array('server_offline', 'confirmation_phrase', 'asset_exists'),
-                'asset_path' => $assetRoot . '\\delete_all_randombots.sql',
-            ),
-            'chars_wipe' => array(
-                'id' => 'chars_wipe',
-                'label' => 'Wipe Characters DB',
-                'category' => 'database_reset',
-                'risk_level' => 'destructive',
-                'scope' => 'single_realm',
-                'execution_mode' => 'sql_job',
-                'summary' => 'Guarded character wipe flow requiring an offline realm and explicit confirmation.',
-                'required_inputs' => array('realm_id', 'confirmation_phrase'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Verify the characters schema and empty-row counts before reopening service.'),
+                'v1_status' => 'yes',
+                'summary' => 'Delete selected character-layer data for one realm while preserving auth accounts.',
+                'required_inputs' => array('realm_id', 'scope_profile', 'confirmation_phrase'),
+                'verification_rules' => array(
+                    'Keep the target realm offline for the full destructive pass.',
+                    'Validate dense character GUID remap coverage before execution.',
+                    'Recount realmcharacters and repair realm-local identity pointers after the rewrite.',
+                ),
+                'affected_tables' => array(
+                    'characters',
+                    'character_inventory',
+                    'character_spell',
+                    'mail',
+                    'mail_items',
+                    'item_instance',
+                    'realmcharacters',
+                    'website_identities.character_guid',
+                ),
+                'blocking_rules' => array(
+                    'Fail closed if a dependent character GUID table is present but unsupported for deterministic remap.',
+                    'Fail closed unless the target realm is offline before maintenance starts.',
+                ),
                 'prechecks' => array('server_offline', 'confirmation_phrase'),
-            ),
-            'chars_accounts_wipe' => array(
-                'id' => 'chars_accounts_wipe',
-                'label' => 'Wipe Characters + Accounts',
-                'category' => 'database_reset',
-                'risk_level' => 'destructive',
-                'scope' => 'global',
-                'execution_mode' => 'sql_job',
-                'summary' => 'High-risk reset flow that should stay in the reviewed job queue.',
-                'required_inputs' => array('realm_id', 'confirmation_phrase'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Confirm both account and character stores were intentionally selected.'),
-                'prechecks' => array('server_offline', 'confirmation_phrase'),
-            ),
-            'world_reinstall' => array(
+                'scope_profiles' => array(
+                    'bots' => 'Delete only accounts where username matches `rndbot%`.',
+                    'admin' => 'Delete only non-bot accounts with `gmlevel >= 3`.',
+                    'all' => 'Delete all characters in the selected realm.',
+                ),
+            )),
+            'world_reinstall' => spp_admin_operations_descriptor_build(array(
                 'id' => 'world_reinstall',
                 'label' => 'World Reinstall',
-                'category' => 'db_update_install',
+                'family_id' => 'realm_world_maintenance',
                 'risk_level' => 'destructive',
-                'scope' => 'single_realm',
-                'execution_mode' => 'sql_job',
-                'summary' => 'Website-driven wrapper for reviewed world install/reinstall workflows.',
-                'required_inputs' => array('realm_id', 'confirmation_phrase'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Confirm the selected world DB and patch set before execution.'),
-                'prechecks' => array('server_offline', 'confirmation_phrase'),
-            ),
-            'db_update_install' => array(
-                'id' => 'db_update_install',
-                'label' => 'DB Update / Install',
-                'category' => 'db_update_install',
-                'risk_level' => 'reviewed',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'external tool wrapper',
                 'scope' => 'single_realm',
                 'execution_mode' => 'external_tool',
-                'summary' => 'Run the reviewed DB patch/install pipeline from the website control plane.',
+                'v1_status' => 'deferred',
+                'is_deferred' => true,
+                'summary' => 'Planned wrapper for reviewed install/update assets. Not executable from Operations in v1.',
                 'required_inputs' => array('realm_id'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Confirm patch inventory and tool output before marking complete.'),
-            ),
-            'transfer_conversion' => array(
+                'verification_rules' => array(
+                    'Review the approved install/update asset set before implementation work begins.',
+                ),
+                'affected_tables' => array('world schema', 'realm install assets'),
+                'deferred_note' => 'Execution stays deferred until the website wraps reviewed launcher or DB-install assets instead of inventing a fake world-reset workflow.',
+                'v1_status_note' => 'Visible in taxonomy only. Do not queue in v1.',
+            )),
+            'auction_house_reset' => spp_admin_operations_descriptor_build(array(
+                'id' => 'auction_house_reset',
+                'label' => 'Auction House Reset',
+                'family_id' => 'realm_economy_maintenance',
+                'risk_level' => 'destructive',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'single_realm',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Clear auction rows and auction-linked residue for the selected realm.',
+                'required_inputs' => array('realm_id', 'confirmation_phrase'),
+                'verification_rules' => array(
+                    'Confirm the selected realm stayed offline during the destructive reset.',
+                    'Verify `auctionhouse` row count is zero after the package completes.',
+                    'Review auction-linked `item_instance` cleanup for unreferenced rows only.',
+                ),
+                'affected_tables' => array('auctionhouse', 'item_instance'),
+                'blocking_rules' => array(
+                    'Fail closed if item cleanup cannot prove the remaining references are safe.',
+                ),
+                'prechecks' => array('server_offline', 'confirmation_phrase'),
+            )),
+            'mail_reset' => spp_admin_operations_descriptor_build(array(
+                'id' => 'mail_reset',
+                'label' => 'Mail Reset',
+                'family_id' => 'realm_economy_maintenance',
+                'risk_level' => 'destructive',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'single_realm',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Clear realm mail state and mail-linked residue for the selected realm.',
+                'required_inputs' => array('realm_id', 'confirmation_phrase'),
+                'verification_rules' => array(
+                    'Confirm `mail` and `mail_items` are empty after the reset.',
+                    'Cleanup orphaned `item_text` and mail-linked `item_instance` rows only when unreferenced elsewhere.',
+                ),
+                'affected_tables' => array('mail', 'mail_items', 'item_text', 'item_instance'),
+                'blocking_rules' => array(
+                    'Fail closed if mail-linked item cleanup cannot validate its dependency checks.',
+                ),
+                'prechecks' => array('server_offline', 'confirmation_phrase'),
+            )),
+            'auction_house_guid_reseed' => spp_admin_operations_descriptor_build(array(
+                'id' => 'auction_house_guid_reseed',
+                'label' => 'Auction House GUID Reseed',
+                'family_id' => 'realm_guid_repairs',
+                'risk_level' => 'reviewed',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'single_realm',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Review current max auction identifiers and reseed only when the engine supports it safely.',
+                'required_inputs' => array('realm_id'),
+                'verification_rules' => array(
+                    'Inspect current max auction identifier before generating the package.',
+                    'Verify there are no collisions after the reseed.',
+                ),
+                'affected_tables' => array('auctionhouse'),
+                'blocking_rules' => array(
+                    'Fail closed unless the realm schema exposes a supported auction identifier strategy.',
+                ),
+            )),
+            'mail_guid_reseed' => spp_admin_operations_descriptor_build(array(
+                'id' => 'mail_guid_reseed',
+                'label' => 'Mail GUID Reseed',
+                'family_id' => 'realm_guid_repairs',
+                'risk_level' => 'reviewed',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'single_realm',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Review current max mail id and reseed to the next safe value.',
+                'required_inputs' => array('realm_id'),
+                'verification_rules' => array(
+                    'Inspect `MAX(id)` from `mail` before reseeding.',
+                    'Verify subsequent inserts allocate above the existing high-water mark.',
+                ),
+                'affected_tables' => array('mail'),
+                'blocking_rules' => array(
+                    'Fail closed if the engine family does not support deterministic reseed behavior.',
+                ),
+            )),
+            'character_reference_cleanup' => spp_admin_operations_descriptor_build(array(
+                'id' => 'character_reference_cleanup',
+                'label' => 'Character Reference Cleanup',
+                'family_id' => 'realm_integrity_cleanup',
+                'risk_level' => 'reviewed',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'single_realm',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Delete rows in character-linked tables whose owning character no longer exists.',
+                'required_inputs' => array('realm_id'),
+                'verification_rules' => array(
+                    'Review each supported character-linked table predicate before execution.',
+                    'Confirm only rows keyed by missing `characters.guid` are removed.',
+                ),
+                'affected_tables' => array(
+                    'character_action',
+                    'character_aura',
+                    'character_inventory',
+                    'character_social',
+                    'character_spell',
+                ),
+            )),
+            'mail_orphan_cleanup' => spp_admin_operations_descriptor_build(array(
+                'id' => 'mail_orphan_cleanup',
+                'label' => 'Mail Orphan Cleanup',
+                'family_id' => 'realm_integrity_cleanup',
+                'risk_level' => 'reviewed',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'single_realm',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Delete mail-linked rows that no longer map to a live mail record.',
+                'required_inputs' => array('realm_id'),
+                'verification_rules' => array(
+                    'Delete only orphaned `mail_items` and `item_text` rows.',
+                    'Recheck remaining `mail` row counts after cleanup.',
+                ),
+                'affected_tables' => array('mail_items', 'item_text', 'mail'),
+            )),
+            'item_reference_cleanup' => spp_admin_operations_descriptor_build(array(
+                'id' => 'item_reference_cleanup',
+                'label' => 'Item Reference Cleanup',
+                'family_id' => 'realm_integrity_cleanup',
+                'risk_level' => 'reviewed',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'single_realm',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Delete item rows that are no longer referenced by live inventory, AH, guild bank, mail, or gifts.',
+                'required_inputs' => array('realm_id'),
+                'verification_rules' => array(
+                    'Confirm item cleanup predicates cover all supported live references before execution.',
+                ),
+                'affected_tables' => array('item_instance', 'item_loot', 'item_text'),
+                'blocking_rules' => array(
+                    'Fail closed if the realm family exposes unsupported item reference paths.',
+                ),
+            )),
+            'realmcharacters_recount_repair' => spp_admin_operations_descriptor_build(array(
+                'id' => 'realmcharacters_recount_repair',
+                'label' => 'Realmcharacters Recount Repair',
+                'family_id' => 'realm_integrity_cleanup',
+                'risk_level' => 'reviewed',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'single_realm',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Recount `realmcharacters.numchars` from the selected realm characters table.',
+                'required_inputs' => array('realm_id'),
+                'verification_rules' => array(
+                    'Compare the recount against the selected realm `characters` table after execution.',
+                ),
+                'affected_tables' => array('realmcharacters', 'characters'),
+            )),
+            'identity_metadata_repair' => spp_admin_operations_descriptor_build(array(
+                'id' => 'identity_metadata_repair',
+                'label' => 'Identity Metadata Repair',
+                'family_id' => 'site_identity_metadata_repair',
+                'risk_level' => 'safe',
+                'ownership_scope' => 'website-wide',
+                'delivery_mode' => 'native page',
+                'scope' => 'global',
+                'execution_mode' => 'native_php',
+                'v1_status' => 'link_out',
+                'is_link_only' => true,
+                'summary' => 'Open the native identity repair page for selected-character cleanup, orphaned website-account cleanup, and backfills.',
+                'verification_rules' => array(
+                    'Keep identity repair on the dedicated native page instead of duplicating it in Operations.',
+                ),
+                'affected_tables' => array('website_identities', 'website_accounts'),
+                'native_href' => 'index.php?n=admin&sub=identities',
+                'v1_status_note' => 'Link-out only in Operations.',
+            )),
+            'account_reset_global' => spp_admin_operations_descriptor_build(array(
+                'id' => 'account_reset_global',
+                'label' => 'Global Account Reset',
+                'family_id' => 'site_account_maintenance',
+                'risk_level' => 'destructive',
+                'ownership_scope' => 'website-wide',
+                'delivery_mode' => 'SQL package',
+                'scope' => 'global',
+                'execution_mode' => 'sql_job',
+                'v1_status' => 'yes',
+                'summary' => 'Remove auth and website account data together. Clearly separated from realm-scoped character resets.',
+                'required_inputs' => array('confirmation_phrase'),
+                'verification_rules' => array(
+                    'Review shared-impact warnings before execution.',
+                    'Verify auth, realmcharacters, and website account data were intentionally selected together.',
+                ),
+                'affected_tables' => array(
+                    'account',
+                    'account_access',
+                    'account_banned',
+                    'realmcharacters',
+                    'website_accounts',
+                ),
+                'blocking_rules' => array(
+                    'Fail closed unless the operator confirms the shared website-wide impact.',
+                ),
+                'prechecks' => array('confirmation_phrase'),
+            )),
+            'backup_export' => spp_admin_operations_descriptor_build(array(
+                'id' => 'backup_export',
+                'label' => 'Backup Export',
+                'family_id' => 'conversion_import_export',
+                'risk_level' => 'safe',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'native page',
+                'scope' => 'single_realm',
+                'execution_mode' => 'native_php',
+                'v1_status' => 'link_out',
+                'is_link_only' => true,
+                'summary' => 'Open the existing native backup export flow for reviewed bundle generation.',
+                'required_inputs' => array('source_realm_id'),
+                'verification_rules' => array(
+                    'Review the generated export bundle on the backup page before import or migration use.',
+                ),
+                'affected_tables' => array('realm characters backup bundle'),
+                'native_href' => 'index.php?n=admin&sub=backup',
+                'v1_status_note' => 'Native backup flow remains outside the Operations queue.',
+            )),
+            'transfer_conversion' => spp_admin_operations_descriptor_build(array(
                 'id' => 'transfer_conversion',
                 'label' => 'Transfer Conversion',
-                'category' => 'conversion_tools',
+                'family_id' => 'conversion_import_export',
                 'risk_level' => 'reviewed',
+                'ownership_scope' => 'cross-realm',
+                'delivery_mode' => 'SQL package',
                 'scope' => 'cross_realm',
                 'execution_mode' => 'sql_job',
-                'summary' => 'Prepare launcher-reviewed conversion SQL between supported expansion targets.',
+                'v1_status' => 'yes',
+                'summary' => 'Prepare reviewed conversion SQL between supported source and target realms.',
                 'required_inputs' => array('source_realm_id', 'target_realm_id'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Review the exact source and target DB names before execution.'),
+                'verification_rules' => array(
+                    'Review source and target schema names before queueing conversion work.',
+                ),
+                'affected_tables' => array('source characters schema', 'target characters schema'),
                 'prechecks' => array('asset_exists'),
                 'asset_path' => $assetRoot . '\\convert_*.sql',
-            ),
-            'save_export_import' => array(
+            )),
+            'save_export_import' => spp_admin_operations_descriptor_build(array(
                 'id' => 'save_export_import',
                 'label' => 'Save Export / Import',
-                'category' => 'export_import',
+                'family_id' => 'conversion_import_export',
                 'risk_level' => 'reviewed',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'external tool wrapper',
                 'scope' => 'single_realm',
                 'execution_mode' => 'external_tool',
-                'summary' => 'Queue `mysqldump`-style save export/import jobs with previewed paths.',
+                'v1_status' => 'yes',
+                'summary' => 'Queue the reviewed save export/import wrapper with a generated preview.',
                 'required_inputs' => array('realm_id'),
-                'supports_dry_run' => true,
-                'verification_rules' => array('Confirm save slot path readability and expected output artifact.'),
-            ),
+                'verification_rules' => array(
+                    'Confirm the expected wrapper inputs and output artifacts before execution.',
+                ),
+                'affected_tables' => array('realm save package'),
+            )),
+            'related_identities' => spp_admin_operations_descriptor_build(array(
+                'id' => 'related_identities',
+                'label' => 'Admin Identities',
+                'family_id' => 'related_native_tools',
+                'risk_level' => 'safe',
+                'ownership_scope' => 'website-wide',
+                'delivery_mode' => 'native page',
+                'scope' => 'global',
+                'execution_mode' => 'native_php',
+                'v1_status' => 'link_out',
+                'is_link_only' => true,
+                'summary' => 'Native identity and metadata repair workflows.',
+                'native_href' => 'index.php?n=admin&sub=identities',
+            )),
+            'related_backup' => spp_admin_operations_descriptor_build(array(
+                'id' => 'related_backup',
+                'label' => 'Admin Backup',
+                'family_id' => 'related_native_tools',
+                'risk_level' => 'safe',
+                'ownership_scope' => 'realm-specific',
+                'delivery_mode' => 'native page',
+                'scope' => 'single_realm',
+                'execution_mode' => 'native_php',
+                'v1_status' => 'link_out',
+                'is_link_only' => true,
+                'summary' => 'Native backup export and bundle tooling.',
+                'native_href' => 'index.php?n=admin&sub=backup',
+            )),
+            'related_chartransfer' => spp_admin_operations_descriptor_build(array(
+                'id' => 'related_chartransfer',
+                'label' => 'Admin Chartransfer',
+                'family_id' => 'related_native_tools',
+                'risk_level' => 'safe',
+                'ownership_scope' => 'cross-realm',
+                'delivery_mode' => 'native page',
+                'scope' => 'cross_realm',
+                'execution_mode' => 'native_php',
+                'v1_status' => 'link_out',
+                'is_link_only' => true,
+                'summary' => 'Native character transfer page for related non-Operations workflows.',
+                'native_href' => 'index.php?n=admin&sub=chartransfer',
+            )),
         );
     }
 }
@@ -255,19 +535,6 @@ if (!function_exists('spp_admin_operations_descriptor')) {
     {
         $descriptors = spp_admin_operations_descriptors($realmDbMap);
         return (array)($descriptors[$operationId] ?? array());
-    }
-}
-
-if (!function_exists('spp_admin_operations_filter_descriptors_by_category')) {
-    function spp_admin_operations_filter_descriptors_by_category(array $descriptors, string $category): array
-    {
-        $filtered = array();
-        foreach ($descriptors as $descriptor) {
-            if ((string)($descriptor['category'] ?? '') === $category) {
-                $filtered[] = $descriptor;
-            }
-        }
-        return $filtered;
     }
 }
 
@@ -332,54 +599,133 @@ if (!function_exists('spp_admin_operations_realm_option_map')) {
     }
 }
 
+if (!function_exists('spp_admin_operations_scope_label')) {
+    function spp_admin_operations_scope_label(array $descriptor): string
+    {
+        return (string)($descriptor['ownership_scope'] ?? ($descriptor['scope'] ?? 'realm-specific'));
+    }
+}
+
+if (!function_exists('spp_admin_operations_delivery_label')) {
+    function spp_admin_operations_delivery_label(array $descriptor): string
+    {
+        return (string)($descriptor['delivery_mode'] ?? ($descriptor['execution_mode'] ?? 'SQL package'));
+    }
+}
+
+if (!function_exists('spp_admin_operations_status_label')) {
+    function spp_admin_operations_status_label(array $descriptor): string
+    {
+        $status = (string)($descriptor['v1_status'] ?? 'yes');
+        if ($status === 'deferred') {
+            return 'Deferred in v1';
+        }
+        if ($status === 'link_out') {
+            return 'Native link-out';
+        }
+        return 'Queueable in v1';
+    }
+}
+
+if (!function_exists('spp_admin_operations_is_queueable')) {
+    function spp_admin_operations_is_queueable(array $descriptor): bool
+    {
+        return empty($descriptor['is_link_only']) && empty($descriptor['is_deferred']);
+    }
+}
+
+if (!function_exists('spp_admin_operations_format_realm_line')) {
+    function spp_admin_operations_format_realm_line(string $label, array $realm): string
+    {
+        $parts = array((string)($realm['label'] ?? $label));
+        if ((string)($realm['chars_schema'] ?? '') !== '') {
+            $parts[] = 'chars: ' . (string)$realm['chars_schema'];
+        }
+        if ((string)($realm['world_schema'] ?? '') !== '') {
+            $parts[] = 'world: ' . (string)$realm['world_schema'];
+        }
+        return $label . ': ' . implode(' | ', $parts);
+    }
+}
+
 if (!function_exists('spp_admin_operations_render_preview')) {
     function spp_admin_operations_render_preview(array $descriptor, array $inputs, array $realmMap): string
     {
-        $operationId = (string)($descriptor['id'] ?? '');
         $realmId = (int)($inputs['realm_id'] ?? 0);
         $sourceRealmId = (int)($inputs['source_realm_id'] ?? 0);
         $targetRealmId = (int)($inputs['target_realm_id'] ?? 0);
-        $value = trim((string)($inputs['value'] ?? ''));
+        $scopeProfile = trim((string)($inputs['scope_profile'] ?? ''));
         $lines = array();
 
+        $lines[] = 'Operation: ' . (string)($descriptor['label'] ?? 'Unknown operation');
+        $lines[] = 'Family: ' . (string)($descriptor['family_label'] ?? 'Operations');
+        $lines[] = 'Risk: ' . (string)($descriptor['risk_level'] ?? 'safe');
+        $lines[] = 'Ownership: ' . spp_admin_operations_scope_label($descriptor);
+        $lines[] = 'Delivery: ' . spp_admin_operations_delivery_label($descriptor);
+        $lines[] = 'V1 status: ' . spp_admin_operations_status_label($descriptor);
+
         if ($realmId > 0 && isset($realmMap[$realmId])) {
-            $lines[] = 'Target realm: ' . (string)$realmMap[$realmId]['label'];
-            $lines[] = 'Target chars DB: ' . (string)($realmMap[$realmId]['chars_schema'] ?? '(unknown)');
+            $lines[] = spp_admin_operations_format_realm_line('Target realm', (array)$realmMap[$realmId]);
         }
         if ($sourceRealmId > 0 && isset($realmMap[$sourceRealmId])) {
-            $lines[] = 'Source realm: ' . (string)$realmMap[$sourceRealmId]['label'];
-            $lines[] = 'Source chars DB: ' . (string)($realmMap[$sourceRealmId]['chars_schema'] ?? '(unknown)');
+            $lines[] = spp_admin_operations_format_realm_line('Source realm', (array)$realmMap[$sourceRealmId]);
         }
         if ($targetRealmId > 0 && isset($realmMap[$targetRealmId])) {
-            $lines[] = 'Target realm: ' . (string)$realmMap[$targetRealmId]['label'];
-            $lines[] = 'Target chars DB: ' . (string)($realmMap[$targetRealmId]['chars_schema'] ?? '(unknown)');
+            $lines[] = spp_admin_operations_format_realm_line('Target realm', (array)$realmMap[$targetRealmId]);
         }
 
-        if ($operationId === 'apply_realm_name') {
+        if ($scopeProfile !== '') {
+            $scopeProfiles = (array)($descriptor['scope_profiles'] ?? array());
+            $lines[] = 'Selected scope: ' . $scopeProfile . (isset($scopeProfiles[$scopeProfile]) ? ' - ' . (string)$scopeProfiles[$scopeProfile] : '');
+        }
+
+        $affectedTables = array_filter(array_map('strval', (array)($descriptor['affected_tables'] ?? array())));
+        if (!empty($affectedTables)) {
             $lines[] = '';
-            $lines[] = 'SQL Preview:';
-            $lines[] = "UPDATE `realmlist` SET `name` = '" . str_replace("'", "\\'", $value) . "' WHERE `id` = " . $realmId . ' LIMIT 1;';
-        } elseif ($operationId === 'apply_realm_address') {
+            $lines[] = 'Affected tables / subsystem scope:';
+            foreach ($affectedTables as $affectedTable) {
+                $lines[] = '- ' . $affectedTable;
+            }
+        }
+
+        $blockingRules = array_filter(array_map('strval', (array)($descriptor['blocking_rules'] ?? array())));
+        if (!empty($blockingRules)) {
             $lines[] = '';
-            $lines[] = 'SQL Preview:';
-            $lines[] = "UPDATE `realmlist` SET `address` = '" . str_replace("'", "\\'", $value) . "' WHERE `id` = " . $realmId . ' LIMIT 1;';
-        } elseif (($descriptor['execution_mode'] ?? '') === 'sql_job') {
+            $lines[] = 'Blocking conditions:';
+            foreach ($blockingRules as $blockingRule) {
+                $lines[] = '- ' . $blockingRule;
+            }
+        }
+
+        if (!empty($descriptor['is_link_only'])) {
+            $lines[] = '';
+            $lines[] = 'Native link-out: ' . (string)($descriptor['native_href'] ?? '');
+            if ((string)($descriptor['v1_status_note'] ?? '') !== '') {
+                $lines[] = 'Note: ' . (string)$descriptor['v1_status_note'];
+            }
+        } elseif (!empty($descriptor['is_deferred'])) {
+            $lines[] = '';
+            $lines[] = 'Deferred note: ' . (string)($descriptor['deferred_note'] ?? 'This workflow is intentionally deferred from v1 execution.');
+        } elseif (($descriptor['execution_mode'] ?? '') === 'external_tool') {
+            $lines[] = '';
+            $lines[] = 'Wrapper preview: website-managed external tool wrapper will resolve the reviewed command or asset set at execution time.';
+        } else {
             $assetPath = (string)($descriptor['asset_path'] ?? '');
             if ($assetPath !== '') {
                 $lines[] = '';
-                $lines[] = 'SQL Asset: ' . $assetPath;
+                $lines[] = 'SQL asset: ' . $assetPath;
+            } else {
+                $lines[] = '';
+                $lines[] = 'SQL package: reviewed package text is generated from the selected operation metadata and prechecks.';
             }
-        } elseif (($descriptor['execution_mode'] ?? '') === 'external_tool') {
-            $lines[] = '';
-            $lines[] = 'Tool preview: website-managed wrapper will resolve command template at execution time.';
         }
 
-        $verificationRules = (array)($descriptor['verification_rules'] ?? array());
+        $verificationRules = array_filter(array_map('strval', (array)($descriptor['verification_rules'] ?? array())));
         if (!empty($verificationRules)) {
             $lines[] = '';
-            $lines[] = 'Verification:';
+            $lines[] = 'Verification checklist:';
             foreach ($verificationRules as $rule) {
-                $lines[] = '- ' . (string)$rule;
+                $lines[] = '- ' . $rule;
             }
         }
 

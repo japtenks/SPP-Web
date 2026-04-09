@@ -3,12 +3,286 @@ if (!defined('INCLUDED') || INCLUDED !== true) {
     exit;
 }
 
+require_once dirname(__DIR__, 2) . '/app/server/realm-capabilities.php';
+
 if (!defined('SPP_ITEM_DATABASE_DEFAULT_PER_PAGE')) {
     define('SPP_ITEM_DATABASE_DEFAULT_PER_PAGE', 25);
 }
 
 if (!defined('SPP_ITEM_DATABASE_MIN_SEARCH_LENGTH')) {
     define('SPP_ITEM_DATABASE_MIN_SEARCH_LENGTH', 2);
+}
+
+if (!function_exists('spp_item_database_log_compatibility')) {
+    function spp_item_database_log_compatibility($realmId, $path, $message)
+    {
+        error_log('[item compatibility][realm ' . (int)$realmId . '][' . trim((string)$path) . '] ' . trim((string)$message));
+    }
+}
+
+if (!function_exists('spp_item_database_optional_pdo')) {
+    function spp_item_database_optional_pdo($service, $realmId)
+    {
+        try {
+            return spp_get_pdo($service, $realmId);
+        } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, $service, $e->getMessage());
+            return null;
+        }
+    }
+}
+
+if (!function_exists('spp_item_database_world_column')) {
+    function spp_item_database_world_column(PDO $worldPdo, $realmId, array $candidates, $fallback = null)
+    {
+        $column = spp_realm_capability_pick_column($worldPdo, 'item_template', $candidates, $fallback);
+        if ($column === null) {
+            spp_item_database_log_compatibility($realmId, 'world.item_template', 'Missing columns: ' . implode(', ', $candidates));
+        }
+        return $column;
+    }
+}
+
+if (!function_exists('spp_item_database_item_columns')) {
+    function spp_item_database_item_columns(PDO $worldPdo, $realmId)
+    {
+        static $cache = [];
+
+        $key = spl_object_hash($worldPdo);
+        if (isset($cache[$key])) {
+            return $cache[$key];
+        }
+
+        $columns = [
+            'displayid' => spp_item_database_world_column($worldPdo, $realmId, ['displayid', 'display_id']),
+            'Quality' => spp_item_database_world_column($worldPdo, $realmId, ['Quality', 'quality']),
+            'InventoryType' => spp_item_database_world_column($worldPdo, $realmId, ['InventoryType', 'inventory_type']),
+            'ItemLevel' => spp_item_database_world_column($worldPdo, $realmId, ['ItemLevel', 'itemlevel', 'item_level']),
+            'RequiredLevel' => spp_item_database_world_column($worldPdo, $realmId, ['RequiredLevel', 'requiredlevel', 'required_level']),
+            'Flags' => spp_item_database_world_column($worldPdo, $realmId, ['Flags', 'flags']),
+        ];
+
+        foreach (['displayid', 'Quality', 'InventoryType', 'ItemLevel', 'RequiredLevel', 'Flags'] as $requiredKey) {
+            if (empty($columns[$requiredKey])) {
+                throw new RuntimeException('Missing required item_template compatibility column for ' . $requiredKey . '.');
+            }
+        }
+
+        return $cache[$key] = $columns;
+    }
+}
+
+if (!function_exists('spp_item_database_item_column_sql')) {
+    function spp_item_database_item_column_sql(array $columns, $aliasKey, $tableAlias = 'it')
+    {
+        $column = (string)($columns[$aliasKey] ?? '');
+        if ($column === '') {
+            throw new RuntimeException('Missing SQL column mapping for ' . $aliasKey . '.');
+        }
+
+        return $tableAlias . '.`' . str_replace('`', '``', $column) . '`';
+    }
+}
+
+if (!function_exists('spp_item_database_pick_metadata_pdo')) {
+    function spp_item_database_pick_metadata_pdo($realmId, array $tables, &$source = null)
+    {
+        $source = null;
+        $armoryPdo = spp_item_database_optional_pdo('armory', $realmId);
+        if ($armoryPdo instanceof PDO) {
+            foreach ($tables as $table) {
+                if (spp_realm_capability_table_exists($armoryPdo, (string)$table)) {
+                    $source = 'armory';
+                    return $armoryPdo;
+                }
+            }
+        }
+
+        $worldPdo = spp_item_database_optional_pdo('world', $realmId);
+        if ($worldPdo instanceof PDO) {
+            foreach ($tables as $table) {
+                if (spp_realm_capability_table_exists($worldPdo, (string)$table)) {
+                    $source = 'world';
+                    return $worldPdo;
+                }
+            }
+        }
+
+        spp_item_database_log_compatibility($realmId, 'metadata', 'No metadata source available for tables: ' . implode(', ', $tables));
+        return null;
+    }
+}
+
+if (!function_exists('spp_item_database_pick_table_pdo')) {
+    function spp_item_database_pick_table_pdo($realmId, $table, &$source = null)
+    {
+        return spp_item_database_pick_metadata_pdo($realmId, [(string)$table], $source);
+    }
+}
+
+if (!function_exists('spp_item_database_itemdisplayinfo_icon_column')) {
+    function spp_item_database_itemdisplayinfo_icon_column(PDO $pdo)
+    {
+        return spp_realm_capability_pick_column($pdo, 'dbc_itemdisplayinfo', ['name', 'icon1']);
+    }
+}
+
+if (!function_exists('spp_item_database_spellicon_name_column')) {
+    function spp_item_database_spellicon_name_column(PDO $pdo)
+    {
+        return spp_realm_capability_pick_column($pdo, 'dbc_spellicon', ['name', 'TextureFilename']);
+    }
+}
+
+if (!function_exists('spp_item_database_spell_icon_column')) {
+    function spp_item_database_spell_icon_column(PDO $pdo, $table = 'dbc_spell')
+    {
+        return spp_realm_capability_pick_column($pdo, (string)$table, ['ref_spellicon', 'SpellIconID', 'spelliconid']);
+    }
+}
+
+if (!function_exists('spp_item_database_fetch_item_icons')) {
+    function spp_item_database_fetch_item_icons($realmId, array $displayIds)
+    {
+        $displayIds = array_values(array_unique(array_map('intval', $displayIds)));
+        if (empty($displayIds)) {
+            return [];
+        }
+
+        $source = null;
+        $pdo = spp_item_database_pick_table_pdo($realmId, 'dbc_itemdisplayinfo', $source);
+        if (!$pdo instanceof PDO) {
+            return [];
+        }
+
+        $iconColumn = spp_item_database_itemdisplayinfo_icon_column($pdo);
+        if ($iconColumn === null) {
+            spp_item_database_log_compatibility($realmId, $source . '.dbc_itemdisplayinfo', 'Missing icon column.');
+            return [];
+        }
+
+        try {
+            $placeholders = implode(',', array_fill(0, count($displayIds), '?'));
+            $stmt = $pdo->prepare('SELECT `id`, `' . $iconColumn . '` AS `icon_name` FROM `dbc_itemdisplayinfo` WHERE `id` IN (' . $placeholders . ')');
+            $stmt->execute($displayIds);
+            $map = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $map[(int)($row['id'] ?? 0)] = trim((string)($row['icon_name'] ?? ''));
+            }
+            return $map;
+        } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, $source . '.dbc_itemdisplayinfo', $e->getMessage());
+            return [];
+        }
+    }
+}
+
+if (!function_exists('spp_item_database_fetch_icon_ids_by_name')) {
+    function spp_item_database_fetch_icon_ids_by_name($realmId, $iconName)
+    {
+        $iconName = trim((string)$iconName);
+        if ($iconName === '') {
+            return [];
+        }
+
+        $source = null;
+        $pdo = spp_item_database_pick_table_pdo($realmId, 'dbc_itemdisplayinfo', $source);
+        if (!$pdo instanceof PDO) {
+            return [];
+        }
+
+        $iconColumn = spp_item_database_itemdisplayinfo_icon_column($pdo);
+        if ($iconColumn === null) {
+            spp_item_database_log_compatibility($realmId, $source . '.dbc_itemdisplayinfo', 'Missing icon column.');
+            return [];
+        }
+
+        try {
+            $stmt = $pdo->prepare('SELECT `id` FROM `dbc_itemdisplayinfo` WHERE LOWER(`' . $iconColumn . '`) = LOWER(:icon) ORDER BY `id` ASC');
+            $stmt->execute(['icon' => $iconName]);
+            return array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+        } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, $source . '.dbc_itemdisplayinfo', $e->getMessage());
+            return [];
+        }
+    }
+}
+
+if (!function_exists('spp_item_database_spell_query_parts')) {
+    function spp_item_database_spell_query_parts($realmId)
+    {
+        $source = null;
+        $pdo = spp_item_database_pick_metadata_pdo($realmId, ['dbc_spell', 'dbc_spellicon'], $source);
+        if (!$pdo instanceof PDO || !spp_realm_capability_table_exists($pdo, 'dbc_spell')) {
+            return null;
+        }
+
+        $spellIconColumn = spp_item_database_spell_icon_column($pdo, 'dbc_spell');
+        $iconNameColumn = spp_realm_capability_table_exists($pdo, 'dbc_spellicon')
+            ? spp_item_database_spellicon_name_column($pdo)
+            : null;
+
+        $select = 'SELECT s.`id`, s.`name`, s.`description`';
+        $join = '';
+        if ($spellIconColumn !== null && $iconNameColumn !== null) {
+            $select .= ', si.`' . $iconNameColumn . '` AS `icon_name`';
+            $join = ' LEFT JOIN `dbc_spellicon` si ON si.`id` = s.`' . $spellIconColumn . '`';
+        } else {
+            $select .= ", '' AS `icon_name`";
+            spp_item_database_log_compatibility($realmId, $source . '.dbc_spell', 'Spell icon join unavailable; using empty icon metadata.');
+        }
+
+        return [
+            'pdo' => $pdo,
+            'source' => $source,
+            'select' => $select,
+            'join' => $join,
+        ];
+    }
+}
+
+if (!function_exists('spp_item_database_talent_query_parts')) {
+    function spp_item_database_talent_query_parts($realmId)
+    {
+        $source = null;
+        $pdo = spp_item_database_pick_metadata_pdo($realmId, ['dbc_talent', 'dbc_spell'], $source);
+        if (!$pdo instanceof PDO || !spp_realm_capability_table_exists($pdo, 'dbc_talent') || !spp_realm_capability_table_exists($pdo, 'dbc_spell')) {
+            return null;
+        }
+
+        $spellIconColumn = spp_item_database_spell_icon_column($pdo, 'dbc_spell');
+        $iconNameColumn = spp_realm_capability_table_exists($pdo, 'dbc_spellicon')
+            ? spp_item_database_spellicon_name_column($pdo)
+            : null;
+        $talentTabNameColumn = spp_realm_capability_table_exists($pdo, 'dbc_talenttab')
+            ? spp_realm_capability_pick_column($pdo, 'dbc_talenttab', ['name', 'Name'], 'name')
+            : null;
+
+        $select = 'SELECT t.`id`, t.`row`, t.`col`, s.`id` AS `spell_id`, s.`name`, s.`description`';
+        $join = ' INNER JOIN `dbc_spell` s ON s.`id` = t.`rank1`';
+
+        if ($talentTabNameColumn !== null) {
+            $select .= ', tt.`' . $talentTabNameColumn . '` AS `tab_name`';
+            $join .= ' LEFT JOIN `dbc_talenttab` tt ON tt.`id` = t.`ref_talenttab`';
+        } else {
+            $select .= ", '' AS `tab_name`";
+        }
+
+        if ($spellIconColumn !== null && $iconNameColumn !== null) {
+            $select .= ', si.`' . $iconNameColumn . '` AS `icon_name`';
+            $join .= ' LEFT JOIN `dbc_spellicon` si ON si.`id` = s.`' . $spellIconColumn . '`';
+        } else {
+            $select .= ", '' AS `icon_name`";
+            spp_item_database_log_compatibility($realmId, $source . '.dbc_talent', 'Talent icon join unavailable; using empty icon metadata.');
+        }
+
+        return [
+            'pdo' => $pdo,
+            'source' => $source,
+            'select' => $select,
+            'join' => $join,
+        ];
+    }
 }
 
 if (!function_exists('spp_item_database_quality_color')) {
@@ -752,44 +1026,46 @@ if (!function_exists('spp_item_database_sets_catalog')) {
         }
 
         $setRows = [];
-        try {
-            $setRows = armory_query("SELECT `id`, `name`, `item_1`, `item_2`, `item_3`, `item_4`, `item_5`, `item_6`, `item_7`, `item_8` FROM `dbc_itemset` ORDER BY `name` ASC", 0);
-            if (!is_array($setRows)) {
+        $setSource = null;
+        $setPdo = spp_item_database_pick_table_pdo($realmId, 'dbc_itemset', $setSource);
+        if ($setPdo instanceof PDO) {
+            try {
+                $setStmt = $setPdo->query("SELECT `id`, `name`, `item_1`, `item_2`, `item_3`, `item_4`, `item_5`, `item_6`, `item_7`, `item_8` FROM `dbc_itemset` ORDER BY `name` ASC");
+                $setRows = $setStmt ? ($setStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) : [];
+            } catch (Throwable $e) {
+                spp_item_database_log_compatibility($realmId, $setSource . '.dbc_itemset', $e->getMessage());
                 $setRows = [];
             }
-        } catch (Throwable $e) {
-            $setRows = [];
         }
 
         $notesBySetId = [];
         try {
-            $tableCheck = armory_query("SHOW TABLES LIKE 'armory_itemset_notes'", 0);
-            if (is_array($tableCheck) && !empty($tableCheck)) {
-                $noteRows = armory_query("SELECT `set_id`, `set_name`, `section`, `class_name`, `note_title`, `note_body`, `piece_count`, `source_key`, `sort_order`
-                                          FROM `armory_itemset_notes`
-                                          WHERE `is_active` = 1
-                                          ORDER BY `sort_order` ASC, `id` ASC", 0);
-                if (is_array($noteRows)) {
-                    foreach ($noteRows as $row) {
-                        $setId = (int)($row['set_id'] ?? 0);
-                        if ($setId <= 0) {
-                            continue;
-                        }
-                        $notesBySetId[$setId][] = [
-                            'set_id' => $setId,
-                            'set_name' => trim((string)($row['set_name'] ?? '')),
-                            'section' => strtolower(trim((string)($row['section'] ?? ''))),
-                            'class_name' => trim((string)($row['class_name'] ?? '')),
-                            'title' => trim((string)($row['note_title'] ?? '')),
-                            'text' => trim((string)($row['note_body'] ?? '')),
-                            'pieces' => (int)($row['piece_count'] ?? 0),
-                            'source_key' => trim((string)($row['source_key'] ?? '')),
-                            'sort_order' => (int)($row['sort_order'] ?? 0),
-                        ];
+            $armoryPdo = spp_item_database_optional_pdo('armory', $realmId);
+            if ($armoryPdo instanceof PDO && spp_realm_capability_table_exists($armoryPdo, 'armory_itemset_notes')) {
+                $noteStmt = $armoryPdo->query("SELECT `set_id`, `set_name`, `section`, `class_name`, `note_title`, `note_body`, `piece_count`, `source_key`, `sort_order`
+                                               FROM `armory_itemset_notes`
+                                               WHERE `is_active` = 1
+                                               ORDER BY `sort_order` ASC, `id` ASC");
+                foreach (($noteStmt ? $noteStmt->fetchAll(PDO::FETCH_ASSOC) : []) as $row) {
+                    $setId = (int)($row['set_id'] ?? 0);
+                    if ($setId <= 0) {
+                        continue;
                     }
+                    $notesBySetId[$setId][] = [
+                        'set_id' => $setId,
+                        'set_name' => trim((string)($row['set_name'] ?? '')),
+                        'section' => strtolower(trim((string)($row['section'] ?? ''))),
+                        'class_name' => trim((string)($row['class_name'] ?? '')),
+                        'title' => trim((string)($row['note_title'] ?? '')),
+                        'text' => trim((string)($row['note_body'] ?? '')),
+                        'pieces' => (int)($row['piece_count'] ?? 0),
+                        'source_key' => trim((string)($row['source_key'] ?? '')),
+                        'sort_order' => (int)($row['sort_order'] ?? 0),
+                    ];
                 }
             }
         } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, 'armory.armory_itemset_notes', $e->getMessage());
             $notesBySetId = [];
         }
 
@@ -924,10 +1200,10 @@ if (!function_exists('spp_item_database_sets_fetch')) {
         if (!empty($pageFirstItemIds)) {
             try {
                 $worldPdo = spp_get_pdo('world', $realmId);
-                $armoryPdo = spp_get_pdo('armory', $realmId);
+                $itemColumns = spp_item_database_item_columns($worldPdo, $realmId);
 
                 $placeholders = implode(',', array_fill(0, count($pageFirstItemIds), '?'));
-                $itemStmt = $worldPdo->prepare("SELECT `entry`, `displayid` FROM `item_template` WHERE `entry` IN ($placeholders)");
+                $itemStmt = $worldPdo->prepare("SELECT `entry`, " . spp_item_database_item_column_sql($itemColumns, 'displayid') . " AS `displayid` FROM `item_template` WHERE `entry` IN ($placeholders)");
                 $itemStmt->execute(array_values($pageFirstItemIds));
                 $displayIds = [];
                 foreach (($itemStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $metaRow) {
@@ -947,17 +1223,7 @@ if (!function_exists('spp_item_database_sets_fetch')) {
                 }
 
                 if (!empty($displayIds)) {
-                    $displayPlaceholders = implode(',', array_fill(0, count($displayIds), '?'));
-                    $iconStmt = $armoryPdo->prepare("SELECT `id`, `icon1` FROM `dbc_itemdisplayinfo` WHERE `id` IN ($displayPlaceholders)");
-                    $iconStmt->execute(array_values($displayIds));
-                    $iconsByDisplayId = [];
-                    foreach (($iconStmt->fetchAll(PDO::FETCH_ASSOC) ?: []) as $iconRow) {
-                        $displayId = (int)($iconRow['id'] ?? 0);
-                        if ($displayId > 0) {
-                            $iconsByDisplayId[$displayId] = trim((string)($iconRow['icon1'] ?? ''));
-                        }
-                    }
-
+                    $iconsByDisplayId = spp_item_database_fetch_item_icons($realmId, array_values($displayIds));
                     foreach ($firstItemMeta as $entryId => $meta) {
                         $displayId = (int)($meta['displayid'] ?? 0);
                         if ($displayId > 0 && !empty($iconsByDisplayId[$displayId])) {
@@ -966,7 +1232,7 @@ if (!function_exists('spp_item_database_sets_fetch')) {
                     }
                 }
             } catch (Throwable $e) {
-                error_log('[item sets] failed loading first item metadata: ' . $e->getMessage());
+                spp_item_database_log_compatibility($realmId, 'sets.first_item_metadata', $e->getMessage());
             }
         }
 
@@ -1079,16 +1345,36 @@ if (!function_exists('spp_item_database_search_counts')) {
 
         try {
             $worldPdo = spp_get_pdo('world', $realmId);
-            $armoryPdo = spp_get_pdo('armory', $realmId);
+            $itemColumns = spp_item_database_item_columns($worldPdo, $realmId);
             $term = '%' . str_replace(' ', '%', $search) . '%';
 
             $counts['items'] = spp_item_database_count_query($worldPdo, 'SELECT COUNT(*) FROM `item_template` WHERE `name` LIKE :search', ['search' => $term]);
-            $counts['icons'] = spp_item_database_count_query($armoryPdo, 'SELECT COUNT(*) FROM `dbc_itemdisplayinfo` WHERE `name` LIKE :search', ['search' => $term]);
             $counts['quests'] = spp_item_database_count_query($worldPdo, 'SELECT COUNT(*) FROM `quest_template` WHERE `Title` LIKE :search', ['search' => $term]);
             $counts['npcs'] = spp_item_database_count_query($worldPdo, 'SELECT COUNT(*) FROM `creature_template` WHERE `Name` LIKE :search', ['search' => $term]);
-            $counts['spells'] = spp_item_database_count_query($armoryPdo, 'SELECT COUNT(*) FROM `dbc_spell` WHERE `name` LIKE :search OR `description` LIKE :search', ['search' => $term]);
-            $counts['talents'] = spp_item_database_count_query($armoryPdo, 'SELECT COUNT(*) FROM `dbc_talent` t INNER JOIN `dbc_spell` s ON s.`id` = t.`rank1` WHERE s.`name` LIKE :search OR s.`description` LIKE :search', ['search' => $term]);
+
+            $iconIds = spp_item_database_fetch_icon_ids_by_name($realmId, $search);
+            if (!empty($iconIds)) {
+                $counts['icons'] = count($iconIds);
+            } else {
+                $iconSource = null;
+                $iconPdo = spp_item_database_pick_table_pdo($realmId, 'dbc_itemdisplayinfo', $iconSource);
+                $iconColumn = $iconPdo instanceof PDO ? spp_item_database_itemdisplayinfo_icon_column($iconPdo) : null;
+                if ($iconPdo instanceof PDO && $iconColumn !== null) {
+                    $counts['icons'] = spp_item_database_count_query($iconPdo, 'SELECT COUNT(*) FROM `dbc_itemdisplayinfo` WHERE `' . $iconColumn . '` LIKE :search', ['search' => $term]);
+                }
+            }
+
+            $spellParts = spp_item_database_spell_query_parts($realmId);
+            if (is_array($spellParts)) {
+                $counts['spells'] = spp_item_database_count_query($spellParts['pdo'], 'SELECT COUNT(*) FROM `dbc_spell` WHERE `name` LIKE :search OR `description` LIKE :search', ['search' => $term]);
+            }
+
+            $talentParts = spp_item_database_talent_query_parts($realmId);
+            if (is_array($talentParts)) {
+                $counts['talents'] = spp_item_database_count_query($talentParts['pdo'], 'SELECT COUNT(*) FROM `dbc_talent` t INNER JOIN `dbc_spell` s ON s.`id` = t.`rank1` WHERE s.`name` LIKE :search OR s.`description` LIKE :search', ['search' => $term]);
+            }
         } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, 'search_counts', $e->getMessage());
             return $counts;
         }
 
@@ -1115,21 +1401,19 @@ if (!function_exists('spp_item_database_icon_counts')) {
 
         try {
             $worldPdo = spp_get_pdo('world', $realmId);
-            $armoryPdo = spp_get_pdo('armory', $realmId);
-
-            $iconStmt = $armoryPdo->prepare('SELECT `id` FROM `dbc_itemdisplayinfo` WHERE LOWER(`name`) = LOWER(:icon)');
-            $iconStmt->execute(['icon' => $icon]);
-            $ids = $iconStmt->fetchAll(PDO::FETCH_COLUMN);
+            $itemColumns = spp_item_database_item_columns($worldPdo, $realmId);
+            $ids = spp_item_database_fetch_icon_ids_by_name($realmId, $icon);
             $counts['icons'] = count($ids);
             if (!$ids) {
                 return $counts;
             }
 
             $placeholders = implode(',', array_fill(0, count($ids), '?'));
-            $itemStmt = $worldPdo->prepare('SELECT COUNT(*) FROM `item_template` WHERE `displayid` IN (' . $placeholders . ')');
+            $itemStmt = $worldPdo->prepare('SELECT COUNT(*) FROM `item_template` WHERE ' . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' IN (' . $placeholders . ')');
             $itemStmt->execute(array_map('intval', $ids));
             $counts['items'] = (int)$itemStmt->fetchColumn();
         } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, 'icon_counts', $e->getMessage());
             return $counts;
         }
 
@@ -1188,20 +1472,31 @@ if (!function_exists('spp_item_database_generic_search')) {
 
         try {
             $worldPdo = spp_get_pdo('world', $realmId);
-            $armoryPdo = spp_get_pdo('armory', $realmId);
+            $itemColumns = spp_item_database_item_columns($worldPdo, $realmId);
             $term = '%' . str_replace(' ', '%', $search) . '%';
             $rows = [];
             $sections = [];
 
             if ($type === 'all') {
+                $spellParts = spp_item_database_spell_query_parts($realmId);
+                $talentParts = spp_item_database_talent_query_parts($realmId);
+                $iconSource = null;
+                $iconPdo = spp_item_database_pick_table_pdo($realmId, 'dbc_itemdisplayinfo', $iconSource);
+                $iconColumn = $iconPdo instanceof PDO ? spp_item_database_itemdisplayinfo_icon_column($iconPdo) : null;
                 $sectionQueries = [
-                    'items' => ['pdo' => $worldPdo, 'sql' => 'SELECT `entry`, `name`, `ItemLevel`, `Quality`, `displayid` FROM `item_template` WHERE `name` LIKE :search ORDER BY `Quality` DESC, `ItemLevel` DESC, `name` ASC LIMIT 5'],
-                    'icons' => ['pdo' => $armoryPdo, 'sql' => 'SELECT `id`, `name` FROM `dbc_itemdisplayinfo` WHERE `name` LIKE :search ORDER BY `name` ASC LIMIT 5'],
+                    'items' => ['pdo' => $worldPdo, 'sql' => 'SELECT `entry`, `name`, ' . spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' AS `ItemLevel`, ' . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' AS `Quality`, ' . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' AS `displayid` FROM `item_template` WHERE `name` LIKE :search ORDER BY `Quality` DESC, `ItemLevel` DESC, `name` ASC LIMIT 5'],
                     'quests' => ['pdo' => $worldPdo, 'sql' => 'SELECT `entry`, `Title`, `QuestLevel`, `MinLevel` FROM `quest_template` WHERE `Title` LIKE :search ORDER BY `QuestLevel` DESC, `Title` ASC LIMIT 5'],
                     'npcs' => ['pdo' => $worldPdo, 'sql' => 'SELECT `entry`, `Name`, `MinLevel`, `MaxLevel`, `Rank` FROM `creature_template` WHERE `Name` LIKE :search ORDER BY `MaxLevel` DESC, `Name` ASC LIMIT 5'],
-                    'spells' => ['pdo' => $armoryPdo, 'sql' => 'SELECT s.`id`, s.`name`, s.`description`, si.`name` AS `icon_name` FROM `dbc_spell` s LEFT JOIN `dbc_spellicon` si ON si.`id` = s.`ref_spellicon` WHERE s.`name` LIKE :search OR s.`description` LIKE :search ORDER BY s.`name` ASC LIMIT 5'],
-                    'talents' => ['pdo' => $armoryPdo, 'sql' => 'SELECT t.`id`, t.`row`, t.`col`, tt.`name` AS `tab_name`, s.`name`, s.`description`, si.`name` AS `icon_name` FROM `dbc_talent` t INNER JOIN `dbc_spell` s ON s.`id` = t.`rank1` LEFT JOIN `dbc_talenttab` tt ON tt.`id` = t.`ref_talenttab` LEFT JOIN `dbc_spellicon` si ON si.`id` = s.`ref_spellicon` WHERE s.`name` LIKE :search OR s.`description` LIKE :search ORDER BY tt.`name` ASC, t.`row` ASC, t.`col` ASC LIMIT 5'],
                 ];
+                if ($iconPdo instanceof PDO && $iconColumn !== null) {
+                    $sectionQueries['icons'] = ['pdo' => $iconPdo, 'sql' => 'SELECT `id`, `' . $iconColumn . '` AS `name` FROM `dbc_itemdisplayinfo` WHERE `' . $iconColumn . '` LIKE :search ORDER BY `' . $iconColumn . '` ASC LIMIT 5'];
+                }
+                if (is_array($spellParts)) {
+                    $sectionQueries['spells'] = ['pdo' => $spellParts['pdo'], 'sql' => $spellParts['select'] . ' FROM `dbc_spell` s' . $spellParts['join'] . ' WHERE s.`name` LIKE :search OR s.`description` LIKE :search ORDER BY s.`name` ASC LIMIT 5'];
+                }
+                if (is_array($talentParts)) {
+                    $sectionQueries['talents'] = ['pdo' => $talentParts['pdo'], 'sql' => $talentParts['select'] . ' FROM `dbc_talent` t' . $talentParts['join'] . ' WHERE s.`name` LIKE :search OR s.`description` LIKE :search ORDER BY `tab_name` ASC, t.`row` ASC, t.`col` ASC LIMIT 5'];
+                }
 
                 foreach ($sectionQueries as $sectionType => $query) {
                     $stmt = $query['pdo']->prepare($query['sql']);
@@ -1287,17 +1582,11 @@ if (!function_exists('spp_item_database_generic_search')) {
 
             if ($type === 'icons') {
                 $iconSearch = $filters['icon'];
-                $iconStmt = $armoryPdo->prepare('SELECT `id`, `name` FROM `dbc_itemdisplayinfo` WHERE LOWER(`name`) = LOWER(:icon) ORDER BY `id` ASC');
-                $iconStmt->execute(['icon' => $iconSearch]);
-                $iconRows = $iconStmt->fetchAll(PDO::FETCH_ASSOC);
-                $displayIds = [];
-                foreach ($iconRows as $iconRow) {
-                    $displayIds[] = (int)$iconRow['id'];
-                }
+                $displayIds = spp_item_database_fetch_icon_ids_by_name($realmId, $iconSearch);
 
                 if ($displayIds) {
                     $placeholders = implode(',', array_fill(0, count($displayIds), '?'));
-                    $itemStmt = $worldPdo->prepare('SELECT `entry`, `name`, `ItemLevel`, `RequiredLevel`, `Quality`, `displayid`, `InventoryType`, `class`, `description` FROM `item_template` WHERE `displayid` IN (' . $placeholders . ') ORDER BY `Quality` DESC, `ItemLevel` DESC, `name` ASC');
+                    $itemStmt = $worldPdo->prepare('SELECT `entry`, `name`, ' . spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' AS `ItemLevel`, ' . spp_item_database_item_column_sql($itemColumns, 'RequiredLevel') . ' AS `RequiredLevel`, ' . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' AS `Quality`, ' . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' AS `displayid`, ' . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' AS `InventoryType`, `class`, `description` FROM `item_template` WHERE ' . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' IN (' . $placeholders . ') ORDER BY `Quality` DESC, `ItemLevel` DESC, `name` ASC');
                     $itemStmt->execute($displayIds);
                     foreach ($itemStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
                         $quality = (int)($row['Quality'] ?? 0);
@@ -1349,32 +1638,38 @@ if (!function_exists('spp_item_database_generic_search')) {
                     ];
                 }
             } elseif ($type === 'spells') {
-                $stmt = $armoryPdo->prepare('SELECT s.`id`, s.`name`, s.`description`, si.`name` AS `icon_name` FROM `dbc_spell` s LEFT JOIN `dbc_spellicon` si ON si.`id` = s.`ref_spellicon` WHERE s.`name` LIKE :search OR s.`description` LIKE :search ORDER BY s.`name` ASC');
-                $stmt->execute(['search' => $term]);
-                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                    $rows[] = [
-                        'entity_type' => 'spells',
-                        'id' => (int)$row['id'],
-                        'name' => (string)$row['name'],
-                        'meta' => 'Spell',
-                        'submeta' => 'Spell ID ' . (int)$row['id'],
-                        'description' => trim((string)($row['description'] ?? '')),
-                        'icon' => spp_item_database_icon_url((string)($row['icon_name'] ?? '')),
-                    ];
+                $spellParts = spp_item_database_spell_query_parts($realmId);
+                if (is_array($spellParts)) {
+                    $stmt = $spellParts['pdo']->prepare($spellParts['select'] . ' FROM `dbc_spell` s' . $spellParts['join'] . ' WHERE s.`name` LIKE :search OR s.`description` LIKE :search ORDER BY s.`name` ASC');
+                    $stmt->execute(['search' => $term]);
+                    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $rows[] = [
+                            'entity_type' => 'spells',
+                            'id' => (int)$row['id'],
+                            'name' => (string)$row['name'],
+                            'meta' => 'Spell',
+                            'submeta' => 'Spell ID ' . (int)$row['id'],
+                            'description' => trim((string)($row['description'] ?? '')),
+                            'icon' => spp_item_database_icon_url((string)($row['icon_name'] ?? '')),
+                        ];
+                    }
                 }
             } elseif ($type === 'talents') {
-                $stmt = $armoryPdo->prepare('SELECT t.`id`, t.`row`, t.`col`, tt.`name` AS `tab_name`, s.`id` AS `spell_id`, s.`name`, s.`description`, si.`name` AS `icon_name` FROM `dbc_talent` t INNER JOIN `dbc_spell` s ON s.`id` = t.`rank1` LEFT JOIN `dbc_talenttab` tt ON tt.`id` = t.`ref_talenttab` LEFT JOIN `dbc_spellicon` si ON si.`id` = s.`ref_spellicon` WHERE s.`name` LIKE :search OR s.`description` LIKE :search ORDER BY tt.`name` ASC, t.`row` ASC, t.`col` ASC');
-                $stmt->execute(['search' => $term]);
-                foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                    $rows[] = [
-                        'entity_type' => 'talents',
-                        'id' => (int)$row['id'],
-                        'name' => (string)$row['name'],
-                        'meta' => 'Talent',
-                        'submeta' => trim((string)($row['tab_name'] ?? 'Talent Tree')) . ' | Row ' . ((int)($row['row'] ?? 0) + 1) . ' | Column ' . ((int)($row['col'] ?? 0) + 1),
-                        'description' => trim((string)($row['description'] ?? '')),
-                        'icon' => spp_item_database_icon_url((string)($row['icon_name'] ?? '')),
-                    ];
+                $talentParts = spp_item_database_talent_query_parts($realmId);
+                if (is_array($talentParts)) {
+                    $stmt = $talentParts['pdo']->prepare($talentParts['select'] . ' FROM `dbc_talent` t' . $talentParts['join'] . ' WHERE s.`name` LIKE :search OR s.`description` LIKE :search ORDER BY `tab_name` ASC, t.`row` ASC, t.`col` ASC');
+                    $stmt->execute(['search' => $term]);
+                    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $rows[] = [
+                            'entity_type' => 'talents',
+                            'id' => (int)$row['id'],
+                            'name' => (string)$row['name'],
+                            'meta' => 'Talent',
+                            'submeta' => trim((string)($row['tab_name'] ?? 'Talent Tree')) . ' | Row ' . ((int)($row['row'] ?? 0) + 1) . ' | Column ' . ((int)($row['col'] ?? 0) + 1),
+                            'description' => trim((string)($row['description'] ?? '')),
+                            'icon' => spp_item_database_icon_url((string)($row['icon_name'] ?? '')),
+                        ];
+                    }
                 }
             }
 
@@ -1389,6 +1684,7 @@ if (!function_exists('spp_item_database_generic_search')) {
                 'sections' => [],
             ];
         } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, 'generic_search.' . $type, $e->getMessage());
             return [
                 'error' => 'The Armory database search could not load ' . $type . ' from the realm databases.',
                 'filters' => $filters,
@@ -1403,33 +1699,36 @@ if (!function_exists('spp_item_database_generic_search')) {
 }
 
 if (!function_exists('spp_item_database_sort_sql')) {
-    function spp_item_database_sort_sql($sortKey, $direction, $hasSearch)
+    function spp_item_database_sort_sql($sortKey, $direction, $hasSearch, array $itemColumns)
     {
         $direction = strtoupper($direction) === 'ASC' ? 'ASC' : 'DESC';
+        $levelSql = spp_item_database_item_column_sql($itemColumns, 'ItemLevel');
+        $requiredSql = spp_item_database_item_column_sql($itemColumns, 'RequiredLevel');
+        $qualitySql = spp_item_database_item_column_sql($itemColumns, 'Quality');
 
         switch ($sortKey) {
             case 'name':
-                return 'display_name ' . $direction . ', it.`ItemLevel` DESC, it.`entry` DESC';
+                return 'display_name ' . $direction . ', ' . $levelSql . ' DESC, it.`entry` DESC';
             case 'level':
-                return 'it.`ItemLevel` ' . $direction . ', display_name ASC, it.`entry` DESC';
+                return $levelSql . ' ' . $direction . ', display_name ASC, it.`entry` DESC';
             case 'required':
-                return 'it.`RequiredLevel` ' . $direction . ', it.`ItemLevel` DESC, display_name ASC';
+                return $requiredSql . ' ' . $direction . ', ' . $levelSql . ' DESC, display_name ASC';
             case 'quality':
-                return 'it.`Quality` ' . $direction . ', it.`ItemLevel` DESC, display_name ASC';
+                return $qualitySql . ' ' . $direction . ', ' . $levelSql . ' DESC, display_name ASC';
             case 'newest':
                 return 'it.`entry` ' . $direction;
             case 'featured':
             default:
                 if ($hasSearch) {
-                    return 'it.`Quality` DESC, it.`ItemLevel` DESC, display_name ASC';
+                    return $qualitySql . ' DESC, ' . $levelSql . ' DESC, display_name ASC';
                 }
-                return 'it.`ItemLevel` DESC, it.`Quality` DESC, display_name ASC';
+                return $levelSql . ' DESC, ' . $qualitySql . ' DESC, display_name ASC';
         }
     }
 }
 
 if (!function_exists('spp_item_database_build_where')) {
-    function spp_item_database_build_where(array $filters, $localeField)
+    function spp_item_database_build_where(array $filters, $localeField, array $itemColumns)
     {
         $where = [];
         $params = [];
@@ -1445,7 +1744,7 @@ if (!function_exists('spp_item_database_build_where')) {
         }
 
         if ($filters['quality'] !== '') {
-            $where[] = 'it.`Quality` = :quality';
+            $where[] = spp_item_database_item_column_sql($itemColumns, 'Quality') . ' = :quality';
             $params['quality'] = (int)$filters['quality'];
         }
 
@@ -1455,17 +1754,17 @@ if (!function_exists('spp_item_database_build_where')) {
         }
 
         if ($filters['slot'] !== '') {
-            $where[] = 'it.`InventoryType` = :slot';
+            $where[] = spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' = :slot';
             $params['slot'] = (int)$filters['slot'];
         }
 
         if ($filters['min_level'] !== '') {
-            $where[] = 'it.`ItemLevel` >= :min_level';
+            $where[] = spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' >= :min_level';
             $params['min_level'] = (int)$filters['min_level'];
         }
 
         if ($filters['max_level'] !== '') {
-            $where[] = 'it.`ItemLevel` <= :max_level';
+            $where[] = spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' <= :max_level';
             $params['max_level'] = (int)$filters['max_level'];
         }
 
@@ -1477,9 +1776,10 @@ if (!function_exists('spp_item_database_build_where')) {
 }
 
 if (!function_exists('spp_item_database_cache_source')) {
-    function spp_item_database_cache_source(PDO $worldPdo, PDO $armoryPdo, $itemId, $isPvpReward)
+    function spp_item_database_cache_source(PDO $worldPdo, $metadataPdo, $itemId, $isPvpReward, $realmId = 0)
     {
         $itemId = (int)$itemId;
+        $realmId = (int)$realmId;
 
         $checks = [
             ['SELECT `entry` FROM `quest_template` WHERE `SrcItemId` = ? LIMIT 1', 'Quest Item'],
@@ -1499,16 +1799,26 @@ if (!function_exists('spp_item_database_cache_source')) {
         $objectStmt->execute([$itemId]);
         $objectLootId = $objectStmt->fetchColumn();
         if ($objectLootId) {
-            $instanceStmt = $armoryPdo->prepare('SELECT * FROM `armory_instance_data` WHERE (`id` = ? OR `lootid_1` = ? OR `lootid_2` = ? OR `lootid_3` = ? OR `lootid_4` = ? OR `name_id` = ?) AND `type` = \'object\' LIMIT 1');
-            $instanceStmt->execute([$objectLootId, $objectLootId, $objectLootId, $objectLootId, $objectLootId, $objectLootId]);
-            $instanceLoot = $instanceStmt->fetch(PDO::FETCH_ASSOC);
-            if ($instanceLoot) {
-                $templateStmt = $armoryPdo->prepare('SELECT * FROM `armory_instance_template` WHERE `id` = ? LIMIT 1');
-                $templateStmt->execute([(int)$instanceLoot['instance_id']]);
-                $instanceInfo = $templateStmt->fetch(PDO::FETCH_ASSOC);
-                if ($instanceInfo) {
-                    return trim((string)$instanceLoot['name_en_gb'] . ' - ' . (string)$instanceInfo['name_en_gb']);
+            if ($metadataPdo instanceof PDO
+                && spp_realm_capability_table_exists($metadataPdo, 'armory_instance_data')
+                && spp_realm_capability_table_exists($metadataPdo, 'armory_instance_template')) {
+                try {
+                    $instanceStmt = $metadataPdo->prepare('SELECT * FROM `armory_instance_data` WHERE (`id` = ? OR `lootid_1` = ? OR `lootid_2` = ? OR `lootid_3` = ? OR `lootid_4` = ? OR `name_id` = ?) AND `type` = \'object\' LIMIT 1');
+                    $instanceStmt->execute([$objectLootId, $objectLootId, $objectLootId, $objectLootId, $objectLootId, $objectLootId]);
+                    $instanceLoot = $instanceStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($instanceLoot) {
+                        $templateStmt = $metadataPdo->prepare('SELECT * FROM `armory_instance_template` WHERE `id` = ? LIMIT 1');
+                        $templateStmt->execute([(int)$instanceLoot['instance_id']]);
+                        $instanceInfo = $templateStmt->fetch(PDO::FETCH_ASSOC);
+                        if ($instanceInfo) {
+                            return trim((string)$instanceLoot['name_en_gb'] . ' - ' . (string)$instanceInfo['name_en_gb']);
+                        }
+                    }
+                } catch (Throwable $e) {
+                    spp_item_database_log_compatibility($realmId, 'metadata.armory_instance_data', $e->getMessage());
                 }
+            } elseif ($realmId > 0) {
+                spp_item_database_log_compatibility($realmId, 'metadata.armory_instance_data', 'Optional source metadata unavailable; using simplified container source.');
             }
             return 'Container Drop';
         }
@@ -1517,16 +1827,26 @@ if (!function_exists('spp_item_database_cache_source')) {
         $creatureStmt->execute([$itemId]);
         $creatureLootId = $creatureStmt->fetchColumn();
         if ($creatureLootId) {
-            $instanceStmt = $armoryPdo->prepare('SELECT * FROM `armory_instance_data` WHERE (`id` = ? OR `lootid_1` = ? OR `lootid_2` = ? OR `lootid_3` = ? OR `lootid_4` = ? OR `name_id` = ?) AND `type` = \'npc\' LIMIT 1');
-            $instanceStmt->execute([$creatureLootId, $creatureLootId, $creatureLootId, $creatureLootId, $creatureLootId, $creatureLootId]);
-            $instanceLoot = $instanceStmt->fetch(PDO::FETCH_ASSOC);
-            if ($instanceLoot) {
-                $templateStmt = $armoryPdo->prepare('SELECT * FROM `armory_instance_template` WHERE `id` = ? LIMIT 1');
-                $templateStmt->execute([(int)$instanceLoot['instance_id']]);
-                $instanceInfo = $templateStmt->fetch(PDO::FETCH_ASSOC);
-                if ($instanceInfo) {
-                    return trim((string)$instanceLoot['name_en_gb'] . ' - ' . (string)$instanceInfo['name_en_gb']);
+            if ($metadataPdo instanceof PDO
+                && spp_realm_capability_table_exists($metadataPdo, 'armory_instance_data')
+                && spp_realm_capability_table_exists($metadataPdo, 'armory_instance_template')) {
+                try {
+                    $instanceStmt = $metadataPdo->prepare('SELECT * FROM `armory_instance_data` WHERE (`id` = ? OR `lootid_1` = ? OR `lootid_2` = ? OR `lootid_3` = ? OR `lootid_4` = ? OR `name_id` = ?) AND `type` = \'npc\' LIMIT 1');
+                    $instanceStmt->execute([$creatureLootId, $creatureLootId, $creatureLootId, $creatureLootId, $creatureLootId, $creatureLootId]);
+                    $instanceLoot = $instanceStmt->fetch(PDO::FETCH_ASSOC);
+                    if ($instanceLoot) {
+                        $templateStmt = $metadataPdo->prepare('SELECT * FROM `armory_instance_template` WHERE `id` = ? LIMIT 1');
+                        $templateStmt->execute([(int)$instanceLoot['instance_id']]);
+                        $instanceInfo = $templateStmt->fetch(PDO::FETCH_ASSOC);
+                        if ($instanceInfo) {
+                            return trim((string)$instanceLoot['name_en_gb'] . ' - ' . (string)$instanceInfo['name_en_gb']);
+                        }
+                    }
+                } catch (Throwable $e) {
+                    spp_item_database_log_compatibility($realmId, 'metadata.armory_instance_data', $e->getMessage());
                 }
+            } elseif ($realmId > 0) {
+                spp_item_database_log_compatibility($realmId, 'metadata.armory_instance_data', 'Optional source metadata unavailable; using simplified creature source.');
             }
             return 'Dropped Item';
         }
@@ -1587,14 +1907,15 @@ if (!function_exists('spp_item_database_fetch')) {
 
         try {
             $worldPdo = spp_get_pdo('world', $realmId);
-            $armoryPdo = spp_get_pdo('armory', $realmId);
+            $itemColumns = spp_item_database_item_columns($worldPdo, $realmId);
+            $metadataPdo = spp_item_database_pick_metadata_pdo($realmId, ['dbc_itemdisplayinfo', 'armory_instance_data', 'armory_instance_template'], $metadataSource);
             $localeId = isset($config['locales']) ? (int)$config['locales'] : 0;
             $localeField = $localeId > 0 ? 'name_loc' . $localeId : null;
             $joinSql = $localeField ? ' LEFT JOIN `locales_item` li ON li.`entry` = it.`entry`' : '';
             $displayNameSql = $localeField ? 'COALESCE(li.`' . $localeField . '`, it.`name`)' : 'it.`name`';
 
-            $whereData = spp_item_database_build_where($filters, $localeField);
-            $orderSql = spp_item_database_sort_sql($filters['sort'], $filters['dir'], $filters['search'] !== '');
+            $whereData = spp_item_database_build_where($filters, $localeField, $itemColumns);
+            $orderSql = spp_item_database_sort_sql($filters['sort'], $filters['dir'], $filters['search'] !== '', $itemColumns);
 
             $countSql = 'SELECT COUNT(*) FROM `item_template` it' . $joinSql . $whereData['sql'];
             $countStmt = $worldPdo->prepare($countSql);
@@ -1610,7 +1931,14 @@ if (!function_exists('spp_item_database_fetch')) {
             $offset = ($page - 1) * $perPage;
             $filters['p'] = $page;
 
-            $sql = 'SELECT it.`entry`, it.`name`, it.`ItemLevel`, it.`RequiredLevel`, it.`Quality`, it.`Flags`, it.`displayid`, it.`InventoryType`, it.`class`, it.`description`, ' . $displayNameSql . ' AS `display_name` FROM `item_template` it' . $joinSql . $whereData['sql'] . ' ORDER BY ' . $orderSql . ' LIMIT ' . (int)$perPage . ' OFFSET ' . (int)$offset;
+            $sql = 'SELECT it.`entry`, it.`name`, '
+                . spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' AS `ItemLevel`, '
+                . spp_item_database_item_column_sql($itemColumns, 'RequiredLevel') . ' AS `RequiredLevel`, '
+                . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' AS `Quality`, '
+                . spp_item_database_item_column_sql($itemColumns, 'Flags') . ' AS `Flags`, '
+                . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' AS `displayid`, '
+                . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' AS `InventoryType`, '
+                . 'it.`class`, it.`description`, ' . $displayNameSql . ' AS `display_name` FROM `item_template` it' . $joinSql . $whereData['sql'] . ' ORDER BY ' . $orderSql . ' LIMIT ' . (int)$perPage . ' OFFSET ' . (int)$offset;
             $stmt = $worldPdo->prepare($sql);
             foreach ($whereData['params'] as $name => $value) {
                 $stmt->bindValue(':' . $name, $value);
@@ -1626,15 +1954,7 @@ if (!function_exists('spp_item_database_fetch')) {
                 }
             }
 
-            $iconMap = [];
-            if ($displayIds) {
-                $placeholders = implode(',', array_fill(0, count($displayIds), '?'));
-                $iconStmt = $armoryPdo->prepare('SELECT `id`, `name` FROM `dbc_itemdisplayinfo` WHERE `id` IN (' . $placeholders . ')');
-                $iconStmt->execute(array_values($displayIds));
-                foreach ($iconStmt->fetchAll(PDO::FETCH_ASSOC) as $iconRow) {
-                    $iconMap[(int)$iconRow['id']] = (string)$iconRow['name'];
-                }
-            }
+            $iconMap = spp_item_database_fetch_item_icons($realmId, array_values($displayIds));
 
             $rows = [];
             $summary = [
@@ -1669,7 +1989,7 @@ if (!function_exists('spp_item_database_fetch')) {
                     'slot_name' => spp_item_database_inventory_type_name((int)($row['InventoryType'] ?? 0)),
                     'class_name' => spp_item_database_class_label($classId),
                     'description' => trim((string)($row['description'] ?? '')),
-                    'source' => spp_item_database_cache_source($worldPdo, $armoryPdo, (int)$row['entry'], (((int)($row['Flags'] ?? 0) & 32768) === 32768)),
+                    'source' => spp_item_database_cache_source($worldPdo, $metadataPdo, (int)$row['entry'], (((int)($row['Flags'] ?? 0) & 32768) === 32768), $realmId),
                     'icon' => spp_item_database_icon_url($iconMap[(int)($row['displayid'] ?? 0)] ?? ''),
                 ];
             }
@@ -1686,6 +2006,7 @@ if (!function_exists('spp_item_database_fetch')) {
                 'sections' => [],
             ];
         } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, 'items.fetch', $e->getMessage());
             return [
                 'error' => 'The item database could not be loaded from the realm databases.',
                 'filters' => $filters,

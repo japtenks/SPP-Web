@@ -73,11 +73,7 @@ if (!function_exists('spp_admin_members_account_profile')) {
 if (!function_exists('spp_admin_members_realm_name')) {
     function spp_admin_members_realm_name(int $realmId): string
     {
-        $name = function_exists('spp_get_armory_realm_name')
-            ? (string)(spp_get_armory_realm_name($realmId) ?? '')
-            : '';
-
-        return $name !== '' ? $name : ('Realm ' . $realmId);
+        return spp_realm_display_name($realmId);
     }
 }
 

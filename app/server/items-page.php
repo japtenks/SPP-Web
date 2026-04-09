@@ -59,7 +59,7 @@ if (!function_exists('spp_item_database_build_page_state')) {
 
         $realmMap = $GLOBALS['realmDbMap'] ?? null;
         $realmId = (is_array($realmMap) && !empty($realmMap)) ? spp_resolve_realm_id($realmMap) : 1;
-        $realmLabel = spp_get_armory_realm_name($realmId) ?? 'Default Realm';
+        $realmLabel = spp_realm_display_name($realmId, is_array($realmMap) ? $realmMap : null, 'Default Realm');
 
         $filters = spp_item_database_parse_request($config);
         $data = spp_item_database_fetch($realmId, $filters, $config);

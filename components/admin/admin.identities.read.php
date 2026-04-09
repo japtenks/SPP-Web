@@ -259,7 +259,7 @@ if (!function_exists('spp_admin_identity_health_selected_realm_coverage_gap')) {
 if (!function_exists('spp_admin_identity_health_coverage_row')) {
     function spp_admin_identity_health_coverage_row(PDO $masterPdo, array $realmRow, string $siteRoot) {
         $realmId = (int)($realmRow['id'] ?? 0);
-        $realmName = (string)($realmRow['name'] ?? ('Realm ' . $realmId));
+        $realmName = spp_realm_display_name($realmId, (array)($GLOBALS['realmDbMap'] ?? array()));
 
         $row = array(
             'realm_id' => $realmId,
@@ -375,7 +375,7 @@ if (!function_exists('spp_admin_identity_health_build_view')) {
 
         $selectedCoverage = $coverageByRealm[$selectedRealmId] ?? array(
             'realm_id' => $selectedRealmId,
-            'realm_name' => $realmOptions[$selectedRealmId] ?? ('Realm ' . $selectedRealmId),
+            'realm_name' => $realmOptions[$selectedRealmId] ?? spp_realm_display_name($selectedRealmId, (array)($GLOBALS['realmDbMap'] ?? array())),
             'posts_total' => 0,
             'posts_eligible' => 0,
             'posts_covered' => 0,
@@ -485,7 +485,7 @@ if (!function_exists('spp_admin_identity_health_build_view')) {
             'legacy_url' => 'index.php?n=admin&sub=cleanup',
             'realm_options' => $realmOptions,
             'selected_realm_id' => $selectedRealmId,
-            'selected_realm_name' => $realmOptions[$selectedRealmId] ?? ('Realm ' . $selectedRealmId),
+            'selected_realm_name' => $realmOptions[$selectedRealmId] ?? spp_realm_display_name($selectedRealmId, (array)($GLOBALS['realmDbMap'] ?? array())),
             'coverage_rows' => $coverageRows,
             'coverage_selected' => $selectedCoverage,
             'skipped_realms' => $skippedRealms,

@@ -7,7 +7,15 @@ builddiv_start(1, 'Downloads', 0);
     <h2 class="feature-title">Downloads and client extras in one place.</h2>
     <p class="feature-copy">This page is for hosted client files. The main target is addon packs from the <a class="feature-link" href="https://github.com/celguar/spp-classics-cmangos/tree/master/Addons" target="_blank" rel="noopener noreferrer">spp-classics-cmangos</a> repo, but you can also drop in launchers, patches, PDFs, or other curated files.</p>
     <div class="feature-actions">
-      <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
+      <?php if (!empty($downloadsRealmlistOptions) && count((array)$downloadsRealmlistOptions) > 1): ?>
+        <?php foreach ((array)$downloadsRealmlistOptions as $realmlistOption): ?>
+          <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
+            Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
+          </a>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
+      <?php endif; ?>
     </div>
   </section>
 
@@ -19,7 +27,15 @@ builddiv_start(1, 'Downloads', 0);
 
         <?php if (!empty($section['show_realmlist_action'])): ?>
           <div class="feature-actions">
-            <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
+            <?php if (!empty($downloadsRealmlistOptions) && count((array)$downloadsRealmlistOptions) > 1): ?>
+              <?php foreach ((array)$downloadsRealmlistOptions as $realmlistOption): ?>
+                <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
+                  Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
+                </a>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
+            <?php endif; ?>
           </div>
         <?php endif; ?>
 

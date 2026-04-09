@@ -60,7 +60,7 @@ if (!function_exists('spp_item_detail_build_comment_poster_state')) {
                 $optionKey = 'char:' . $characterRealmId . ':' . $characterGuid;
                 $commentPosterOptions[$optionKey] = [
                     'type' => 'character',
-                    'label' => $characterName . ' (' . (string)($character['realm_name'] ?? ('Realm ' . $characterRealmId)) . ', lvl ' . (int)($character['level'] ?? 0) . ')',
+                    'label' => $characterName . ' (' . (string)($character['realm_name'] ?? spp_realm_display_name($characterRealmId, is_array($realmMap) ? $realmMap : null)) . ', lvl ' . (int)($character['level'] ?? 0) . ')',
                     'poster' => $characterName,
                     'character_id' => $characterGuid,
                     'identity_id' => function_exists('spp_ensure_char_identity')
@@ -98,7 +98,7 @@ if (!function_exists('spp_item_detail_bootstrap_state')) {
     function spp_item_detail_bootstrap_state(array $config, array $user, $realmMap, array $realms = []): array
     {
         $realmId = (is_array($realmMap) && !empty($realmMap)) ? spp_resolve_realm_id($realmMap) : 1;
-        $realmLabel = spp_get_armory_realm_name($realmId) ?? '';
+        $realmLabel = spp_realm_display_name($realmId, is_array($realmMap) ? $realmMap : null);
         $itemId = isset($_GET['item']) ? (int)$_GET['item'] : 0;
         $requestType = strtolower(trim((string)($_GET['type'] ?? 'items')));
         $requestedSetName = trim((string)($_GET['set'] ?? ''));

@@ -441,31 +441,7 @@ function spp_admin_playerbots_meeting_location_options(array $realmInfo, string 
 
 function spp_admin_playerbots_fetch_realm_name(int $realmId, array $realmInfo): string
 {
-    $db = $GLOBALS['db'] ?? null;
-    $realmdDb = (string)($realmInfo['realmd'] ?? '');
-    if (is_array($db) && $realmdDb !== '') {
-        try {
-            $pdo = new PDO(
-                "mysql:host={$db['host']};port={$db['port']};dbname={$realmdDb};charset=utf8mb4",
-                $db['user'],
-                $db['pass'],
-                array(
-                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                )
-            );
-            $stmt = $pdo->prepare("SELECT `name` FROM `realmlist` WHERE `id` = ? LIMIT 1");
-            $stmt->execute(array($realmId));
-            $name = $stmt->fetchColumn();
-            if ($name !== false && trim((string)$name) !== '') {
-                return trim((string)$name);
-            }
-        } catch (Throwable $e) {
-            error_log('[admin.playerbots] Failed fetching realm name: ' . $e->getMessage());
-        }
-    }
-
-    return 'SPP-' . spp_admin_playerbots_expansion_label(spp_admin_playerbots_detect_realm_expansion($realmInfo));
+    return spp_realm_display_name($realmId, array($realmId => $realmInfo));
 }
 
 function spp_admin_playerbots_build_realm_options(array $realmDbMap): array
@@ -485,7 +461,7 @@ function spp_admin_playerbots_build_realm_options(array $realmDbMap): array
 
     foreach ($options as &$option) {
         if (($labelCounts[$option['label']] ?? 0) > 1) {
-            $option['label'] .= ' (Realm ' . (int)$option['realm_id'] . ')';
+            $option['label'] .= ' (ID #' . (int)$option['realm_id'] . ')';
         }
     }
     unset($option);

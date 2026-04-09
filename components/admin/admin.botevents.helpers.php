@@ -226,17 +226,9 @@ function spp_admin_botevents_realm_options(array $realmDbMap, array $config): ar
             continue;
         }
 
-        $resolvedName = function_exists('spp_get_armory_realm_name')
-            ? (string)(spp_get_armory_realm_name((int)$realmId) ?? '')
-            : '';
-        $fallbackName = 'Realm ' . (int)$realmId;
-        if (isset($realmDbMap[$realmId]) && is_array($realmDbMap[$realmId]) && !empty($realmDbMap[$realmId]['name'])) {
-            $fallbackName = (string)$realmDbMap[$realmId]['name'];
-        }
-
         $options[] = array(
             'id' => (int)$realmId,
-            'name' => $resolvedName !== '' ? $resolvedName : $fallbackName,
+            'name' => spp_realm_display_name((int)$realmId, $realmDbMap),
             'expansion' => (string)($realmExpansion[$realmId] ?? ''),
         );
     }
@@ -446,7 +438,7 @@ function spp_admin_botevents_build_achievement_catalog(array $realmDbMap, array 
         return $result;
     }
 
-    $result['realmName'] = (string)(spp_get_armory_realm_name($preferredRealmId) ?? ('Realm ' . $preferredRealmId));
+    $result['realmName'] = spp_realm_display_name($preferredRealmId, $realmDbMap);
 
     try {
         $worldPdo = spp_get_pdo('world', $preferredRealmId);

@@ -70,6 +70,133 @@ if (!function_exists('spp_realm_to_expansion_key')) {
     }
 }
 
+if (!function_exists('spp_realm_display_name_is_placeholder')) {
+    function spp_realm_display_name_is_placeholder(string $name): bool
+    {
+        $name = trim($name);
+        if ($name === '') {
+            return true;
+        }
+
+        return preg_match('/^Realm\s*#?\s*\d+$/i', $name) === 1;
+    }
+}
+
+if (!function_exists('spp_realm_display_name_from_info')) {
+    function spp_realm_display_name_from_info(array $realmInfo): string
+    {
+        foreach (array('display_name', 'realm_name', 'name', 'label') as $field) {
+            $value = trim((string)($realmInfo[$field] ?? ''));
+            if (!spp_realm_display_name_is_placeholder($value)) {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('spp_realm_display_name_from_realmlist')) {
+    function spp_realm_display_name_from_realmlist(int $realmId): string
+    {
+        static $cache = array();
+
+        if ($realmId <= 0) {
+            return '';
+        }
+
+        if (array_key_exists($realmId, $cache)) {
+            return $cache[$realmId];
+        }
+
+        $name = '';
+        if (function_exists('spp_get_pdo')) {
+            try {
+                $pdo = spp_get_pdo('realmd', $realmId);
+                $stmt = $pdo->prepare('SELECT `name` FROM `realmlist` WHERE `id` = ? LIMIT 1');
+                $stmt->execute(array($realmId));
+                $name = trim((string)($stmt->fetchColumn() ?: ''));
+            } catch (Throwable $e) {
+                $name = '';
+            }
+        }
+
+        $cache[$realmId] = spp_realm_display_name_is_placeholder($name) ? '' : $name;
+        return $cache[$realmId];
+    }
+}
+
+if (!function_exists('spp_realm_display_name_from_armory')) {
+    function spp_realm_display_name_from_armory(int $realmId): string
+    {
+        if (!function_exists('spp_get_armory_realm_name') || $realmId <= 0) {
+            return '';
+        }
+
+        $name = trim((string)(spp_get_armory_realm_name($realmId) ?? ''));
+        return spp_realm_display_name_is_placeholder($name) ? '' : $name;
+    }
+}
+
+if (!function_exists('spp_realm_display_name_from_derived')) {
+    function spp_realm_display_name_from_derived(int $realmId, array $realmInfo = array()): string
+    {
+        $expansionKey = strtolower(trim((string)(function_exists('spp_realm_to_expansion_key') ? spp_realm_to_expansion_key($realmId) : '')));
+        $haystack = strtolower(trim(implode(' ', array_filter(array(
+            (string)($realmInfo['world'] ?? ''),
+            (string)($realmInfo['armory'] ?? ''),
+            (string)($realmInfo['realmd'] ?? ''),
+            (string)($realmInfo['chars'] ?? ''),
+            (string)($realmInfo['bots'] ?? ''),
+            $expansionKey,
+        )))));
+
+        if ($haystack === '') {
+            return '';
+        }
+
+        if (strpos($haystack, 'vmangos') !== false) {
+            return 'vMaNGOS';
+        }
+        if (strpos($haystack, 'wrath of the lich king') !== false || strpos($haystack, 'wotlk') !== false) {
+            return 'Wrath of the Lich King';
+        }
+        if (strpos($haystack, 'burning crusade') !== false || strpos($haystack, 'tbc') !== false) {
+            return 'The Burning Crusade';
+        }
+        if (strpos($haystack, 'classic') !== false || strpos($haystack, 'vanilla') !== false || strpos($haystack, 'mangos') !== false) {
+            return 'Classic';
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('spp_realm_display_name')) {
+    function spp_realm_display_name(int $realmId, ?array $realmMap = null, string $fallbackPattern = 'Realm %d'): string
+    {
+        $realmMap = is_array($realmMap) ? $realmMap : (array)($GLOBALS['realmDbMap'] ?? array());
+        $realmInfo = (array)($realmMap[$realmId] ?? array());
+
+        $name = spp_realm_display_name_from_info($realmInfo);
+        if ($name === '') {
+            $name = spp_realm_display_name_from_realmlist($realmId);
+        }
+        if ($name === '') {
+            $name = spp_realm_display_name_from_armory($realmId);
+        }
+        if ($name === '') {
+            $name = spp_realm_display_name_from_derived($realmId, $realmInfo);
+        }
+
+        if ($name !== '') {
+            return $name;
+        }
+
+        return sprintf($fallbackPattern, max(0, $realmId));
+    }
+}
+
 if (!function_exists('spp_forum_detect_realm_hint')) {
     function spp_forum_detect_realm_hint(array $forum, int $fallbackRealmId = 0): int
     {

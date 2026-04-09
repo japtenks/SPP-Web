@@ -132,7 +132,7 @@ function spp_admin_playerbots_build_view(array $realmDbMap): array
         $selectedPersonality = spp_admin_playerbots_decode_personality_value($storedValue !== false ? (string)$storedValue : '');
     }
 
-    $realmName = 'Realm ' . $realmId;
+    $realmName = spp_realm_display_name($realmId, $realmDbMap);
     foreach ($realmOptions as $realmOption) {
         if ((int)($realmOption['realm_id'] ?? 0) === $realmId) {
             $realmName = (string)($realmOption['label'] ?? $realmName);

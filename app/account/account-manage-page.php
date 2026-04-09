@@ -49,18 +49,7 @@ if (!function_exists('spp_account_manage_load_page_state')) {
         spp_ensure_website_account_row($managePdo, $user['id']);
         $manageCharPdo = spp_get_pdo('chars', $currentRealmId);
 
-        $manageRealmName = 'Realm ' . $currentRealmId;
-        try {
-            $manageRealmPdo = spp_get_pdo('realmd', $currentRealmId);
-            $stmtRealmName = $manageRealmPdo->prepare("SELECT name FROM realmlist WHERE id = ? LIMIT 1");
-            $stmtRealmName->execute([$currentRealmId]);
-            $realmName = $stmtRealmName->fetchColumn();
-            if (!empty($realmName)) {
-                $manageRealmName = (string)$realmName;
-            }
-        } catch (Throwable $e) {
-            error_log('[account.manage] Realm name lookup failed: ' . $e->getMessage());
-        }
+        $manageRealmName = spp_realm_display_name($currentRealmId, is_array($realmDbMap) ? $realmDbMap : null);
 
         if (isset($_GET['pwchange'])) {
             if ($_GET['pwchange'] === '1') {
@@ -121,7 +110,7 @@ if (!function_exists('spp_account_manage_load_page_state')) {
                     'level' => (int)($character['level'] ?? 0),
                     'online' => 0,
                     'realm_id' => (int)($character['realm_id'] ?? 0),
-                    'realm_name' => (string)($character['realm_name'] ?? ('Realm ' . (int)($character['realm_id'] ?? 0))),
+                    'realm_name' => (string)($character['realm_name'] ?? spp_realm_display_name((int)($character['realm_id'] ?? 0), is_array($realmDbMap) ? $realmDbMap : null)),
                 );
             }
         }
@@ -151,7 +140,7 @@ if (!function_exists('spp_account_manage_load_page_state')) {
                 'guid' => (int)$character['guid'],
                 'name' => (string)$character['name'],
                 'realm_id' => $characterRealmId,
-                'realm_name' => (string)($character['realm_name'] ?? ('Realm ' . $characterRealmId)),
+                'realm_name' => (string)($character['realm_name'] ?? spp_realm_display_name($characterRealmId, is_array($realmDbMap) ? $realmDbMap : null)),
             );
         }
 
@@ -174,7 +163,7 @@ if (!function_exists('spp_account_manage_load_page_state')) {
             $identityId = spp_ensure_char_identity($characterRealmId, $characterGuid, $user['id'], (string)$character['name']);
             $profile['character_signatures'][$characterKey] = array(
                 'name' => (string)$character['name'],
-                'realm_name' => (string)($character['realm_name'] ?? ('Realm ' . $characterRealmId)),
+                'realm_name' => (string)($character['realm_name'] ?? spp_realm_display_name($characterRealmId, is_array($realmDbMap) ? $realmDbMap : null)),
                 'avatar_url' => spp_character_portrait_url($characterRealmId, $characterGuid, (int)$user['id']),
                 'signature' => $identityId > 0 ? str_replace('<br />', '', spp_get_identity_signature($identityId)) : '',
             );

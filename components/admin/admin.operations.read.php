@@ -5,31 +5,56 @@ if (INCLUDED !== true) {
 
 require_once __DIR__ . '/admin.operations.helpers.php';
 
+if (!function_exists('spp_admin_operations_default_selection')) {
+    function spp_admin_operations_default_selection(array $descriptors): array
+    {
+        foreach ($descriptors as $descriptor) {
+            if (spp_admin_operations_is_queueable($descriptor)) {
+                return $descriptor;
+            }
+        }
+
+        return !empty($descriptors) ? (array)reset($descriptors) : array();
+    }
+}
+
 if (!function_exists('spp_admin_operations_build_view')) {
     function spp_admin_operations_build_view(PDO $masterPdo, array $realmDbMap, array $actionState = array()): array
     {
         $descriptors = spp_admin_operations_descriptors($realmDbMap);
-        $categoryLabels = spp_admin_operations_category_labels();
+        $familyLabels = spp_admin_operations_family_labels();
+        $familyDescriptions = spp_admin_operations_family_descriptions();
+        $familyOrder = spp_admin_operations_family_order();
         $realmOptions = spp_admin_operations_realm_options($realmDbMap);
         $realmMap = spp_admin_operations_realm_option_map($realmOptions);
         $grouped = array();
 
+        foreach ($familyOrder as $familyId) {
+            $grouped[$familyId] = array(
+                'id' => $familyId,
+                'label' => (string)($familyLabels[$familyId] ?? $familyId),
+                'description' => (string)($familyDescriptions[$familyId] ?? ''),
+                'items' => array(),
+            );
+        }
+
         foreach ($descriptors as $descriptor) {
-            $category = (string)($descriptor['category'] ?? 'misc');
-            if (!isset($grouped[$category])) {
-                $grouped[$category] = array(
-                    'id' => $category,
-                    'label' => (string)($categoryLabels[$category] ?? $category),
+            $familyId = (string)($descriptor['family_id'] ?? 'conversion_import_export');
+            if (!isset($grouped[$familyId])) {
+                $grouped[$familyId] = array(
+                    'id' => $familyId,
+                    'label' => (string)($familyLabels[$familyId] ?? $familyId),
+                    'description' => (string)($familyDescriptions[$familyId] ?? ''),
                     'items' => array(),
                 );
             }
-            $grouped[$category]['items'][] = $descriptor;
+            $grouped[$familyId]['items'][] = $descriptor;
         }
 
         $requestedOperationId = trim((string)($_GET['operation'] ?? ''));
         $selectedOperation = $requestedOperationId !== '' ? (array)($descriptors[$requestedOperationId] ?? array()) : array();
-        if (empty($selectedOperation) && !empty($descriptors)) {
-            $selectedOperation = reset($descriptors);
+        if (empty($selectedOperation)) {
+            $selectedOperation = spp_admin_operations_default_selection($descriptors);
         }
 
         $jobHistory = array();
@@ -53,10 +78,13 @@ if (!function_exists('spp_admin_operations_build_view')) {
 
         $selectedOperationPreview = array();
         if (!empty($selectedOperation)) {
+            $defaultRealmId = !empty($realmOptions[0]['id']) ? (int)$realmOptions[0]['id'] : 0;
+            $secondRealmId = !empty($realmOptions[1]['id']) ? (int)$realmOptions[1]['id'] : $defaultRealmId;
             $defaultInputs = array(
-                'realm_id' => !empty($realmOptions[0]['id']) ? (int)$realmOptions[0]['id'] : 0,
-                'source_realm_id' => !empty($realmOptions[0]['id']) ? (int)$realmOptions[0]['id'] : 0,
-                'target_realm_id' => !empty($realmOptions[1]['id']) ? (int)$realmOptions[1]['id'] : (!empty($realmOptions[0]['id']) ? (int)$realmOptions[0]['id'] : 0),
+                'realm_id' => $defaultRealmId,
+                'source_realm_id' => $defaultRealmId,
+                'target_realm_id' => $secondRealmId,
+                'scope_profile' => 'bots',
                 'value' => '',
                 'confirmation_phrase' => '',
             );
@@ -71,8 +99,8 @@ if (!function_exists('spp_admin_operations_build_view')) {
         return array(
             'operationsIntro' => array(
                 'eyebrow' => 'Operations',
-                'title' => 'Launcher-Parity Operations Catalog',
-                'body' => 'Use the website as the control plane for reviewed jobs. Safe native tools stay linked here, while SQL-backed and external-tool workflows queue with previews, scope, and verification notes.',
+                'title' => 'Database Maintenance Operations',
+                'body' => 'Use Operations as the reviewed control plane for destructive and cleanup database work. Native admin pages stay linked here when they remain the source of truth, and deferred families stay visible without pretending to be executable v1 workflows.',
             ),
             'operationGroups' => array_values($grouped),
             'selectedOperation' => $selectedOperation,

@@ -315,12 +315,7 @@ function build_account_menu($asList = true) {
 
                 $realmGroupName = trim((string)($char['realm_name'] ?? ''));
                 if ($realmGroupName === '') {
-                    $realmGroupName = function_exists('spp_get_armory_realm_name')
-                        ? (string)(spp_get_armory_realm_name($characterRealmId) ?? '')
-                        : '';
-                }
-                if ($realmGroupName === '') {
-                    $realmGroupName = 'Realm ' . $characterRealmId;
+                    $realmGroupName = spp_realm_display_name($characterRealmId);
                 }
 
                 $char['realm_id'] = $characterRealmId;
@@ -587,20 +582,9 @@ function builddiv_start($type = 0, $title = "No title set", $realm = 0, $forumna
                     }
                 }
 
-                $preferredName = '';
-                if (function_exists('spp_get_armory_realm_name')) {
-                    $preferredName = (string)(spp_get_armory_realm_name($candidateRealmId) ?? '');
-                }
-                if ($preferredName === '' && !empty($realmInfo['name'])) {
-                    $preferredName = (string)$realmInfo['name'];
-                }
-                if ($preferredName === '') {
-                    $preferredName = 'Realm ' . $candidateRealmId;
-                }
-
                 $availableRealms[$candidateRealmId] = array(
                     'id' => $candidateRealmId,
-                    'name' => $preferredName,
+                    'name' => spp_realm_display_name($candidateRealmId, $realmMap),
                 );
             }
         }

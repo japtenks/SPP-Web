@@ -1,5 +1,6 @@
 <?php
 
+require_once dirname(__DIR__, 2) . '/components/server/server.items.helpers.php';
 require_once dirname(__DIR__, 2) . '/core/xfer/item_set_shared.php';
 
 if (!function_exists('spp_item_detail_load_core_data')) {
@@ -33,16 +34,34 @@ if (!function_exists('spp_item_detail_load_core_data')) {
 
         try {
             $worldPdo = spp_get_pdo('world', $realmId);
-            $armoryPdo = spp_get_pdo('armory', $realmId);
             $charsPdo = spp_get_pdo('chars', $realmId);
+            $itemColumns = spp_item_database_item_columns($worldPdo, $realmId);
+            $metadataPdo = spp_item_database_pick_metadata_pdo($realmId, ['dbc_itemdisplayinfo', 'dbc_itemrandomproperties', 'dbc_spellitemenchantment', 'armory_instance_data', 'armory_instance_template'], $metadataSource);
 
             $localeId = isset($config['locales']) ? (int)$config['locales'] : 0;
             $localeField = $localeId > 0 ? 'name_loc' . $localeId : null;
 
             if ($localeField) {
-                $itemStmt = $worldPdo->prepare('SELECT it.*, li.`' . $localeField . '` AS `localized_name`, li.`description_loc' . $localeId . '` AS `localized_description` FROM `item_template` it LEFT JOIN `locales_item` li ON li.`entry` = it.`entry` WHERE it.`entry` = ? LIMIT 1');
+                $itemStmt = $worldPdo->prepare(
+                    'SELECT it.*, '
+                    . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' AS `displayid`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' AS `Quality`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'Flags') . ' AS `Flags`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' AS `ItemLevel`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'RequiredLevel') . ' AS `RequiredLevel`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' AS `InventoryType`, '
+                    . 'li.`' . $localeField . '` AS `localized_name`, li.`description_loc' . $localeId . '` AS `localized_description` FROM `item_template` it LEFT JOIN `locales_item` li ON li.`entry` = it.`entry` WHERE it.`entry` = ? LIMIT 1'
+                );
             } else {
-                $itemStmt = $worldPdo->prepare('SELECT * FROM `item_template` WHERE `entry` = ? LIMIT 1');
+                $itemStmt = $worldPdo->prepare(
+                    'SELECT it.*, '
+                    . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' AS `displayid`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' AS `Quality`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'Flags') . ' AS `Flags`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' AS `ItemLevel`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'RequiredLevel') . ' AS `RequiredLevel`, '
+                    . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' AS `InventoryType` FROM `item_template` it WHERE it.`entry` = ? LIMIT 1'
+                );
             }
             $itemStmt->execute([$itemId]);
             $itemRow = $itemStmt->fetch(PDO::FETCH_ASSOC);
@@ -53,9 +72,8 @@ if (!function_exists('spp_item_detail_load_core_data')) {
 
             $displayId = (int)($itemRow['displayid'] ?? 0);
             if ($displayId > 0) {
-                $iconStmt = $armoryPdo->prepare('SELECT `name` FROM `dbc_itemdisplayinfo` WHERE `id` = ? LIMIT 1');
-                $iconStmt->execute([$displayId]);
-                $iconName = (string)$iconStmt->fetchColumn();
+                $iconMap = spp_item_database_fetch_item_icons($realmId, [$displayId]);
+                $iconName = (string)($iconMap[$displayId] ?? '');
             }
 
             $itemName = ($localeField && !empty($itemRow['localized_name'])) ? (string)$itemRow['localized_name'] : (string)$itemRow['name'];
@@ -83,7 +101,7 @@ if (!function_exists('spp_item_detail_load_core_data')) {
                 'item_subclass_id' => (int)($itemRow['subclass'] ?? 0),
                 'slot_name' => spp_modern_item_inventory_type_name((int)($itemRow['InventoryType'] ?? 0)),
                 'class_name' => spp_modern_item_class_name((int)($itemRow['class'] ?? 0), (int)($itemRow['subclass'] ?? 0)),
-                'source' => spp_modern_item_cache_source($worldPdo, $armoryPdo, $itemId, (($flags & 32768) === 32768)),
+                'source' => spp_item_database_cache_source($worldPdo, $metadataPdo, $itemId, (($flags & 32768) === 32768), $realmId),
             ];
 
             $upgradeManualWeights = spp_item_upgrade_parse_weights($upgradeWeightsRaw);
@@ -123,7 +141,17 @@ if (!function_exists('spp_item_detail_load_core_data')) {
                 $upgradeCurrentScore = spp_item_upgrade_score($upgradeCurrentStats, $upgradeActiveWeights);
             }
 
-            $upgradeSql = 'SELECT `entry`, `name`, `Quality`, `ItemLevel`, `RequiredLevel`, `displayid`, `InventoryType`, `class`, `subclass`, `description`, `Flags`, `Armor`, `stat_type1`, `stat_value1`, `stat_type2`, `stat_value2`, `stat_type3`, `stat_value3`, `stat_type4`, `stat_value4`, `stat_type5`, `stat_value5`, `stat_type6`, `stat_value6`, `stat_type7`, `stat_value7`, `stat_type8`, `stat_value8`, `stat_type9`, `stat_value9`, `stat_type10`, `stat_value10`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res` FROM `item_template` WHERE `entry` <> :entry AND `InventoryType` = :inventory_type AND `class` = :item_class AND (`subclass` = :item_subclass OR :use_subclass = 0) AND `Quality` > 0 ORDER BY `Quality` DESC, `ItemLevel` DESC, `RequiredLevel` ASC, `name` ASC LIMIT 150';
+            $upgradeSql = 'SELECT `entry`, `name`, '
+                . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' AS `Quality`, '
+                . spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' AS `ItemLevel`, '
+                . spp_item_database_item_column_sql($itemColumns, 'RequiredLevel') . ' AS `RequiredLevel`, '
+                . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' AS `displayid`, '
+                . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' AS `InventoryType`, '
+                . '`class`, `subclass`, `description`, '
+                . spp_item_database_item_column_sql($itemColumns, 'Flags') . ' AS `Flags`, '
+                . '`Armor`, `stat_type1`, `stat_value1`, `stat_type2`, `stat_value2`, `stat_type3`, `stat_value3`, `stat_type4`, `stat_value4`, `stat_type5`, `stat_value5`, `stat_type6`, `stat_value6`, `stat_type7`, `stat_value7`, `stat_type8`, `stat_value8`, `stat_type9`, `stat_value9`, `stat_type10`, `stat_value10`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res` FROM `item_template` WHERE `entry` <> :entry AND '
+                . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' = :inventory_type AND `class` = :item_class AND (`subclass` = :item_subclass OR :use_subclass = 0) AND '
+                . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' > 0 ORDER BY `Quality` DESC, `ItemLevel` DESC, `RequiredLevel` ASC, `name` ASC LIMIT 150';
             $upgradeStmt = $worldPdo->prepare($upgradeSql);
             $useSubclass = in_array((int)$item['item_class_id'], [2, 4], true) ? 1 : 0;
             $upgradeStmt->execute([
@@ -145,12 +173,7 @@ if (!function_exists('spp_item_detail_load_core_data')) {
 
                 $upgradeIconMap = [];
                 if ($upgradeDisplayIds) {
-                    $placeholders = implode(',', array_fill(0, count($upgradeDisplayIds), '?'));
-                    $upgradeIconStmt = $armoryPdo->prepare('SELECT `id`, `name` FROM `dbc_itemdisplayinfo` WHERE `id` IN (' . $placeholders . ')');
-                    $upgradeIconStmt->execute(array_values($upgradeDisplayIds));
-                    foreach ($upgradeIconStmt->fetchAll(PDO::FETCH_ASSOC) as $upgradeIconRow) {
-                        $upgradeIconMap[(int)$upgradeIconRow['id']] = (string)$upgradeIconRow['name'];
-                    }
+                    $upgradeIconMap = spp_item_database_fetch_item_icons($realmId, array_values($upgradeDisplayIds));
                 }
 
                 $scoredUpgrades = [];
@@ -239,13 +262,22 @@ if (!function_exists('spp_item_detail_load_core_data')) {
 
                 $scoredUpgrades = array_slice($scoredUpgrades, 0, 12);
                 foreach ($scoredUpgrades as $upgradeEntry) {
-                    $upgradeEntry['source'] = spp_modern_item_cache_source($worldPdo, $armoryPdo, (int)$upgradeEntry['id'], (((int)($upgradeEntry['flags'] ?? 0) & 32768) === 32768));
+                    $upgradeEntry['source'] = spp_item_database_cache_source($worldPdo, $metadataPdo, (int)$upgradeEntry['id'], (((int)($upgradeEntry['flags'] ?? 0) & 32768) === 32768), $realmId);
                     unset($upgradeEntry['flags']);
                     $upgrades[] = $upgradeEntry;
                 }
             }
 
-            $randomProperties = spp_modern_item_random_properties($worldPdo, $armoryPdo, $itemRow);
+            try {
+                if ($metadataPdo instanceof PDO && spp_realm_capability_table_exists($metadataPdo, 'dbc_itemrandomproperties')) {
+                    $randomProperties = spp_modern_item_random_properties($worldPdo, $metadataPdo, $itemRow);
+                } else {
+                    spp_item_database_log_compatibility($realmId, 'metadata.dbc_itemrandomproperties', 'Optional random-property metadata unavailable; skipping.');
+                }
+            } catch (Throwable $e) {
+                spp_item_database_log_compatibility($realmId, 'random_properties', $e->getMessage());
+                $randomProperties = [];
+            }
 
             $itemSetId = (int)($itemRow['itemset'] ?? 0);
             if ($itemSetId > 0) {
@@ -304,6 +336,7 @@ if (!function_exists('spp_item_detail_load_core_data')) {
                 ];
             }
         } catch (Throwable $e) {
+            spp_item_database_log_compatibility($realmId, 'item_detail', $e->getMessage());
             $pageError = 'Item details could not be loaded from the realm databases.';
         }
 

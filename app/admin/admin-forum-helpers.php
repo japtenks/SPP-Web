@@ -59,6 +59,15 @@ if (!function_exists('spp_admin_forum_redirect_url')) {
     }
 }
 
+if (!function_exists('spp_admin_forum_redirect_url_with_notice')) {
+    function spp_admin_forum_redirect_url_with_notice(array $request, string $notice): string
+    {
+        $baseUrl = spp_admin_forum_redirect_url($request);
+        $separator = strpos($baseUrl, '?') === false ? '?' : '&';
+        return $baseUrl . $separator . http_build_query(array('forum_notice' => $notice));
+    }
+}
+
 if (!function_exists('spp_admin_forum_filter_category_fields')) {
     function spp_admin_forum_filter_category_fields(array $data)
     {
@@ -70,8 +79,205 @@ if (!function_exists('spp_admin_forum_filter_category_fields')) {
 if (!function_exists('spp_admin_forum_filter_forum_fields')) {
     function spp_admin_forum_filter_forum_fields(array $data)
     {
-        $allowed = array('cat_id', 'forum_name', 'forum_desc', 'disp_position');
+        $allowed = array('cat_id', 'forum_name', 'forum_desc', 'disp_position', 'scope_type', 'scope_value');
         return spp_filter_allowed_fields($data, $allowed);
+    }
+}
+
+if (!function_exists('spp_admin_forum_realm_options')) {
+    function spp_admin_forum_realm_options(array $realmDbMap): array
+    {
+        $options = array();
+        foreach ($realmDbMap as $realmId => $realmInfo) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0) {
+                continue;
+            }
+
+            $options[] = array(
+                'realm_id' => $realmId,
+                'realm_name' => (string)(spp_get_armory_realm_name($realmId) ?? ('Realm #' . $realmId)),
+                'expansion_key' => function_exists('spp_realm_to_expansion') ? (string)spp_realm_to_expansion($realmId) : '',
+            );
+        }
+
+        usort($options, static function (array $left, array $right): int {
+            return (int)$left['realm_id'] <=> (int)$right['realm_id'];
+        });
+
+        return $options;
+    }
+}
+
+if (!function_exists('spp_admin_forum_standard_section_templates')) {
+    function spp_admin_forum_standard_section_templates(): array
+    {
+        return array(
+            'General' => array(
+                'category_name' => 'General',
+                'scope_type' => 'realm',
+                'forum_desc_format' => 'General discussion and updates for the %s realm.',
+            ),
+            'Guild' => array(
+                'category_name' => 'Guild',
+                'scope_type' => 'guild_recruitment',
+                'forum_desc_format' => 'Guild recruitment and guild-focused posts for the %s realm.',
+            ),
+        );
+    }
+}
+
+if (!function_exists('spp_admin_forum_find_category_id_by_name')) {
+    function spp_admin_forum_find_category_id_by_name(PDO $pdo, string $categoryName): int
+    {
+        $stmt = $pdo->prepare("SELECT `cat_id` FROM `f_categories` WHERE LOWER(`cat_name`) = LOWER(?) ORDER BY `cat_disp_position`, `cat_id` LIMIT 1");
+        $stmt->execute(array(trim($categoryName)));
+        return (int)$stmt->fetchColumn();
+    }
+}
+
+if (!function_exists('spp_admin_forum_next_position_for_category')) {
+    function spp_admin_forum_next_position_for_category(PDO $pdo, int $catId): int
+    {
+        $stmt = $pdo->prepare("SELECT COALESCE(MAX(`disp_position`), 0) FROM `f_forums` WHERE `cat_id` = ?");
+        $stmt->execute(array($catId));
+        return max(1, (int)$stmt->fetchColumn() + 1);
+    }
+}
+
+if (!function_exists('spp_admin_forum_insert_forum')) {
+    function spp_admin_forum_insert_forum(PDO $pdo, array $data): void
+    {
+        $payload = spp_admin_forum_filter_forum_fields($data);
+        if (empty($payload)) {
+            return;
+        }
+
+        $setClause = implode(',', array_map(static function ($key) {
+            return '`' . preg_replace('/[^a-zA-Z0-9_]/', '', $key) . '`=?';
+        }, array_keys($payload)));
+        $stmt = $pdo->prepare("INSERT INTO f_forums SET $setClause");
+        $stmt->execute(array_values($payload));
+    }
+}
+
+if (!function_exists('spp_admin_forum_realm_managed_forum_rows')) {
+    function spp_admin_forum_realm_managed_forum_rows(PDO $pdo, array $realmDbMap, int $realmId): array
+    {
+        $realmName = (string)(spp_get_armory_realm_name($realmId) ?? ('Realm #' . $realmId));
+        $expansionKey = function_exists('spp_realm_to_expansion') ? (string)spp_realm_to_expansion($realmId) : '';
+        $categoryNames = array_keys(spp_admin_forum_standard_section_templates());
+
+        $stmt = $pdo->query("
+            SELECT f.*, c.`cat_name`
+            FROM `f_forums` f
+            INNER JOIN `f_categories` c ON c.`cat_id` = f.`cat_id`
+            ORDER BY c.`cat_disp_position`, f.`disp_position`, f.`forum_id`
+        ");
+        $rows = $stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: array()) : array();
+
+        $managed = array();
+        foreach ($rows as $row) {
+            $categoryName = (string)($row['cat_name'] ?? '');
+            if (!in_array($categoryName, $categoryNames, true)) {
+                continue;
+            }
+
+            $scopeType = (string)($row['scope_type'] ?? 'all');
+            $scopeValue = strtolower(trim((string)($row['scope_value'] ?? '')));
+            $forumName = strtolower(trim((string)($row['forum_name'] ?? '')));
+            $forumDesc = strtolower(trim((string)($row['forum_desc'] ?? '')));
+            $realmNameNeedle = strtolower($realmName);
+            $matchesRealm = false;
+
+            if ($scopeType === 'realm' && (int)$scopeValue === $realmId) {
+                $matchesRealm = true;
+            } elseif ($scopeType === 'expansion' && $expansionKey !== '' && $scopeValue === strtolower($expansionKey)) {
+                $matchesRealm = true;
+            } elseif ($scopeType === 'guild_recruitment' && ($scopeValue === (string)$realmId || ($expansionKey !== '' && $scopeValue === strtolower($expansionKey)))) {
+                $matchesRealm = true;
+            } elseif ($realmNameNeedle !== '' && (strpos($forumName, $realmNameNeedle) !== false || strpos($forumDesc, $realmNameNeedle) !== false)) {
+                $matchesRealm = true;
+            } elseif (function_exists('spp_detect_forum_realm_hint') && spp_detect_forum_realm_hint($row, $realmDbMap, 0) === $realmId) {
+                $matchesRealm = true;
+            }
+
+            if ($matchesRealm) {
+                $managed[] = $row;
+            }
+        }
+
+        return $managed;
+    }
+}
+
+if (!function_exists('spp_admin_forum_create_realm_forum_set')) {
+    function spp_admin_forum_create_realm_forum_set(PDO $pdo, array $realmDbMap, int $realmId): array
+    {
+        $realmName = (string)(spp_get_armory_realm_name($realmId) ?? ('Realm #' . $realmId));
+        $created = 0;
+        $skipped = 0;
+        $missingCategories = array();
+
+        foreach (spp_admin_forum_standard_section_templates() as $template) {
+            $categoryName = (string)$template['category_name'];
+            $catId = spp_admin_forum_find_category_id_by_name($pdo, $categoryName);
+            if ($catId <= 0) {
+                $missingCategories[] = $categoryName;
+                continue;
+            }
+
+            $managedRows = spp_admin_forum_realm_managed_forum_rows($pdo, $realmDbMap, $realmId);
+            $alreadyExists = false;
+            foreach ($managedRows as $row) {
+                if ((int)($row['cat_id'] ?? 0) === $catId) {
+                    $alreadyExists = true;
+                    break;
+                }
+            }
+            if ($alreadyExists) {
+                $skipped++;
+                continue;
+            }
+
+            spp_admin_forum_insert_forum($pdo, array(
+                'cat_id' => $catId,
+                'forum_name' => $realmName,
+                'forum_desc' => sprintf((string)$template['forum_desc_format'], $realmName),
+                'disp_position' => spp_admin_forum_next_position_for_category($pdo, $catId),
+                'scope_type' => (string)$template['scope_type'],
+                'scope_value' => (string)$realmId,
+            ));
+            $created++;
+        }
+
+        return array(
+            'created' => $created,
+            'skipped' => $skipped,
+            'missing_categories' => $missingCategories,
+            'realm_name' => $realmName,
+        );
+    }
+}
+
+if (!function_exists('spp_admin_forum_remove_realm_forum_set')) {
+    function spp_admin_forum_remove_realm_forum_set(PDO $pdo, array $realmDbMap, int $realmId): array
+    {
+        $rows = spp_admin_forum_realm_managed_forum_rows($pdo, $realmDbMap, $realmId);
+        $removed = 0;
+        foreach ($rows as $row) {
+            $forumId = (int)($row['forum_id'] ?? 0);
+            if ($forumId <= 0) {
+                continue;
+            }
+            spp_admin_forum_delete_forum($pdo, $forumId);
+            $removed++;
+        }
+
+        return array(
+            'removed' => $removed,
+            'realm_name' => (string)(spp_get_armory_realm_name($realmId) ?? ('Realm #' . $realmId)),
+        );
     }
 }
 

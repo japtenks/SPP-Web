@@ -25,6 +25,41 @@ if (!function_exists('spp_server_realmlist_lookup_host')) {
     }
 }
 
+if (!function_exists('spp_server_realmlist_lookup_name')) {
+    function spp_server_realmlist_lookup_name(array $realmMap, int $realmId): string
+    {
+        return spp_realm_display_name($realmId, $realmMap, 'Realm #%d');
+    }
+}
+
+if (!function_exists('spp_server_realmlist_download_options')) {
+    function spp_server_realmlist_download_options(array $realmMap, ?int $selectedRealmId = null): array
+    {
+        $options = array();
+        $realmIds = array_keys($realmMap);
+        sort($realmIds, SORT_NUMERIC);
+
+        foreach ($realmIds as $realmId) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0) {
+                continue;
+            }
+
+            $host = spp_server_realmlist_lookup_host($realmId);
+            $options[] = array(
+                'realm_id' => $realmId,
+                'realm_name' => spp_server_realmlist_lookup_name($realmMap, $realmId),
+                'host' => $host,
+                'href' => 'index.php?n=server&sub=realmlist&nobody=1&realm=' . $realmId,
+                'filename' => $realmId === 1 ? 'realmlist.wtf' : ('realmlist-' . $realmId . '.wtf'),
+                'is_selected' => $selectedRealmId !== null && $realmId === $selectedRealmId,
+            );
+        }
+
+        return $options;
+    }
+}
+
 if (!function_exists('spp_server_realmlist_endpoint_state')) {
     function spp_server_realmlist_endpoint_state(array $args = array()): array
     {

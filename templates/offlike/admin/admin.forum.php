@@ -11,7 +11,12 @@ $forumOrderLabel = (string)($lang['order'] ?? 'Order');
 $forumNameLabel = (string)($lang['l_name'] ?? 'Name');
 $forumDescriptionLabel = (string)($lang['l_desc'] ?? 'Description');
 $forumConfirmLabel = (string)($lang['sure_q'] ?? 'Are you sure?');
+$forumNotice = trim((string)($forum_notice ?? ''));
+$realmForumTools = (array)($realm_forum_tools ?? array());
 ?>
+<?php if ($forumNotice !== '') { ?>
+  <div class="playerbots-success"><?php echo htmlspecialchars($forumNotice); ?></div>
+<?php } ?>
 <?php if ($view_mode === 'topic') { ?>
     <div class="forum-admin__card feature-panel">
       <h3>Topic Posts</h3>
@@ -119,6 +124,32 @@ $forumConfirmLabel = (string)($lang['sure_q'] ?? 'Are you sure?');
     <div class="forum-admin__intro feature-hero">
       Forum sections are your top-level buckets. Realm-specific spaces can live as scoped forums inside each section.
     </div>
+    <?php if (!empty($realmForumTools['realm_options'])) { ?>
+    <div class="forum-admin__card feature-panel">
+      <h3>Realm Forum Tools</h3>
+      <p class="forum-admin__subtext">Use these easy buttons to create, remove, or reset the standard realm forum set for each world without losing the granular controls below.</p>
+      <div class="forum-admin__stack">
+        <?php foreach ((array)($realmForumTools['realm_summaries'] ?? array()) as $realmSummary) { ?>
+          <div class="forum-admin__row">
+            <div class="forum-admin__main">
+              <p class="forum-admin__title"><?php echo htmlspecialchars((string)($realmSummary['realm_name'] ?? 'Realm')); ?></p>
+              <p class="forum-admin__desc">
+                Managed forums found: <?php echo (int)($realmSummary['managed_forum_count'] ?? 0); ?>
+                <?php if (!empty($realmSummary['managed_forums'])) { ?>
+                  | <?php echo htmlspecialchars(implode(', ', array_map(static function ($item) { return (string)($item['forum_name'] ?? ''); }, (array)$realmSummary['managed_forums']))); ?>
+                <?php } ?>
+              </p>
+            </div>
+            <div class="forum-admin__actions">
+              <?php echo spp_admin_forum_action_button(array('action' => 'spawnrealmforums', 'realm_id' => (int)($realmSummary['realm_id'] ?? 0)), 'Spawn Forum Set', $forumCsrfToken, 'forum-admin__pill'); ?>
+              <?php echo spp_admin_forum_action_button(array('action' => 'resetrealmforums', 'realm_id' => (int)($realmSummary['realm_id'] ?? 0)), 'Reset Forum Set', $forumCsrfToken, 'forum-admin__pill', 'Delete and recreate the managed forum set for this realm?'); ?>
+              <?php echo spp_admin_forum_action_button(array('action' => 'removerealmforums', 'realm_id' => (int)($realmSummary['realm_id'] ?? 0)), 'Remove Forum Set', $forumCsrfToken, 'forum-admin__pill forum-admin__pill--danger', 'Delete the managed forum set for this realm?'); ?>
+            </div>
+          </div>
+        <?php } ?>
+      </div>
+    </div>
+    <?php } ?>
     <div class="forum-admin__card feature-panel">
       <h3>Forum Sections</h3>
       <div class="forum-admin__stack">

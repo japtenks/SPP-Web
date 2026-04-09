@@ -1030,7 +1030,7 @@ if (is_array($realmMap) && !empty($realmMap)) {
         if ($candidateRealmId <= 0) {
             continue;
         }
-        $itemRealmOptions[$candidateRealmId] = spp_get_armory_realm_name($candidateRealmId) ?? ('Realm ' . $candidateRealmId);
+        $itemRealmOptions[$candidateRealmId] = spp_realm_display_name($candidateRealmId, $realmMap);
     }
 }
 

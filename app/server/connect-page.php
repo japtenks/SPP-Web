@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/realm-capabilities.php';
+require_once __DIR__ . '/realmlist-endpoint.php';
 
 if (!function_exists('spp_server_load_connect_page_state')) {
     function spp_server_load_connect_page_state(array $args = array()): array
@@ -53,6 +54,7 @@ if (!function_exists('spp_server_load_connect_page_state')) {
             'connectRealmlistHost' => $realmlistHost,
             'createAccountUrl' => spp_route_url('account', 'register', array(), false),
             'downloadRealmlistUrl' => 'index.php?n=server&sub=realmlist&nobody=1&realm=' . $realmId,
+            'downloadRealmlistOptions' => spp_server_realmlist_download_options($realmMap, $realmId),
             'isLoggedIn' => !empty($user['id']) && (int)$user['id'] > 0,
             'realmCapabilities' => $realmCapabilities,
         );

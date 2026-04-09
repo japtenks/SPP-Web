@@ -6,12 +6,32 @@ if (!function_exists('spp_admin_forum_build_view')) {
         $catId = (int)($_GET['cat_id'] ?? 0);
         $forumId = (int)($_GET['forum_id'] ?? 0);
         $topicId = (int)($_GET['topic_id'] ?? 0);
+        $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+        $realmOptions = spp_admin_forum_realm_options($realmDbMap);
+        $realmForumSummaries = array();
+
+        foreach ($realmOptions as $realmOption) {
+            $realmOptionId = (int)($realmOption['realm_id'] ?? 0);
+            $managedRows = $realmOptionId > 0 ? spp_admin_forum_realm_managed_forum_rows($forumPdo, $realmDbMap, $realmOptionId) : array();
+            $realmForumSummaries[] = array(
+                'realm_id' => $realmOptionId,
+                'realm_name' => (string)($realmOption['realm_name'] ?? ('Realm #' . $realmOptionId)),
+                'expansion_key' => (string)($realmOption['expansion_key'] ?? ''),
+                'managed_forum_count' => count($managedRows),
+                'managed_forums' => $managedRows,
+            );
+        }
 
         $view = array(
             'view_mode' => 'categories',
             'items' => array(),
             'this_forum' => null,
             'this_topic' => null,
+            'forum_notice' => trim((string)($_GET['forum_notice'] ?? '')),
+            'realm_forum_tools' => array(
+                'realm_options' => $realmOptions,
+                'realm_summaries' => $realmForumSummaries,
+            ),
             'request' => array(
                 'cat_id' => $catId,
                 'forum_id' => $forumId,

@@ -20,7 +20,15 @@ builddiv_start(1, 'How to Play');
       <?php if (!$isLoggedIn) { ?>
       <a class="feature-button is-primary" href="<?php echo htmlspecialchars($createAccountUrl); ?>">Create Account</a>
       <?php } ?>
-      <a class="feature-button" href="<?php echo htmlspecialchars($downloadRealmlistUrl); ?>">Download realmlist.wtf</a>
+      <?php if (!empty($downloadRealmlistOptions) && count((array)$downloadRealmlistOptions) > 1): ?>
+        <?php foreach ((array)$downloadRealmlistOptions as $realmlistOption): ?>
+          <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
+            Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
+          </a>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <a class="feature-button" href="<?php echo htmlspecialchars($downloadRealmlistUrl); ?>">Download realmlist.wtf</a>
+      <?php endif; ?>
     </div>
   </section>
 
@@ -83,13 +91,31 @@ builddiv_start(1, 'How to Play');
         <?php } ?>
         <div class="feature-step">
           <strong>3. Get this server's realmlist</strong>
-          Download the file directly here:
-          <a class="feature-link" href="<?php echo htmlspecialchars($downloadRealmlistUrl); ?>">realmlist.wtf for <?php echo htmlspecialchars($connectRealmName); ?></a>
+          <?php if (!empty($downloadRealmlistOptions) && count((array)$downloadRealmlistOptions) > 1): ?>
+            Download the file that matches the realm you want to join:
+            <ul class="feature-step-list">
+              <?php foreach ((array)$downloadRealmlistOptions as $realmlistOption): ?>
+                <li>
+                  <a class="feature-link" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">realmlist.wtf for <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?></a>
+                  <?php if (!empty($realmlistOption['host'])): ?>
+                    <span class="feature-code">set realmlist <?php echo htmlspecialchars((string)$realmlistOption['host']); ?></span>
+                  <?php endif; ?>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php else: ?>
+            Download the file directly here:
+            <a class="feature-link" href="<?php echo htmlspecialchars($downloadRealmlistUrl); ?>">realmlist.wtf for <?php echo htmlspecialchars($connectRealmName); ?></a>
+          <?php endif; ?>
         </div>
         <div class="feature-step">
           <strong>4. Manual fallback if needed</strong>
-          If you need to edit it by hand, your file should contain:
-          <span class="feature-code">set realmlist <?php echo htmlspecialchars($connectRealmlistHost); ?></span>
+          <?php if (!empty($downloadRealmlistOptions) && count((array)$downloadRealmlistOptions) > 1): ?>
+            If you need to edit the file by hand, use the host shown next to the matching realm download above.
+          <?php else: ?>
+            If you need to edit it by hand, your file should contain:
+            <span class="feature-code">set realmlist <?php echo htmlspecialchars($connectRealmlistHost); ?></span>
+          <?php endif; ?>
         </div>
       </div>
     </section>

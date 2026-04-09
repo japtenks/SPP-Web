@@ -140,7 +140,7 @@ if ($currentExpansionId === 0) {
               <?php
                 $sigKey = (int)($character['realm_id'] ?? 0) . ':' . (int)$character['guid'];
                 $sigValue = (string)($profile['character_signatures'][$sigKey]['signature'] ?? '');
-                $sigRealmName = (string)($character['realm_name'] ?? ('Realm ' . (int)($character['realm_id'] ?? 0)));
+                $sigRealmName = (string)($character['realm_name'] ?? spp_realm_display_name((int)($character['realm_id'] ?? 0)));
               ?>
               <option
                 value="<?php echo htmlspecialchars($sigKey); ?>"

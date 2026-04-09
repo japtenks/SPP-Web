@@ -43,7 +43,7 @@ $memberIsSuperAdmin = !empty($isSuperAdmin);
       </div>
 
       <div class="admin-meta-label">Auth Realm</div>
-      <div class="admin-meta-value"><?php echo htmlspecialchars((string)($authRealmName ?? ('Realm ' . (int)($activeRealmId ?? 0)))); ?></div>
+      <div class="admin-meta-value"><?php echo htmlspecialchars((string)($authRealmName ?? spp_realm_display_name((int)($activeRealmId ?? 0)))); ?></div>
     </div>
 
     <div class="admin-actions">
@@ -73,7 +73,7 @@ $memberIsSuperAdmin = !empty($isSuperAdmin);
                       $realmGroupOnline++;
                   }
               }
-              $realmGroupName = $realmChars[0]['realm_name'] ?? ('Realm ' . (int)$realmGroupId);
+              $realmGroupName = $realmChars[0]['realm_name'] ?? spp_realm_display_name((int)$realmGroupId);
           ?>
             <div class="admin-realm-group">
               <div class="admin-realm-heading">
@@ -114,7 +114,7 @@ $memberIsSuperAdmin = !empty($isSuperAdmin);
           <div class="admin-signature-realm-groups">
             <?php if (!empty($characterRealmGroups)) { ?>
               <?php foreach ($characterRealmGroups as $realmGroupId => $realmChars) { ?>
-                <?php $realmGroupName = $realmChars[0]['realm_name'] ?? ('Realm ' . (int)$realmGroupId); ?>
+                <?php $realmGroupName = $realmChars[0]['realm_name'] ?? spp_realm_display_name((int)$realmGroupId); ?>
                 <div class="admin-signature-realm-group">
                   <div class="admin-signature-realm-title"><?php echo htmlspecialchars((string)$realmGroupName); ?></div>
                   <div class="admin-signature-stack">
@@ -177,7 +177,7 @@ $memberIsSuperAdmin = !empty($isSuperAdmin);
         <label for="character_realm_id">Realm</label>
         <select id="character_realm_id" name="character_realm_id" data-auto-submit="change">
           <?php foreach (($characterRealmGroups ?? array()) as $realmGroupId => $realmChars): ?>
-            <?php $realmGroupName = $realmChars[0]['realm_name'] ?? ('Realm ' . (int)$realmGroupId); ?>
+            <?php $realmGroupName = $realmChars[0]['realm_name'] ?? spp_realm_display_name((int)$realmGroupId); ?>
             <option value="<?php echo (int)$realmGroupId; ?>"<?php if ((int)$realmGroupId === $selectedToolRealmId) echo ' selected'; ?>>
               <?php echo htmlspecialchars($realmGroupName . ' (' . count($realmChars) . ')'); ?>
             </option>

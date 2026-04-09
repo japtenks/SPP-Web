@@ -21,7 +21,7 @@ function declension($int, $expressions)
 }
 
 function spp_realm_to_expansion(int $realmId): string {
-    $map = [1 => 'classic', 2 => 'tbc', 3 => 'wotlk'];
+    $map = [1 => 'classic', 2 => 'tbc', 3 => 'wotlk', 4 => 'vmangos'];
     return $map[$realmId] ?? '';
 }
 
@@ -101,6 +101,7 @@ function spp_detect_forum_realm_hint(array $forum, array $realmMap, int $fallbac
     }
 
     $patterns = array(
+        'vmangos' => array('vmangos', 'vanilla'),
         'wotlk' => array('wrath of the lich king', 'wrath', 'wotlk'),
         'tbc' => array('the burning crusade', 'burning crusade', 'tbc'),
         'classic' => array('classic', 'vanilla'),

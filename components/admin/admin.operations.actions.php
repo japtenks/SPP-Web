@@ -29,12 +29,19 @@ if (!function_exists('spp_admin_operations_handle_action')) {
             $state['notice'] = 'Unknown operation requested.';
             return $state;
         }
+        if (!spp_admin_operations_is_queueable($descriptor)) {
+            $state['notice'] = !empty($descriptor['is_link_only'])
+                ? 'This operation is a native link-out. Open the linked tool instead of queueing a job.'
+                : 'This operation is intentionally deferred from v1 execution and cannot be queued yet.';
+            return $state;
+        }
 
         $realmMap = spp_admin_operations_realm_option_map(spp_admin_operations_realm_options($realmDbMap));
         $inputs = array(
             'realm_id' => (int)($_POST['realm_id'] ?? 0),
             'source_realm_id' => (int)($_POST['source_realm_id'] ?? 0),
             'target_realm_id' => (int)($_POST['target_realm_id'] ?? 0),
+            'scope_profile' => trim((string)($_POST['scope_profile'] ?? '')),
             'value' => trim((string)($_POST['value'] ?? '')),
             'confirmation_phrase' => trim((string)($_POST['confirmation_phrase'] ?? '')),
         );
@@ -64,9 +71,9 @@ if (!function_exists('spp_admin_operations_handle_action')) {
         $stmt->execute(array(
             (string)$descriptor['id'],
             (string)$descriptor['label'],
-            (string)$descriptor['category'],
+            (string)$descriptor['family_id'],
             (string)$descriptor['risk_level'],
-            (string)$descriptor['scope'],
+            (string)$descriptor['ownership_scope'],
             (int)$inputs['realm_id'],
             (int)$inputs['source_realm_id'],
             (int)$inputs['target_realm_id'],
