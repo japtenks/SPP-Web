@@ -1,19 +1,25 @@
 <?php
 
+require_once __DIR__ . '/realm-capabilities.php';
+
 if (!function_exists('spp_server_load_connect_page_state')) {
     function spp_server_load_connect_page_state(array $args = array()): array
     {
         $realmMap = (array)($args['realm_map'] ?? ($GLOBALS['realmDbMap'] ?? array()));
+        $get = (array)($args['get'] ?? $_GET);
         $user = (array)($args['user'] ?? ($GLOBALS['user'] ?? array()));
         $server = (array)($args['server'] ?? $_SERVER);
 
         $realmId = 1;
         if (!empty($realmMap)) {
-            $realmId = (int)spp_resolve_realm_id($realmMap);
+            $requestedRealmId = isset($get['realm']) ? (int)$get['realm'] : 0;
+            $realmId = (int)spp_resolve_realm_id($realmMap, $requestedRealmId > 0 ? $requestedRealmId : null);
         }
         if ($realmId <= 0) {
             $realmId = 1;
         }
+
+        $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);
 
         $realmName = 'This Server';
         $realmlistHost = '';
@@ -48,6 +54,7 @@ if (!function_exists('spp_server_load_connect_page_state')) {
             'createAccountUrl' => spp_route_url('account', 'register', array(), false),
             'downloadRealmlistUrl' => 'index.php?n=server&sub=realmlist&nobody=1&realm=' . $realmId,
             'isLoggedIn' => !empty($user['id']) && (int)$user['id'] > 0,
+            'realmCapabilities' => $realmCapabilities,
         );
     }
 }

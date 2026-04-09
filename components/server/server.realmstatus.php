@@ -19,7 +19,6 @@ if (!empty($_GET['ajax'])) {
     header('Content-Type: application/json; charset=UTF-8');
     echo json_encode(array(
         'ok' => true,
-        'sourceRealmId' => (int)($realmstatusPageState['realmstatusSourceRealmId'] ?? 0),
         'polledAt' => (string)($realmstatusPageState['realmstatusPolledAtLabel'] ?? ''),
         'html' => (string)($realmstatusPageState['realmstatusListHtml'] ?? ''),
     ));

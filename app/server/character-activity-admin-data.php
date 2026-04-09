@@ -39,6 +39,7 @@ if (!function_exists('spp_character_load_activity_admin_state')) {
         $canManageBotPersonality = !empty($args['can_manage_bot_personality']);
         $botPersonalityText = (string)($args['bot_personality_text'] ?? '');
         $botSignatureText = (string)($args['bot_signature_text'] ?? '');
+        $botPlayHabitTraits = (array)($args['bot_play_habit_traits'] ?? array());
         $characterAdminFeedback = (string)($args['character_admin_feedback'] ?? '');
         $characterAdminError = (string)($args['character_admin_error'] ?? '');
         $characterStrategyState = (array)($args['character_strategy_state'] ?? []);
@@ -52,6 +53,7 @@ if (!function_exists('spp_character_load_activity_admin_state')) {
                 'last_instance_date' => $lastInstanceDate,
                 'bot_personality_text' => $botPersonalityText,
                 'bot_signature_text' => $botSignatureText,
+                'bot_play_habit_traits' => $botPlayHabitTraits,
                 'forum_social' => $forumSocial,
                 'character_admin_feedback' => $characterAdminFeedback,
                 'character_admin_error' => $characterAdminError,
@@ -146,6 +148,24 @@ if (!function_exists('spp_character_load_activity_admin_state')) {
                 error_log('[character-personality-read] ' . $e->getMessage());
             }
 
+            try {
+                $identityRow = array(
+                    'realm_id' => (int)$realmId,
+                    'character_guid' => (int)$characterGuid,
+                    'owner_account_id' => (int)($character['account'] ?? 0),
+                    'display_name' => (string)$characterName,
+                    'identity_type' => 'bot_character',
+                    'guild_id' => isset($character['guildid']) ? (int)$character['guildid'] : null,
+                    'is_bot' => 1,
+                );
+                $identityId = (int)($forumSocial['identity_id'] ?? 0);
+                if ($identityId > 0) {
+                    $botPlayHabitTraits = spp_get_identity_play_habit_traits($identityId, $identityRow);
+                }
+            } catch (Throwable $e) {
+                error_log('[character-play-habits-read] ' . $e->getMessage());
+            }
+
             $characterStrategyState = spp_admin_playerbots_fetch_character_strategy_state($charsPdo, $characterGuid);
         }
 
@@ -206,6 +226,44 @@ if (!function_exists('spp_character_load_activity_admin_state')) {
                             exit;
                         }
                         $characterAdminFeedback = 'Bot signature saved.';
+                    }
+                } elseif ($characterAdminAction === 'save_bot_habits') {
+                    $identityId = (int)($forumSocial['identity_id'] ?? 0);
+                    if ($identityId <= 0) {
+                        $identityId = spp_ensure_char_identity($realmId, $characterGuid, (int)($character['account'] ?? 0), $characterName, 1, isset($character['guildid']) ? (int)$character['guildid'] : null);
+                        $forumSocial['identity_id'] = $identityId;
+                    }
+
+                    $botPlayHabitTraits = array(
+                        'play_style_key' => (string)($post['play_style_key'] ?? ''),
+                        'weekly_frequency_hint' => (string)($post['weekly_frequency_hint'] ?? ''),
+                        'session_duration_hint_min' => (string)($post['session_duration_hint_min'] ?? ''),
+                        'session_duration_hint_max' => (string)($post['session_duration_hint_max'] ?? ''),
+                        'preferred_days' => (string)($post['preferred_days'] ?? ''),
+                        'preferred_hours' => (string)($post['preferred_hours'] ?? ''),
+                        'cohort_key' => (string)($post['cohort_key'] ?? ''),
+                        'life_stage_hint' => (string)($post['life_stage_hint'] ?? ''),
+                    );
+
+                    if ($identityId <= 0) {
+                        $characterAdminError = 'No website identity exists for this bot yet, so the play habit traits could not be saved.';
+                    } elseif (!spp_update_identity_play_habit_traits($identityId, $botPlayHabitTraits)) {
+                        $characterAdminError = 'Saving the bot play habit traits failed.';
+                    } else {
+                        $botPlayHabitTraits = spp_get_identity_play_habit_traits($identityId, array(
+                            'realm_id' => (int)$realmId,
+                            'character_guid' => (int)$characterGuid,
+                            'owner_account_id' => (int)($character['account'] ?? 0),
+                            'display_name' => (string)$characterName,
+                            'identity_type' => 'bot_character',
+                            'guild_id' => isset($character['guildid']) ? (int)$character['guildid'] : null,
+                            'is_bot' => 1,
+                        ));
+                        if (!headers_sent()) {
+                            header('Location: ' . $personalityTabUrl . '&bot_habits_saved=1');
+                            exit;
+                        }
+                        $characterAdminFeedback = 'Bot play habit traits saved.';
                     }
                 } elseif ($characterAdminAction === 'save_bot_strategy') {
                     $effectiveStrategyValues = array();
@@ -295,6 +353,7 @@ if (!function_exists('spp_character_load_activity_admin_state')) {
             'last_instance_date' => $lastInstanceDate,
             'bot_personality_text' => $botPersonalityText,
             'bot_signature_text' => $botSignatureText,
+            'bot_play_habit_traits' => $botPlayHabitTraits,
             'forum_social' => $forumSocial,
             'character_admin_feedback' => $characterAdminFeedback,
             'character_admin_error' => $characterAdminError,

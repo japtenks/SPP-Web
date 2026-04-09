@@ -1,0 +1,50 @@
+.rot-command {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #111;
+  color: #dbe9ff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.rot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.rot-help--warning {
+  color: #ffb0b0;
+}
+
+.rot-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 16px;
+}
+
+.rot-table th,
+.rot-table td {
+  padding: 10px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rot-table th {
+  color: #ffca5a;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .rot-table {
+    display: block;
+    overflow-x: auto;
+  }
+}

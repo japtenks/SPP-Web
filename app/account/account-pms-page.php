@@ -11,10 +11,7 @@ if (!function_exists('spp_account_pms_load_page_state')) {
         $get = $ctx['get'] ?? $_GET;
         $post = $ctx['post'] ?? $_POST;
         $cookie = $ctx['cookie'] ?? $_COOKIE;
-        $realmId = function_exists('spp_current_realm_id')
-            ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-            : spp_resolve_realm_id(is_array($realmDbMap) ? $realmDbMap : array());
-        $pmsPdo = spp_get_pdo('realmd', $realmId);
+        $pmsPdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
         $currentAction = (string)($get['action'] ?? '');
         $currentDir = (string)($get['dir'] ?? '');
 
@@ -27,6 +24,7 @@ if (!function_exists('spp_account_pms_load_page_state')) {
             'page' => isset($get['p']) ? max(1, (int)$get['p']) : 1,
             'limit_start' => 0,
             'pmsPdo' => $pmsPdo,
+            'canonicalRealmId' => function_exists('spp_canonical_auth_realm_id') ? spp_canonical_auth_realm_id() : 1,
             'currentAction' => $currentAction,
             'currentDir' => $currentDir,
             'pms_csrf_token' => spp_csrf_token('account_pms'),

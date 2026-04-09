@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 return [
     'appTimezone' => 'America/Chicago',
@@ -99,4 +99,3 @@ return [
         ],
     ],
 ];
-

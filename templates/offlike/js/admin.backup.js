@@ -46,7 +46,8 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function fetchOptions(params) {
-    var url = endpoint + '?' + new URLSearchParams(params).toString();
+    var separator = endpoint.indexOf('?') === -1 ? '?' : '&';
+    var url = endpoint + separator + new URLSearchParams(params).toString();
     return fetch(url, {
       credentials: 'same-origin',
       headers: { 'X-Requested-With': 'XMLHttpRequest' }
@@ -56,6 +57,30 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       return response.json();
     });
+  }
+
+  function bindSelectRefresh(select, handler) {
+    if (!select) {
+      return;
+    }
+
+    select.addEventListener('change', handler);
+    select.addEventListener('input', handler);
+  }
+
+  function buildGuildHint(summary, selectedGuildId, vmangosTransformRoute) {
+    if (String(selectedGuildId || '0') === '0') {
+      return 'No guild selected.';
+    }
+
+    summary = summary || {};
+    var text = 'Guild members: ' + Number(summary.member_count || 0)
+      + ' | Owning accounts: ' + Number(summary.account_count || 0)
+      + ' | Mix: ' + Number(summary.human_account_count || 0) + ' human / ' + Number(summary.bot_account_count || 0) + ' bot';
+    if (vmangosTransformRoute) {
+      text += ' | Target accounts: ' + Number(summary.create_count || 0) + ' create / ' + Number(summary.reuse_count || 0) + ' reuse';
+    }
+    return text;
   }
 
   function bindBackupForm() {
@@ -155,17 +180,22 @@ document.addEventListener('DOMContentLoaded', function () {
 
         applyVisibility();
         updateSubmitState();
-      }).catch(function () {});
+      }).catch(function (error) {
+        if (accountHint) {
+          accountHint.textContent = 'Refresh failed: ' + (error && error.message ? error.message : 'Lookup failed');
+        }
+      });
     }
 
-    entityType.addEventListener('change', function () {
+    bindSelectRefresh(entityType, function () {
       applyVisibility();
       refresh();
     });
-    sourceRealm.addEventListener('change', refresh);
-    sourceAccount.addEventListener('change', refresh);
+    bindSelectRefresh(sourceRealm, refresh);
+    bindSelectRefresh(sourceAccount, refresh);
     applyVisibility();
     updateSubmitState();
+    refresh();
   }
 
   function bindXferForm() {
@@ -243,9 +273,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       if (guildHint) {
         var summary = (data && data.selected_guild_summary) || (lastLookup && lastLookup.selected_guild_summary) || {};
-        guildHint.textContent = String(sourceGuild.value || '0') !== '0'
-          ? ('Guild members: ' + Number(summary.member_count || 0) + ' | Owning accounts: ' + Number(summary.account_count || 0) + ' | Mix: ' + Number(summary.human_account_count || 0) + ' human / ' + Number(summary.bot_account_count || 0) + ' bot')
-          : 'No guild selected.';
+        guildHint.textContent = buildGuildHint(summary, sourceGuild.value, vmangosTransformRoute);
       }
 
       if (selectedEntity === 'character') {
@@ -326,31 +354,34 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (guildHint) {
           var guildSummary = data.selected_guild_summary || {};
-          guildHint.textContent = data.selected_guild_id > 0
-            ? ('Guild members: ' + Number(guildSummary.member_count || 0) + ' | Owning accounts: ' + Number(guildSummary.account_count || 0) + ' | Mix: ' + Number(guildSummary.human_account_count || 0) + ' human / ' + Number(guildSummary.bot_account_count || 0) + ' bot')
-            : 'No guild selected.';
+          guildHint.textContent = buildGuildHint(guildSummary, data.selected_guild_id, isVmangosTransformRoute(data));
         }
 
         applyVisibility(data);
         updateSubmitState(data);
-      }).catch(function () {});
+      }).catch(function (error) {
+        if (guildHint) {
+          guildHint.textContent = 'Refresh failed: ' + (error && error.message ? error.message : 'Lookup failed');
+        }
+      });
     }
 
-    entityType.addEventListener('change', function () {
+    bindSelectRefresh(entityType, function () {
       applyVisibility(lastLookup);
       refresh();
     });
-    xferRoute.addEventListener('change', refresh);
-    sourceAccount.addEventListener('change', refresh);
-    sourceCharacter.addEventListener('change', function () {
+    bindSelectRefresh(xferRoute, refresh);
+    bindSelectRefresh(sourceAccount, refresh);
+    bindSelectRefresh(sourceCharacter, function () {
       updateSubmitState(lastLookup);
     });
-    sourceGuild.addEventListener('change', refresh);
-    targetAccount.addEventListener('change', function () {
+    bindSelectRefresh(sourceGuild, refresh);
+    bindSelectRefresh(targetAccount, function () {
       updateSubmitState(lastLookup);
     });
     applyVisibility(lastLookup);
     updateSubmitState(lastLookup);
+    refresh();
   }
 
   bindBackupForm();

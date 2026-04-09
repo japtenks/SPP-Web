@@ -9,10 +9,7 @@ if ($q === '') {
 }
 
 try {
-    $realmId = function_exists('spp_current_realm_id')
-        ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-        : spp_resolve_realm_id($realmDbMap);
-    $REALMD = spp_get_pdo('realmd', $realmId);
+    $REALMD = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
 } catch (Throwable $e) {
     error_log('[pm_user_search] Failed opening realmd connection: ' . $e->getMessage());
     echo json_encode([]);

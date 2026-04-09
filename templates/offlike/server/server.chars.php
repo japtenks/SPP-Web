@@ -2,6 +2,8 @@
 require_once dirname(__DIR__, 3) . '/app/support/terminology.php';
 $publicTerms = spp_terminology_public();
 $characterRows = $characterRows ?? $character_rows ?? $characters ?? array();
+$charsRealmCapabilities = $realmCapabilities ?? $realm_capabilities ?? array();
+$characterLinksEnabled = !empty($charsRealmCapabilities['supports_character_detail']);
 builddiv_start(1, 'Characters', 1);
 ?>
 
@@ -106,10 +108,17 @@ builddiv_start(1, 'Characters', 1);
     ?>
     <div class="character-table__row">
       <div class="character-table__cell character-table__name class-<?php echo strtolower($classNames[$item['class']] ?? 'unknown'); ?>">
-        <a href="index.php?n=server&amp;sub=character&amp;realm=<?php echo (int)$realmId; ?>&amp;character=<?php echo urlencode($item['name']); ?>">
-          <img src="<?php echo $portrait; ?>" class="list-page-avatar-circle portrait" alt="">
-          <?php echo htmlspecialchars($item['name']); ?>
-        </a>
+        <?php if ($characterLinksEnabled): ?>
+          <a href="index.php?n=server&amp;sub=character&amp;realm=<?php echo (int)$realmId; ?>&amp;character=<?php echo urlencode($item['name']); ?>">
+            <img src="<?php echo $portrait; ?>" class="list-page-avatar-circle portrait" alt="">
+            <?php echo htmlspecialchars($item['name']); ?>
+          </a>
+        <?php else: ?>
+          <span>
+            <img src="<?php echo $portrait; ?>" class="list-page-avatar-circle portrait" alt="">
+            <?php echo htmlspecialchars($item['name']); ?>
+          </span>
+        <?php endif; ?>
       </div>
       <div class="character-table__cell"><?php if (!empty($item['guild_id']) && !empty($item['guild_name'])): ?><a href="index.php?n=server&sub=guild&guildid=<?php echo (int)$item['guild_id']; ?>&realm=<?php echo $realmId; ?>"><?php echo htmlspecialchars($item['guild_name']); ?></a><?php else: ?>-<?php endif; ?></div>
       <div class="character-table__cell">

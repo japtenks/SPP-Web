@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/realm-capabilities.php';
+
 if (!function_exists('spp_server_ah_quality_options')) {
     function spp_server_ah_quality_options(): array
     {
@@ -40,15 +42,20 @@ if (!function_exists('spp_server_ah_item_class_options')) {
 }
 
 if (!function_exists('spp_server_ah_sort_columns')) {
-    function spp_server_ah_sort_columns(): array
+    function spp_server_ah_sort_columns(array $mapping = array()): array
     {
+        $quantitySort = (string)($mapping['quantity'] ?? 'a.item_count');
+        $timeSort = (string)($mapping['time'] ?? 'a.time');
+        $bidSort = (string)($mapping['bid'] ?? '(CASE WHEN a.lastbid > 0 THEN a.lastbid ELSE a.startbid END)');
+        $buyoutSort = (string)($mapping['buyout'] ?? 'a.buyoutprice');
+
         return array(
             'type' => 'i.class',
             'item' => 'i.name',
-            'qty' => 'a.item_count',
-            'time' => 'a.time',
-            'bid' => '(CASE WHEN a.lastbid > 0 THEN a.lastbid ELSE a.startbid END)',
-            'buyout' => 'a.buyoutprice',
+            'qty' => $quantitySort,
+            'time' => $timeSort,
+            'bid' => $bidSort,
+            'buyout' => $buyoutSort,
             'req' => 'i.RequiredLevel',
             'ilvl' => 'i.ItemLevel',
         );
@@ -195,17 +202,15 @@ if (!function_exists('spp_server_ah_load_page_state')) {
             $realmId = 1;
         }
 
+        $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);
+
         $filterMap = spp_server_ah_filter_map();
         $filter = strtolower(trim((string)($get['filter'] ?? 'all')));
         if (!isset($filterMap[$filter])) {
             $filter = 'all';
         }
 
-        $sortColumns = spp_server_ah_sort_columns();
         $sort = strtolower(trim((string)($get['sort'] ?? 'time')));
-        if (!isset($sortColumns[$sort])) {
-            $sort = 'time';
-        }
 
         $dir = strtolower(trim((string)($get['dir'] ?? 'desc')));
         if (!in_array($dir, array('asc', 'desc'), true)) {
@@ -252,6 +257,7 @@ if (!function_exists('spp_server_ah_load_page_state')) {
             'minReqLevel' => $minReqLevel,
             'maxReqLevel' => $maxReqLevel,
             'useItemsiteUrl' => 'index.php?n=server&sub=item&realm=' . $realmId . '&item=',
+            'supportsItemDetail' => !empty($realmCapabilities['supports_item_detail']),
             'ahFilterLinks' => array(),
             'ah_entry' => array(),
             'total' => 0,
@@ -260,23 +266,56 @@ if (!function_exists('spp_server_ah_load_page_state')) {
             'pageError' => '',
             'iconPath' => spp_modern_image_url('auction-house'),
             'pathway_info' => array(array('title' => 'Auction House', 'link' => '')),
+            'realmCapabilities' => $realmCapabilities,
         );
 
-        if (!isset($realmMap[$realmId]['chars'], $realmMap[$realmId]['world'])) {
+        if (empty($realmCapabilities['supports_auction'])) {
             $state['pageError'] = 'Auction House data is not available for the selected realm.';
         } else {
             $dbChars = (string)$realmMap[$realmId]['chars'];
             $dbWorld = (string)$realmMap[$realmId]['world'];
+            $charsPdo = spp_get_pdo('chars', $realmId);
+            $worldPdo = spp_get_pdo('world', $realmId);
+            $auctionHouseIdColumn = spp_realm_capability_pick_column($charsPdo, 'auction', array('houseid', 'house_id'));
+            $auctionItemIdColumn = spp_realm_capability_pick_column($charsPdo, 'auction', array('item_template', 'item_id'));
+            $auctionItemGuidColumn = spp_realm_capability_pick_column($charsPdo, 'auction', array('itemguid', 'item_guid'));
+            $auctionItemCountColumn = spp_realm_capability_pick_column($charsPdo, 'auction', array('item_count'));
+            $auctionBuyoutColumn = spp_realm_capability_pick_column($charsPdo, 'auction', array('buyoutprice', 'buyout_price'));
+            $auctionLastBidColumn = spp_realm_capability_pick_column($charsPdo, 'auction', array('lastbid', 'last_bid'));
+            $auctionStartBidColumn = spp_realm_capability_pick_column($charsPdo, 'auction', array('startbid', 'start_bid'));
+            $auctionExpireColumn = spp_realm_capability_pick_column($charsPdo, 'auction', array('time', 'expire_time'));
+            $worldQualityColumn = spp_realm_capability_pick_column($worldPdo, 'item_template', array('Quality', 'quality'), 'Quality');
+            $worldRequiredLevelColumn = spp_realm_capability_pick_column($worldPdo, 'item_template', array('RequiredLevel', 'required_level'), 'RequiredLevel');
+            $worldItemLevelColumn = spp_realm_capability_pick_column($worldPdo, 'item_template', array('ItemLevel', 'item_level'), 'ItemLevel');
+            $worldAllowableClassColumn = spp_realm_capability_pick_column($worldPdo, 'item_template', array('AllowableClass', 'allowable_class'), 'AllowableClass');
+            $worldInventoryTypeColumn = spp_realm_capability_pick_column($worldPdo, 'item_template', array('InventoryType', 'inventory_type'), 'InventoryType');
+            $quantitySql = $auctionItemCountColumn !== null
+                ? 'a.`' . $auctionItemCountColumn . '`'
+                : 'COALESCE(ii.`count`, 1)';
+            $auctionJoinSql = ($auctionItemCountColumn === null && $auctionItemGuidColumn !== null)
+                ? 'LEFT JOIN `item_instance` AS ii ON ii.`guid` = a.`' . $auctionItemGuidColumn . '`'
+                : '';
+            $sortColumns = spp_server_ah_sort_columns(array(
+                'quantity' => $quantitySql,
+                'time' => 'a.`' . $auctionExpireColumn . '`',
+                'bid' => '(CASE WHEN a.`' . $auctionLastBidColumn . '` > 0 THEN a.`' . $auctionLastBidColumn . '` ELSE a.`' . $auctionStartBidColumn . '` END)',
+                'buyout' => 'a.`' . $auctionBuyoutColumn . '`',
+                'req' => 'i.`' . $worldRequiredLevelColumn . '`',
+                'ilvl' => 'i.`' . $worldItemLevelColumn . '`',
+            ));
+            if (!isset($sortColumns[$sort])) {
+                $sort = 'time';
+            }
             $params = array();
             $whereParts = array();
-            $whereParts[] = 'a.houseid IN (' . implode(',', array_map('intval', (array)$filterMap[$filter]['houses'])) . ')';
+            $whereParts[] = 'a.`' . $auctionHouseIdColumn . '` IN (' . implode(',', array_map('intval', (array)$filterMap[$filter]['houses'])) . ')';
 
             if ($search !== '') {
                 $whereParts[] = 'i.name LIKE :search';
                 $params[':search'] = '%' . $search . '%';
             }
             if ($qualityFilter >= 0) {
-                $whereParts[] = 'i.Quality = :quality';
+                $whereParts[] = 'i.`' . $worldQualityColumn . '` = :quality';
                 $params[':quality'] = $qualityFilter;
             }
             if ($itemClassFilter >= 0) {
@@ -284,38 +323,38 @@ if (!function_exists('spp_server_ah_load_page_state')) {
                 $params[':item_class'] = $itemClassFilter;
             }
             if ($minReqLevel !== null) {
-                $whereParts[] = 'i.RequiredLevel >= :min_level';
+                $whereParts[] = 'i.`' . $worldRequiredLevelColumn . '` >= :min_level';
                 $params[':min_level'] = $minReqLevel;
             }
             if ($maxReqLevel !== null) {
-                $whereParts[] = 'i.RequiredLevel <= :max_level';
+                $whereParts[] = 'i.`' . $worldRequiredLevelColumn . '` <= :max_level';
                 $params[':max_level'] = $maxReqLevel;
             }
 
-            $whereClause = 'WHERE ' . implode(' AND ', $whereParts) . ' AND a.time > UNIX_TIMESTAMP(NOW())';
+            $whereClause = 'WHERE ' . implode(' AND ', $whereParts) . ' AND a.`' . $auctionExpireColumn . '` > UNIX_TIMESTAMP(NOW())';
             $orderBy = 'ORDER BY ' . $sortColumns[$sort] . ' ' . strtoupper($dir);
 
             try {
-                $charsPdo = spp_get_pdo('chars', $realmId);
                 $sql = "
 SELECT
   a.id,
-  a.houseid,
-  a.item_template,
-  a.item_count AS quantity,
-  a.buyoutprice AS buyout,
-  CASE WHEN a.lastbid > 0 THEN a.lastbid ELSE a.startbid END AS currentbid,
-  a.time,
+  a.`{$auctionHouseIdColumn}` AS houseid,
+  a.`{$auctionItemIdColumn}` AS item_template,
+  {$quantitySql} AS quantity,
+  a.`{$auctionBuyoutColumn}` AS buyout,
+  CASE WHEN a.`{$auctionLastBidColumn}` > 0 THEN a.`{$auctionLastBidColumn}` ELSE a.`{$auctionStartBidColumn}` END AS currentbid,
+  a.`{$auctionExpireColumn}` AS time,
   i.class,
   i.subclass,
-  i.InventoryType,
-  i.Quality AS quality,
-  i.RequiredLevel,
-  i.ItemLevel,
-  i.AllowableClass,
+  i.`{$worldInventoryTypeColumn}` AS InventoryType,
+  i.`{$worldQualityColumn}` AS quality,
+  i.`{$worldRequiredLevelColumn}` AS RequiredLevel,
+  i.`{$worldItemLevelColumn}` AS ItemLevel,
+  i.`{$worldAllowableClassColumn}` AS AllowableClass,
   i.name AS itemname
 FROM `{$dbChars}`.`auction` AS a
-LEFT JOIN `{$dbWorld}`.`item_template` AS i ON i.entry = a.item_template
+LEFT JOIN `{$dbWorld}`.`item_template` AS i ON i.entry = a.`{$auctionItemIdColumn}`
+{$auctionJoinSql}
 {$whereClause}
 {$orderBy}
 LIMIT :limit OFFSET :offset";
@@ -329,7 +368,8 @@ LIMIT :limit OFFSET :offset";
                 $countSql = "
 SELECT COUNT(*)
 FROM `{$dbChars}`.`auction` AS a
-LEFT JOIN `{$dbWorld}`.`item_template` AS i ON i.entry = a.item_template
+LEFT JOIN `{$dbWorld}`.`item_template` AS i ON i.entry = a.`{$auctionItemIdColumn}`
+{$auctionJoinSql}
 {$whereClause}";
                 $countStatement = $charsPdo->prepare($countSql);
                 spp_server_ah_bind_params($countStatement, $params);
@@ -351,7 +391,7 @@ LEFT JOIN `{$dbWorld}`.`item_template` AS i ON i.entry = a.item_template
                         'buyout' => spp_server_ah_money_view($row['buyout'] ?? 0),
                         'time_left_label' => spp_server_ah_time_left_label($row['time'] ?? 0, $currentTime),
                         'is_expired' => ((int)($row['time'] ?? 0) - $currentTime) <= 0,
-                        'item_url' => 'index.php?n=server&sub=item&realm=' . $realmId . '&item=' . $itemId,
+                        'item_url' => !empty($realmCapabilities['supports_item_detail']) ? 'index.php?n=server&sub=item&realm=' . $realmId . '&item=' . $itemId : '',
                         'tooltip_item_id' => $itemId,
                         'tooltip_realm_id' => $realmId,
                     );

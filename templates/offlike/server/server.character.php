@@ -496,6 +496,9 @@ $achievementTabIcon = $tabIcons['achievements'];
       <?php if (!empty($signature_saved)): ?>
         <div class="character-admin-banner">Bot signature saved for <?php echo htmlspecialchars($characterName); ?>.</div>
       <?php endif; ?>
+      <?php if (!empty($bot_habits_saved)): ?>
+        <div class="character-admin-banner">Bot play habit traits saved for <?php echo htmlspecialchars($characterName); ?>.</div>
+      <?php endif; ?>
       <?php if (!empty($bot_strategy_saved)): ?>
         <div class="character-admin-banner">
           Bot strategy overrides saved for <?php echo htmlspecialchars($characterName); ?>.
@@ -520,7 +523,7 @@ $achievementTabIcon = $tabIcons['achievements'];
       <section class="character-admin-card">
         <h2 class="character-panel-title">How Seeding Works</h2>
         <div class="character-admin-note">
-          Per-bot personality text is seeded from the Playerbots config file <code>AiPlayerbot.LLMDefaultPromptsFile</code>. On startup, the bot loader reads lines like <code>Name::prompt text</code> and writes them into <code>ai_playerbot_db_store</code>. Saving from this page replaces that bot's stored override. The website signature is seeded separately from the bot identity: guild leaders get a guild-master line, and normal bots hash realm, guid, and name into a canned signature pool, with some bots intentionally left blank.
+          Per-bot personality text is seeded from the Playerbots config file <code>AiPlayerbot.LLMDefaultPromptsFile</code>. On startup, the bot loader reads lines like <code>Name::prompt text</code> and writes them into <code>ai_playerbot_db_store</code>. Saving from this page replaces that bot's stored override. The website signature is seeded separately from the bot identity: guild leaders get a guild-master line, and normal bots hash realm, guid, and name into a canned signature pool, with some bots intentionally left blank. Bot play-habit traits live on <code>website_identity_profiles</code> and fall back to stable seeded defaults whenever a bot has not been customized yet.
         </div>
       </section>
 
@@ -555,6 +558,73 @@ $achievementTabIcon = $tabIcons['achievements'];
             <div class="character-admin-actions">
               <button class="character-admin-button" type="submit">Save Signature</button>
               <span class="character-admin-note">Saved to the website identity profile for the public-facing forum identity.</span>
+            </div>
+          </form>
+        </section>
+
+        <section class="character-admin-card character-admin-top-card">
+          <h2 class="character-panel-title">Bot Play Habits</h2>
+          <form class="character-admin-form" method="post" action="<?php echo htmlspecialchars($characterUrl . '&tab=personality'); ?>">
+            <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($characterPersonalityCsrfToken, ENT_QUOTES); ?>">
+            <input type="hidden" name="character_admin_action" value="save_bot_habits">
+            <input type="hidden" name="character_guid" value="<?php echo (int)$characterGuid; ?>">
+            <div class="character-admin-form-grid">
+              <div class="character-admin-subcards character-admin-form-wide">
+                <div class="character-admin-subcard">
+                  <label for="character-play-style-key">Play Style Key</label>
+                  <select id="character-play-style-key" class="character-paperdoll-select" name="play_style_key">
+                    <option value=""<?php echo trim((string)($botPlayHabitTraits['play_style_key'] ?? '')) === '' ? ' selected' : ''; ?>>Use fallback</option>
+                    <option value="balanced"<?php echo (string)($botPlayHabitTraits['play_style_key'] ?? '') === 'balanced' ? ' selected' : ''; ?>>Balanced</option>
+                    <option value="social"<?php echo (string)($botPlayHabitTraits['play_style_key'] ?? '') === 'social' ? ' selected' : ''; ?>>Social</option>
+                    <option value="grinder"<?php echo (string)($botPlayHabitTraits['play_style_key'] ?? '') === 'grinder' ? ' selected' : ''; ?>>Grinder</option>
+                    <option value="night_owl"<?php echo (string)($botPlayHabitTraits['play_style_key'] ?? '') === 'night_owl' ? ' selected' : ''; ?>>Night Owl</option>
+                    <option value="weekend"<?php echo (string)($botPlayHabitTraits['play_style_key'] ?? '') === 'weekend' ? ' selected' : ''; ?>>Weekend</option>
+                    <option value="support"<?php echo (string)($botPlayHabitTraits['play_style_key'] ?? '') === 'support' ? ' selected' : ''; ?>>Support</option>
+                    <option value="pvp"<?php echo (string)($botPlayHabitTraits['play_style_key'] ?? '') === 'pvp' ? ' selected' : ''; ?>>PvP</option>
+                    <option value="crafting"<?php echo (string)($botPlayHabitTraits['play_style_key'] ?? '') === 'crafting' ? ' selected' : ''; ?>>Crafting</option>
+                  </select>
+                </div>
+                <div class="character-admin-subcard">
+                  <label for="character-weekly-frequency-hint">Weekly Frequency Hint</label>
+                  <select id="character-weekly-frequency-hint" class="character-paperdoll-select" name="weekly_frequency_hint">
+                    <option value=""<?php echo trim((string)($botPlayHabitTraits['weekly_frequency_hint'] ?? '')) === '' ? ' selected' : ''; ?>>Use fallback</option>
+                    <option value="daily"<?php echo (string)($botPlayHabitTraits['weekly_frequency_hint'] ?? '') === 'daily' ? ' selected' : ''; ?>>Daily</option>
+                    <option value="weekdays"<?php echo (string)($botPlayHabitTraits['weekly_frequency_hint'] ?? '') === 'weekdays' ? ' selected' : ''; ?>>Weekdays</option>
+                    <option value="weekends"<?php echo (string)($botPlayHabitTraits['weekly_frequency_hint'] ?? '') === 'weekends' ? ' selected' : ''; ?>>Weekends</option>
+                    <option value="3-4 days/week"<?php echo (string)($botPlayHabitTraits['weekly_frequency_hint'] ?? '') === '3-4 days/week' ? ' selected' : ''; ?>>3-4 days/week</option>
+                    <option value="evenings"<?php echo (string)($botPlayHabitTraits['weekly_frequency_hint'] ?? '') === 'evenings' ? ' selected' : ''; ?>>Evenings</option>
+                    <option value="flexible"<?php echo (string)($botPlayHabitTraits['weekly_frequency_hint'] ?? '') === 'flexible' ? ' selected' : ''; ?>>Flexible</option>
+                  </select>
+                </div>
+                <div class="character-admin-subcard">
+                  <label for="character-session-duration-min">Session Duration Hint Min</label>
+                  <input id="character-session-duration-min" type="number" min="0" name="session_duration_hint_min" value="<?php echo htmlspecialchars((string)($botPlayHabitTraits['session_duration_hint_min'] ?? '')); ?>" placeholder="60">
+                </div>
+                <div class="character-admin-subcard">
+                  <label for="character-session-duration-max">Session Duration Hint Max</label>
+                  <input id="character-session-duration-max" type="number" min="0" name="session_duration_hint_max" value="<?php echo htmlspecialchars((string)($botPlayHabitTraits['session_duration_hint_max'] ?? '')); ?>" placeholder="120">
+                </div>
+                <div class="character-admin-subcard">
+                  <label for="character-preferred-days">Preferred Days</label>
+                  <input id="character-preferred-days" type="text" name="preferred_days" value="<?php echo htmlspecialchars((string)($botPlayHabitTraits['preferred_days'] ?? '')); ?>" placeholder="Mon-Fri">
+                </div>
+                <div class="character-admin-subcard">
+                  <label for="character-preferred-hours">Preferred Hours</label>
+                  <input id="character-preferred-hours" type="text" name="preferred_hours" value="<?php echo htmlspecialchars((string)($botPlayHabitTraits['preferred_hours'] ?? '')); ?>" placeholder="18:00-22:00">
+                </div>
+                <div class="character-admin-subcard">
+                  <label for="character-cohort-key">Cohort Key</label>
+                  <input id="character-cohort-key" type="text" name="cohort_key" value="<?php echo htmlspecialchars((string)($botPlayHabitTraits['cohort_key'] ?? '')); ?>" placeholder="raid">
+                </div>
+                <div class="character-admin-subcard">
+                  <label for="character-life-stage-hint">Life Stage Hint</label>
+                  <input id="character-life-stage-hint" type="text" name="life_stage_hint" value="<?php echo htmlspecialchars((string)($botPlayHabitTraits['life_stage_hint'] ?? '')); ?>" placeholder="endgame">
+                </div>
+              </div>
+            </div>
+            <div class="character-admin-actions">
+              <button class="character-admin-button" type="submit">Save Play Habits</button>
+              <span class="character-admin-note">Empty fields fall back to the bot's seeded defaults on the website identity profile.</span>
             </div>
           </form>
         </section>

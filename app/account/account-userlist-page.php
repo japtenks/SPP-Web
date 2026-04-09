@@ -24,7 +24,7 @@ if (!function_exists('spp_account_userlist_load_page_state')) {
         if ((int)($get['id'] ?? 0) > 0) {
             if (empty($get['action'])) {
                 $profile = $auth ? $auth->getprofile((int)$get['id']) : null;
-                $realmPdo = spp_get_pdo('realmd', function_exists('spp_current_realm_id') ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array()) : spp_resolve_realm_id($realmDbMap));
+                $realmPdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
                 $allgroups = $realmPdo->query("SELECT g_id, g_title FROM website_account_groups")->fetchAll(PDO::FETCH_KEY_PAIR);
 
                 $pathwayInfo[] = array('title' => 'Member Management', 'link' => $GLOBALS['com_links']['sub_members'] ?? '');
@@ -71,7 +71,7 @@ if (!function_exists('spp_account_userlist_load_page_state')) {
 
             $filter = 'WHERE ' . implode(' AND ', $filters);
             $itemsPerPage = (int)spp_config_generic('users_per_page', 25);
-            $realmPdo = spp_get_pdo('realmd', function_exists('spp_current_realm_id') ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array()) : spp_resolve_realm_id($realmDbMap));
+            $realmPdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
 
             $stmtCount = $realmPdo->prepare("
                 SELECT count(*)

@@ -1,5 +1,7 @@
 <?php
 builddiv_start(1, 'Honor', 1);
+$honorRealmCapabilities = $realmCapabilities ?? $realm_capabilities ?? array();
+$honorCharacterLinksEnabled = !empty($honorRealmCapabilities['supports_character_detail']);
 ?>
 
 <div class="honor-list-shell list-page-shell feature-shell">
@@ -53,10 +55,17 @@ builddiv_start(1, 'Honor', 1);
     <?php foreach ($charactersPage as $item): ?>
       <div class="honor-table__row">
         <div class="honor-table__cell honor-table__name class-<?php echo htmlspecialchars($item['class_slug']); ?>" data-sort-value="<?php echo htmlspecialchars($item['name']); ?>">
-          <a href="<?php echo htmlspecialchars($item['character_url']); ?>">
-            <img src="<?php echo htmlspecialchars($item['portrait_url']); ?>" class="list-page-avatar-circle portrait" alt="">
-            <?php echo htmlspecialchars($item['name']); ?>
-          </a>
+          <?php if ($honorCharacterLinksEnabled && !empty($item['character_url'])): ?>
+            <a href="<?php echo htmlspecialchars($item['character_url']); ?>">
+              <img src="<?php echo htmlspecialchars($item['portrait_url']); ?>" class="list-page-avatar-circle portrait" alt="">
+              <?php echo htmlspecialchars($item['name']); ?>
+            </a>
+          <?php else: ?>
+            <span>
+              <img src="<?php echo htmlspecialchars($item['portrait_url']); ?>" class="list-page-avatar-circle portrait" alt="">
+              <?php echo htmlspecialchars($item['name']); ?>
+            </span>
+          <?php endif; ?>
         </div>
         <div class="honor-table__cell honor-table__icon honor-table__faction" data-sort-value="<?php echo htmlspecialchars($item['faction_name']); ?>">
           <img src="<?php echo htmlspecialchars($item['faction_icon']); ?>" class="faction-icon" alt="<?php echo htmlspecialchars($item['faction_name']); ?>" title="<?php echo htmlspecialchars($item['faction_name']); ?>">

@@ -1,11 +1,16 @@
 <?php
 
 require_once __DIR__ . '/chars-helpers.php';
+require_once __DIR__ . '/realm-capabilities.php';
 
 if (!function_exists('spp_chars_load_page_state')) {
     function spp_chars_load_page_state(array $args): array
     {
         $realmMap = (array)($args['realm_map'] ?? []);
+        $enabledRealmMap = (array)($GLOBALS['allEnabledRealmDbMap'] ?? array());
+        if (!empty($enabledRealmMap)) {
+            $realmMap = $enabledRealmMap;
+        }
         $get = (array)($args['get'] ?? $_GET);
         $page = isset($args['page']) ? max(1, (int)$args['page']) : (isset($get['p']) ? max(1, (int)$get['p']) : 1);
 
@@ -15,7 +20,12 @@ if (!function_exists('spp_chars_load_page_state')) {
 
         $requestedRealmId = isset($get['realm']) ? (int)$get['realm'] : 0;
         $realmId = spp_resolve_realm_id($realmMap, $requestedRealmId > 0 ? $requestedRealmId : null);
-        $armoryRealm = spp_get_armory_realm_name($realmId) ?? '';
+        if ($requestedRealmId > 0 && !isset($realmMap[$requestedRealmId])) {
+            $get['realm'] = (string)$realmId;
+            $_GET['realm'] = (string)$realmId;
+        }
+        $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);
+        $armoryRealm = !empty($realmCapabilities['has_armory']) ? (spp_get_armory_realm_name($realmId) ?? '') : '';
 
         $itemsPerPage = isset($get['per_page']) ? max(1, (int)$get['per_page']) : 25;
         $search = trim((string)($get['search'] ?? ''));
@@ -36,15 +46,41 @@ if (!function_exists('spp_chars_load_page_state')) {
         }
         $baseWhereSql = implode(' AND ', $baseWhere);
 
-        $charPdo = spp_get_pdo('chars', $realmId);
+        try {
+            $charPdo = spp_get_pdo('chars', $realmId);
+        } catch (Throwable $e) {
+            $fallbackRealmId = 0;
+            foreach ($realmMap as $candidateRealmId => $candidateRealmInfo) {
+                try {
+                    $charPdo = spp_get_pdo('chars', (int)$candidateRealmId);
+                    $fallbackRealmId = (int)$candidateRealmId;
+                    break;
+                } catch (Throwable $ignored) {
+                    continue;
+                }
+            }
+
+            if ($fallbackRealmId <= 0) {
+                throw $e;
+            }
+
+            $realmId = $fallbackRealmId;
+            $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);
+            $armoryRealm = !empty($realmCapabilities['has_armory']) ? (spp_get_armory_realm_name($realmId) ?? '') : '';
+            $get['realm'] = (string)$realmId;
+            $_GET['realm'] = (string)$realmId;
+            error_log('[chars] Falling back from unavailable realm to realm ' . $realmId . ': ' . $e->getMessage());
+        }
+        $guildMemberGuildIdColumn = spp_realm_capability_pick_column($charPdo, 'guild_member', array('guildid', 'guild_id'), 'guildid');
+        $guildGuildIdColumn = spp_realm_capability_pick_column($charPdo, 'guild', array('guildid', 'guild_id'), $guildMemberGuildIdColumn);
         $rawCharacters = $charPdo->query("
           SELECT c.guid, c.account, c.name, c.race, c.class, c.gender, c.level, c.zone, c.online,
-                 g.guildid AS guild_id, g.name AS guild_name,
+                 g.`{$guildGuildIdColumn}` AS guild_id, g.name AS guild_name,
                  IF(LOWER(a.username) LIKE 'rndbot%', 1, 0) AS is_bot
           FROM characters c
           INNER JOIN `{$_realmdDb}`.`account` a ON a.id = c.account
           LEFT JOIN guild_member gm ON c.guid = gm.guid
-          LEFT JOIN guild g ON gm.guildid = g.guildid
+          LEFT JOIN guild g ON gm.`{$guildMemberGuildIdColumn}` = g.`{$guildGuildIdColumn}`
           WHERE {$baseWhereSql}
           ORDER BY c.level DESC, c.name ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
@@ -133,6 +169,7 @@ if (!function_exists('spp_chars_load_page_state')) {
         return array(
             'realm_id' => $realmId,
             'armory_realm' => $armoryRealm,
+            'realm_capabilities' => $realmCapabilities,
             'p' => $page,
             'items_per_page' => $itemsPerPage,
             'search' => $search,
@@ -152,6 +189,7 @@ if (!function_exists('spp_chars_load_page_state')) {
             'filtered_bot_count' => $filteredBotCount,
             'realmId' => $realmId,
             'armoryRealm' => $armoryRealm,
+            'realmCapabilities' => $realmCapabilities,
             'includeBots' => $includeBots,
             'onlineOnly' => $onlineOnly,
             'factionFilter' => $factionFilter,

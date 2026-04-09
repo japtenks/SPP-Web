@@ -203,6 +203,16 @@ function spp_admin_backup_build_view(array $realmDbMap, ?array $request = null):
             'bot_account_count' => 0,
             'human_account_count' => 0,
         );
+    if ($sourceRealmdPdo && $targetRealmdPdo && $selectedGuildId > 0 && !empty($selectedXferRoute['target_is_vmangos']) && empty($selectedXferRoute['source_is_vmangos'])) {
+        $selectedGuildSummary = array_merge(
+            $selectedGuildSummary,
+            spp_admin_backup_fetch_target_account_resolution_summary(
+                $sourceRealmdPdo,
+                $targetRealmdPdo,
+                (array)($selectedGuildSummary['account_ids'] ?? array())
+            )
+        );
+    }
 
     return array(
         'realm_options' => $realmOptions,

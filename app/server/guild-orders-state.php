@@ -10,6 +10,25 @@ if (!function_exists('spp_guild_orders_fetch_roster_rows')) {
             return array();
         }
 
+        $guildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild', array('guildid', 'guild_id'), 'guildid');
+        $guildMemberGuildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_member', array('guildid', 'guild_id'), $guildIdColumn);
+        $guildRankGuildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_rank', array('guildid', 'guild_id'), $guildMemberGuildIdColumn);
+        $guildRankIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_rank', array('rid', 'rankid', 'rank_id', 'id'), 'rid');
+        $guildRankNameSelect = "CONCAT('Rank ', gm.rank) AS rank_name";
+        foreach (array('rname', 'rankname', 'name') as $candidateColumn) {
+            if (spp_db_column_exists($charsPdo, 'guild_rank', $candidateColumn)) {
+                $guildRankNameSelect = "gr.`{$candidateColumn}` AS rank_name";
+                break;
+            }
+        }
+
+        $playerNoteSelect = spp_db_column_exists($charsPdo, 'guild_member', 'pnote')
+            ? 'gm.pnote AS pnote'
+            : "'' AS pnote";
+        $officerNoteSelect = spp_db_column_exists($charsPdo, 'guild_member', 'offnote')
+            ? 'gm.offnote AS offnote'
+            : "'' AS offnote";
+
         $stmt = $charsPdo->prepare("
             SELECT
               c.guid,
@@ -20,13 +39,13 @@ if (!function_exists('spp_guild_orders_fetch_roster_rows')) {
               c.level,
               c.gender,
               gm.rank,
-              gm.pnote,
-              gm.offnote,
-              gr.rname AS rank_name
+              {$playerNoteSelect},
+              {$officerNoteSelect},
+              {$guildRankNameSelect}
             FROM {$realmDB}.guild_member gm
             LEFT JOIN {$realmDB}.characters c ON gm.guid = c.guid
-            LEFT JOIN {$realmDB}.guild_rank gr ON gr.guildid = gm.guildid AND gr.rid = gm.rank
-            WHERE gm.guildid = ?
+            LEFT JOIN {$realmDB}.guild_rank gr ON gr.`{$guildRankGuildIdColumn}` = gm.`{$guildMemberGuildIdColumn}` AND gr.`{$guildRankIdColumn}` = gm.rank
+            WHERE gm.`{$guildMemberGuildIdColumn}` = ?
             ORDER BY gm.rank ASC, c.level DESC, c.name ASC
         ");
         $stmt->execute(array((int)$guildId));
@@ -50,7 +69,8 @@ if (!function_exists('spp_guild_orders_fetch_guild_info_row')) {
         try {
             $hasInfoColumn = spp_db_column_exists($charsPdo, 'guild', 'info');
             $selectColumns = $hasInfoColumn ? 'info, motd' : 'motd';
-            $stmt = $charsPdo->prepare("SELECT {$selectColumns} FROM {$realmDB}.guild WHERE guildid = ? LIMIT 1");
+            $guildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild', array('guildid', 'guild_id'), 'guildid');
+            $stmt = $charsPdo->prepare("SELECT {$selectColumns} FROM {$realmDB}.guild WHERE `{$guildIdColumn}` = ? LIMIT 1");
             $stmt->execute(array((int)$guildId));
             $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: array();
 

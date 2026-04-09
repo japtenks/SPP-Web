@@ -37,9 +37,11 @@ if (!function_exists('spp_route_registry')) {
                 'operations' => array('g_is_admin', 'Operations', 'index.php?n=admin&sub=operations', '', 1),
                 'identities' => array('g_is_admin', 'Identity & Data Health', 'index.php?n=admin&sub=identities', '', 1),
                 'botevents' => array('g_is_admin', 'Bot Events', 'index.php?n=admin&sub=botevents', '', 1),
+                'bots' => array('g_is_admin', 'Bot Maintenance', 'index.php?n=admin&sub=bots', '', 1),
+                'botrotation' => array('g_is_admin', 'Bot Rotation Health', 'index.php?n=admin&sub=botrotation', '', 1),
                 'playerbots' => array('g_is_admin', 'Playerbots Control', 'index.php?n=admin&sub=playerbots', '', 1),
+                'populationdirector' => array('g_is_admin', 'Population Director', 'index.php?n=admin&sub=populationdirector', '', 1),
                 'chartools' => array('g_is_admin', 'chartransfer', 'index.php?n=admin&sub=chartools', '', 0),
-                'chartransfer' => array('g_is_admin', 'chartransfer', 'index.php?n=admin&sub=chartransfer', '', 0),
             ),
             'forum' => array(
                 'index' => array('', 'Forums', 'index.php?n=forum', '6-Forums', 0),
@@ -207,6 +209,24 @@ if (!function_exists('spp_route_page_contracts')) {
                         'scripts' => array('admin.botevents.js'),
                     ),
                 ),
+                'bots' => array(
+                    'loader' => 'app/admin/admin-bots-page.php',
+                    'component_role' => 'adapter',
+                    'template_role' => 'render',
+                    'assets' => array(
+                        'style_paths' => array('css/admin.bots.css'),
+                        'scripts' => array('admin.bots.js'),
+                    ),
+                ),
+                'botrotation' => array(
+                    'loader' => 'app/admin/admin-botrotation-page.php',
+                    'component_role' => 'adapter',
+                    'template_role' => 'render',
+                    'assets' => array(
+                        'style_paths' => array('css/admin.botrotation.css'),
+                        'scripts' => array('admin.botrotation.js'),
+                    ),
+                ),
                 'playerbots' => array(
                     'loader' => 'app/admin/admin-playerbots-page.php',
                     'component_role' => 'adapter',
@@ -215,13 +235,17 @@ if (!function_exists('spp_route_page_contracts')) {
                         'scripts' => array('admin.playerbots.js'),
                     ),
                 ),
-                'chartools' => array(
-                    'loader' => 'app/admin/admin-chartools-page.php',
+                'populationdirector' => array(
+                    'loader' => 'app/admin/admin-populationdirector-page.php',
                     'component_role' => 'adapter',
                     'template_role' => 'render',
+                    'assets' => array(
+                        'style_paths' => array('css/admin.populationdirector.css'),
+                        'scripts' => array('admin.populationdirector.js'),
+                    ),
                 ),
-                'chartransfer' => array(
-                    'loader' => 'app/admin/admin-chartransfer-page.php',
+                'chartools' => array(
+                    'loader' => 'app/admin/admin-chartools-page.php',
                     'component_role' => 'adapter',
                     'template_role' => 'render',
                 ),
@@ -229,9 +253,6 @@ if (!function_exists('spp_route_page_contracts')) {
                     'loader' => 'app/admin/admin-backup-page.php',
                     'component_role' => 'adapter',
                     'template_role' => 'render',
-                    'assets' => array(
-                        'scripts' => array('admin.backup.js'),
-                    ),
                 ),
                 'operations' => array(
                     'loader' => 'app/admin/admin-operations-page.php',

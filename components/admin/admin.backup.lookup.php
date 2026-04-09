@@ -6,19 +6,15 @@ define('INCLUDED', true);
 header('Content-Type: application/json; charset=utf-8');
 
 require_once(__DIR__ . '/../../config/config-protected.php');
-require_once(__DIR__ . '/../../core/class.mangosweb.php');
-
-$runtimeConfig = new mangosweb();
 
 require_once(__DIR__ . '/../../core/common.php');
 require_once(__DIR__ . '/../../core/request.php');
+require_once(__DIR__ . '/../../core/security.php');
 require_once(__DIR__ . '/../../core/mangos.class.php');
-require_once(__DIR__ . '/../../core/class.auth.php');
 require_once(__DIR__ . '/admin.backup.helpers.php');
 require_once(__DIR__ . '/admin.backup.read.php');
 
-$auth = new AUTH(null, $runtimeConfig->getConfig);
-$user = $auth->user ?? array();
+$user = spp_admin_backup_current_admin_user();
 $isAdmin = !empty($user['g_is_admin']) || !empty($user['g_is_supadmin']);
 
 if (!$isAdmin) {

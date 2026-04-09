@@ -77,7 +77,7 @@ function spp_account_pms_reply_in_thread(array $ctx): void
 
     $pmsPdo = $ctx['pmsPdo'];
     $user = $ctx['user'];
-    $realmDbMap = $ctx['realmDbMap'];
+    $canonicalRealmId = (int)($ctx['canonicalRealmId'] ?? (function_exists('spp_canonical_auth_realm_id') ? spp_canonical_auth_realm_id() : 1));
 
     $stmt = $pmsPdo->prepare("
         SELECT
@@ -106,9 +106,7 @@ function spp_account_pms_reply_in_thread(array $ctx): void
         return;
     }
 
-    $replyRealmId = function_exists('spp_current_realm_id')
-        ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-        : spp_resolve_realm_id($realmDbMap);
+    $replyRealmId = $canonicalRealmId > 0 ? $canonicalRealmId : 1;
     $replySenderIdentId = null;
     $replyRecipientIdentId = null;
     if (function_exists('spp_ensure_account_identity')) {
@@ -154,7 +152,7 @@ function spp_account_pms_send_new_message(array $ctx): void
 
     $pmsPdo = $ctx['pmsPdo'];
     $user = $ctx['user'];
-    $realmDbMap = $ctx['realmDbMap'];
+    $canonicalRealmId = (int)($ctx['canonicalRealmId'] ?? (function_exists('spp_canonical_auth_realm_id') ? spp_canonical_auth_realm_id() : 1));
 
     $message = trim((string)$_POST['message']);
     $sender_id = $user['id'];
@@ -165,9 +163,7 @@ function spp_account_pms_send_new_message(array $ctx): void
     $owner_id = (int)$stmt->fetchColumn();
 
     if ($owner_id > 0) {
-        $sendRealmId = function_exists('spp_current_realm_id')
-            ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-            : spp_resolve_realm_id($realmDbMap);
+        $sendRealmId = $canonicalRealmId > 0 ? $canonicalRealmId : 1;
         $pmSenderIdentId = null;
         $pmRecipientIdentId = null;
         if (function_exists('spp_ensure_account_identity')) {

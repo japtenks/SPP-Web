@@ -567,45 +567,41 @@ function builddiv_start($type = 0, $title = "No title set", $realm = 0, $forumna
 
     // === Optional Realm Selector ===
     if ($realm == 1) {
-        $realmMap = $GLOBALS['realmDbMap'] ?? array();
+        $realmMap = $GLOBALS['allEnabledRealmDbMap'] ?? $GLOBALS['realmDbMap'] ?? array();
         $realmId = is_array($realmMap) && !empty($realmMap) ? spp_resolve_realm_id($realmMap) : (int)($_GET['realm'] ?? 1);
         $availableRealms = array();
 
         if (is_array($realmMap) && !empty($realmMap)) {
-            $realmPdoInner = spp_get_pdo('realmd', $realmId);
-            $realmRows = $realmPdoInner->query("SELECT id, name FROM realmlist ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
-            if (is_array($realmRows)) {
-                foreach ($realmRows as $realmRow) {
-                    $candidateRealmId = (int)($realmRow['id'] ?? 0);
-                    if ($candidateRealmId <= 0 || !isset($realmMap[$candidateRealmId])) {
-                        continue;
-                    }
-
-                    $preferredName = !empty($realmRow['name']) ? $realmRow['name'] : '';
-                    if ($preferredName === '') {
-                        continue;
-                    }
-
-                    $availableRealms[$candidateRealmId] = array(
-                        'id' => $candidateRealmId,
-                        'name' => $preferredName,
-                    );
+            foreach ($realmMap as $candidateRealmId => $realmInfo) {
+                $candidateRealmId = (int)$candidateRealmId;
+                if ($candidateRealmId <= 0) {
+                    continue;
                 }
-            }
 
-            if (empty($availableRealms)) {
-                foreach ($realmMap as $candidateRealmId => $realmInfo) {
-                    $fallbackName = function_exists('spp_get_armory_realm_name')
-                        ? (spp_get_armory_realm_name((int)$candidateRealmId) ?? '')
-                        : '';
-                    if ($fallbackName === '') {
+                if (function_exists('spp_realm_capabilities')) {
+                    $candidateCapabilities = spp_realm_capabilities($realmMap, $candidateRealmId);
+                    $hasVisibleService = !empty($candidateCapabilities['services']['chars']['available'])
+                        || !empty($candidateCapabilities['services']['world']['available']);
+                    if (!$hasVisibleService) {
                         continue;
                     }
-                    $availableRealms[(int)$candidateRealmId] = array(
-                        'id' => (int)$candidateRealmId,
-                        'name' => $fallbackName,
-                    );
                 }
+
+                $preferredName = '';
+                if (function_exists('spp_get_armory_realm_name')) {
+                    $preferredName = (string)(spp_get_armory_realm_name($candidateRealmId) ?? '');
+                }
+                if ($preferredName === '' && !empty($realmInfo['name'])) {
+                    $preferredName = (string)$realmInfo['name'];
+                }
+                if ($preferredName === '') {
+                    $preferredName = 'Realm ' . $candidateRealmId;
+                }
+
+                $availableRealms[$candidateRealmId] = array(
+                    'id' => $candidateRealmId,
+                    'name' => $preferredName,
+                );
             }
         }
 

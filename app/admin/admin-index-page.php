@@ -81,16 +81,11 @@ if (!function_exists('spp_admin_load_index_page_state')) {
                             'href' => 'index.php?n=admin&sub=backup',
                             'description' => 'Build copy-account SQL exports for migration or restoration workflows.',
                         ),
-                        array(
-                            'label' => 'Character Transfer',
-                            'href' => 'index.php?n=admin&sub=chartransfer',
-                            'description' => 'Run schema-aware dry-run validation for Classic/TBC character transfer planning without executing live data moves.',
-                        ),
                     ),
                 ),
                 array(
                     'title' => 'Bot Controls',
-                    'description' => 'Automation-facing tools approved for the beta website surface.',
+                    'description' => 'Automation-facing tools approved for the beta website surface, with Windows-safe guidance for old Linux-first maintenance flows.',
                     'links' => array(
                         array(
                             'label' => 'Playerbots Control',
@@ -98,9 +93,24 @@ if (!function_exists('spp_admin_load_index_page_state')) {
                             'description' => 'Manage playerbot tools and jump into the dedicated playerbots admin surface.',
                         ),
                         array(
+                            'label' => 'Bot Maintenance',
+                            'href' => 'index.php?n=admin&sub=bots',
+                            'description' => 'Preview reset impact, review preserved data, and get manual helper guidance for bot maintenance workflows.',
+                        ),
+                        array(
                             'label' => 'Bot Events Pipeline',
                             'href' => 'index.php?n=admin&sub=botevents',
                             'description' => 'Scan, queue, and process generated forum-ready bot event activity when PHP CLI is available.',
+                        ),
+                        array(
+                            'label' => 'Bot Rotation Health',
+                            'href' => 'index.php?n=admin&sub=botrotation',
+                            'description' => 'Inspect rotation freshness, uptime, and stalled-cycle signals with platform-aware command guidance.',
+                        ),
+                        array(
+                            'label' => 'Population Director',
+                            'href' => 'index.php?n=admin&sub=populationdirector',
+                            'description' => 'Read the live target, online observations, and recommendations before using only temporary override controls.',
                         ),
                     ),
                 ),

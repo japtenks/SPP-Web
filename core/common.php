@@ -372,15 +372,20 @@ function check_for_symbols($string, $space_check = 0){
 }
 
 function get_banned($account_id,$returncont){
-    global $realmDbMap;
-    $realmId = function_exists('spp_current_realm_id')
-        ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-        : spp_resolve_realm_id($realmDbMap);
-    $pdo = spp_get_pdo('realmd', $realmId);
+    $pdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
+    $realmId = function_exists('spp_canonical_auth_realm_id') ? spp_canonical_auth_realm_id() : 1;
+    $capabilities = function_exists('spp_auth_realm_capabilities') ? spp_auth_realm_capabilities($realmId) : array();
+
+    if (empty($capabilities['supports_ban_lookup'])) {
+        return $returncont == "1" ? FALSE : '';
+    }
 
     $stmt = $pdo->prepare("SELECT ip FROM account_logons WHERE accountId = ? LIMIT 1");
     $stmt->execute([(int)$account_id]);
     $db_IP = $stmt->fetchColumn();
+    if ($db_IP === false || $db_IP === null || $db_IP === '') {
+        return $returncont == "1" ? FALSE : '';
+    }
 
     $stmt = $pdo->prepare("SELECT ip FROM `ip_banned` WHERE ip = ?");
     $stmt->execute([$db_IP]);
@@ -389,6 +394,7 @@ function get_banned($account_id,$returncont){
         if ($returncont == "1"){
             return FALSE;
         }
+        return '';
     }
     else{
         if ($returncont == "1"){
@@ -679,11 +685,7 @@ function default_paginate($num_pages, $cur_page, $link_to) {
 // ACCOUNT KEY FUNCTIONS //
 function matchAccountKey($id, $key) {
     clearOldAccountKeys();
-    global $realmDbMap;
-    $realmId = function_exists('spp_current_realm_id')
-        ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-        : spp_resolve_realm_id($realmDbMap);
-    $pdo = spp_get_pdo('realmd', $realmId);
+    $pdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
     $stmt = $pdo->prepare("SELECT count(*) FROM `website_account_keys` WHERE id = ?");
     $stmt->execute([(int)$id]);
     $count = $stmt->fetchColumn();
@@ -702,8 +704,6 @@ function matchAccountKey($id, $key) {
 }
 
 function clearOldAccountKeys() {
-    global $realmDbMap;
-
     $cookie_expire_time = (int)spp_config_generic('account_key_retain_length', 0);
     if(!$cookie_expire_time) {
         $cookie_expire_time = (60*60*24*365);   //default is 1 year
@@ -711,20 +711,13 @@ function clearOldAccountKeys() {
 
     $expire_time = time() - $cookie_expire_time;
 
-    $realmId = function_exists('spp_current_realm_id')
-        ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-        : spp_resolve_realm_id($realmDbMap);
-    $pdo = spp_get_pdo('realmd', $realmId);
+    $pdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
     $stmt = $pdo->prepare("DELETE FROM `website_account_keys` WHERE `assign_time` < ?");
     $stmt->execute([$expire_time]);
 }
 
 function addOrUpdateAccountKeys($id, $key) {
-    global $realmDbMap;
-    $realmId = function_exists('spp_current_realm_id')
-        ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-        : spp_resolve_realm_id($realmDbMap);
-    $pdo = spp_get_pdo('realmd', $realmId);
+    $pdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
     $current_time = time();
 
     $stmt = $pdo->prepare("SELECT count(*) FROM website_account_keys WHERE id = ?");
@@ -741,11 +734,7 @@ function addOrUpdateAccountKeys($id, $key) {
 }
 
 function removeAccountKeyForUser($id) {
-    global $realmDbMap;
-    $realmId = function_exists('spp_current_realm_id')
-        ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-        : spp_resolve_realm_id($realmDbMap);
-    $pdo = spp_get_pdo('realmd', $realmId);
+    $pdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
 
     $stmt = $pdo->prepare("SELECT count(*) FROM website_account_keys WHERE id = ?");
     $stmt->execute([(int)$id]);

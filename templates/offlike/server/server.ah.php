@@ -1,5 +1,7 @@
 <?php
 builddiv_start(1, 'Auction House', 1);
+$ahRealmCapabilities = $realmCapabilities ?? $realm_capabilities ?? array();
+$ahItemLinksEnabled = !empty($ahRealmCapabilities['supports_item_detail']);
 $ahSortState = array(
     'realmId' => $realmId ?? 1,
     'filter' => $filter ?? 'all',
@@ -103,18 +105,24 @@ $ahSortState = array(
         <div class="ah-table__row">
           <div class="ah-table__cell"><?php echo htmlspecialchars((string)$row['item_class_label']); ?></div>
           <div class="ah-table__cell">
-            <a
-              class="<?php echo htmlspecialchars((string)$row['quality_class']); ?> js-ah-tooltip"
-              href="<?php echo htmlspecialchars((string)$row['item_url']); ?>"
-              data-item-id="<?php echo (int)$row['tooltip_item_id']; ?>"
-              data-realm-id="<?php echo (int)$row['tooltip_realm_id']; ?>"
-            >
-              <?php echo htmlspecialchars((string)$row['itemname']); ?>
-            </a>
+            <?php if ($ahItemLinksEnabled && !empty($row['item_url'])): ?>
+              <a
+                class="<?php echo htmlspecialchars((string)$row['quality_class']); ?> js-ah-tooltip"
+                href="<?php echo htmlspecialchars((string)$row['item_url']); ?>"
+                data-item-id="<?php echo (int)$row['tooltip_item_id']; ?>"
+                data-realm-id="<?php echo (int)$row['tooltip_realm_id']; ?>"
+              >
+                <?php echo htmlspecialchars((string)$row['itemname']); ?>
+              </a>
+            <?php else: ?>
+              <span class="<?php echo htmlspecialchars((string)$row['quality_class']); ?>">
+                <?php echo htmlspecialchars((string)$row['itemname']); ?>
+              </span>
+            <?php endif; ?>
           </div>
           <div class="ah-table__cell"><?php echo (int)$row['quantity']; ?></div>
-          <div class="ah-table__cell"><?php echo (int)$row['required_level']; ?></div>
-          <div class="ah-table__cell"><?php echo (int)$row['item_level']; ?></div>
+          <div class="ah-table__cell"><?php echo !empty($row['required_level']) ? (int)$row['required_level'] : '-'; ?></div>
+          <div class="ah-table__cell"><?php echo !empty($row['item_level']) ? (int)$row['item_level'] : '-'; ?></div>
           <div class="ah-table__cell">
             <?php if (!empty($row['is_expired'])): ?>
               <span class="expired">Expired</span>

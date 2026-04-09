@@ -52,6 +52,9 @@ function spp_account_manage_change_email(array $ctx): void
                         $stmt->execute([$newemail, (int)$user['id']]);
                     }
                 }
+                if (function_exists('spp_auth_sync_canonical_account')) {
+                    spp_auth_sync_canonical_account((int)$user['id'], null);
+                }
                 output_message('notice', '<b>Email address updated successfully.</b><meta http-equiv=refresh content="2;url=index.php?n=account&sub=manage">');
             }
         } else {
@@ -102,6 +105,9 @@ function spp_account_manage_change_password(array $ctx): void
                 $stmt = $managePdo->prepare("INSERT INTO account_pass SET id=?, username=?, password=?, email=?");
                 $stmt->execute([(int)$user['id'], $user['username'], $newpass, $user['email']]);
             }
+        }
+        if (function_exists('spp_auth_sync_canonical_account')) {
+            spp_auth_sync_canonical_account((int)$user['id'], $newpass);
         }
 
         redirect('index.php?n=account&sub=manage&pwchange=1', 1);
@@ -294,14 +300,23 @@ function spp_account_manage_change_gameplay(array $ctx): void
     if ($_POST['switch_wow_type'] == 'wotlk') {
         $stmt = $managePdo->prepare("UPDATE `account` SET expansion='2' WHERE `id`=?");
         $stmt->execute([(int)$user['id']]);
+        if (function_exists('spp_auth_sync_canonical_account')) {
+            spp_auth_sync_canonical_account((int)$user['id'], null);
+        }
         redirect('index.php?n=account&sub=manage',1);
     } elseif ($_POST['switch_wow_type'] == 'tbc') {
         $stmt = $managePdo->prepare("UPDATE `account` SET expansion='1' WHERE `id`=?");
         $stmt->execute([(int)$user['id']]);
+        if (function_exists('spp_auth_sync_canonical_account')) {
+            spp_auth_sync_canonical_account((int)$user['id'], null);
+        }
         redirect('index.php?n=account&sub=manage',1);
     } elseif ($_POST['switch_wow_type'] == 'classic') {
         $stmt = $managePdo->prepare("UPDATE `account` SET expansion='0' WHERE `id`=?");
         $stmt->execute([(int)$user['id']]);
+        if (function_exists('spp_auth_sync_canonical_account')) {
+            spp_auth_sync_canonical_account((int)$user['id'], null);
+        }
         redirect('index.php?n=account&sub=manage',1);
     }
 }

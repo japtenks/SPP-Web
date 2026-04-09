@@ -1,6 +1,7 @@
 <?php
 require_once dirname(__DIR__, 3) . '/app/support/terminology.php';
 $publicTerms = spp_terminology_public();
+$statisticsRealmCapabilities = $realmCapabilities ?? $realm_capabilities ?? array();
 builddiv_start(1, 'Statistics', 1);
 ?>
 
@@ -144,6 +145,7 @@ builddiv_start(1, 'Statistics', 1);
             </div>
           </details>
 
+          <?php if (!empty($statisticsRealmCapabilities['supports_item_template'])): ?>
           <details class="stats-accordion collapse-card">
             <summary class="collapse-card__summary">
               <div class="stats-accordion-summary-copy collapse-card__copy">
@@ -170,6 +172,7 @@ builddiv_start(1, 'Statistics', 1);
               </div>
             </div>
           </details>
+          <?php endif; ?>
 
           <details class="stats-accordion collapse-card">
             <summary class="collapse-card__summary">
@@ -280,19 +283,19 @@ builddiv_start(1, 'Statistics', 1);
                 </div>
 
                 <div class="stats-mini-card">
-                <h4><?php echo htmlspecialchars($publicTerms['character_vs_human_split']); ?></h4>
-                  <p class="stats-mini-note">Pulled from auth accounts matching the <code>rndbot</code> naming pattern.</p>
+                <h4>Human Characters vs Bot Characters</h4>
+                  <p class="stats-mini-note">Character totals grouped by whether the owning account matches the <code>rndbot</code> naming pattern.</p>
                   <div class="stats-split-card">
                     <div class="stats-split-stat">
-                      <span><?php echo htmlspecialchars($publicTerms['humans']); ?></span>
+                      <span>Human Characters</span>
                       <strong><?php echo (int)$totalPlayers; ?><?php echo $accountSplitTotal > 0 ? ' (' . round(($totalPlayers / $accountSplitTotal) * 100, 1) . '%)' : ''; ?></strong>
                     </div>
                     <div class="stats-split-stat">
-                      <span><?php echo htmlspecialchars($publicTerms['characters']); ?></span>
+                      <span>Bot Characters</span>
                       <strong><?php echo (int)$totalBots; ?><?php echo $accountSplitTotal > 0 ? ' (' . round(($totalBots / $accountSplitTotal) * 100, 1) . '%)' : ''; ?></strong>
                     </div>
                     <div class="stats-split-stat">
-                      <span>Total tracked</span>
+                      <span>Total Characters</span>
                       <strong><?php echo (int)$accountSplitTotal; ?></strong>
                     </div>
                   </div>

@@ -3,6 +3,7 @@
 require_once dirname(__DIR__, 2) . '/app/support/db-schema.php';
 require_once dirname(__DIR__) . '/support/terminology.php';
 require_once dirname(__DIR__, 2) . '/templates/offlike/server/text_helpers.php';
+require_once __DIR__ . '/realm-capabilities.php';
 
 if (!function_exists('spp_stat_median')) {
     function spp_stat_median(array $values): int
@@ -103,6 +104,11 @@ if (!function_exists('spp_stat_scope_includes_character')) {
 if (!function_exists('spp_stat_world_db_name')) {
     function spp_stat_world_db_name(int $realmId): string
     {
+        $realmMap = $GLOBALS['realmDbMap'] ?? array();
+        if (is_array($realmMap) && !empty($realmMap[$realmId]['world'])) {
+            return (string)$realmMap[$realmId]['world'];
+        }
+
         if ($realmId === 2) {
             return 'tbcmangos';
         }
@@ -111,6 +117,25 @@ if (!function_exists('spp_stat_world_db_name')) {
         }
 
         return 'classicmangos';
+    }
+}
+
+if (!function_exists('spp_stat_expansion_key')) {
+    function spp_stat_expansion_key(int $realmId, array $realmMap, array $realmCapabilities = array()): string
+    {
+        $expansionKey = strtolower(trim((string)($realmCapabilities['expansion_key'] ?? '')));
+        if ($expansionKey !== '') {
+            return $expansionKey;
+        }
+
+        if (function_exists('spp_realm_capability_guess_expansion_key')) {
+            $guessedKey = strtolower(trim((string)spp_realm_capability_guess_expansion_key($realmMap, $realmId)));
+            if ($guessedKey !== '') {
+                return $guessedKey;
+            }
+        }
+
+        return 'classic';
     }
 }
 
@@ -138,6 +163,8 @@ if (!function_exists('spp_stat_load_page_state')) {
             $realmId = 1;
         }
 
+        $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);
+
         $statScope = strtolower(trim((string)($get['scope'] ?? 'all')));
         if (!in_array($statScope, array('all', 'human_guilds', 'humans'), true)) {
             $statScope = 'all';
@@ -150,11 +177,10 @@ if (!function_exists('spp_stat_load_page_state')) {
             'humans' => $publicTerms['humans_only'],
         );
 
-        $availableClassOrder = array(1, 2, 3, 4, 5, 8, 9, 11);
-        if ($realmId >= 2) {
-            $availableClassOrder[] = 7;
-        }
-        if ($realmId >= 3) {
+        $expansionKey = spp_stat_expansion_key($realmId, $realmMap, $realmCapabilities);
+
+        $availableClassOrder = array(1, 2, 3, 4, 5, 7, 8, 9, 11);
+        if ($expansionKey === 'wotlk') {
             $availableClassOrder[] = 6;
         }
 
@@ -206,6 +232,7 @@ if (!function_exists('spp_stat_load_page_state')) {
             'pathway_info' => array(
                 array('title' => 'Statistics', 'link' => ''),
             ),
+            'realmCapabilities' => $realmCapabilities,
         );
 
         $classMeta = spp_class_palette();
@@ -229,6 +256,8 @@ if (!function_exists('spp_stat_load_page_state')) {
 
         try {
             $statCharPdo = spp_get_pdo('chars', $realmId);
+            $guildMemberGuildIdColumn = spp_realm_capability_pick_column($statCharPdo, 'guild_member', array('guildid', 'guild_id'), 'guildid');
+            $playtimeColumn = spp_realm_capability_pick_column($statCharPdo, 'characters', array('totaltime', 'played_time_total'), 'totaltime');
 
             $botAccountRows = $statCharPdo->query("SELECT `id` FROM `{$realmdDbName}`.`account` WHERE LOWER(`username`) LIKE 'rndbot%'");
             while ($botAccountRow = $botAccountRows->fetch(PDO::FETCH_NUM)) {
@@ -239,19 +268,19 @@ if (!function_exists('spp_stat_load_page_state')) {
                 if (!empty($botAccountIds)) {
                     $botAccountIdSql = implode(',', array_keys($botAccountIds));
                     $guildRows = $statCharPdo->query("
-                        SELECT DISTINCT gm.guildid
+                        SELECT DISTINCT gm.`{$guildMemberGuildIdColumn}`
                         FROM guild_member gm
                         INNER JOIN characters c ON c.guid = gm.guid
-                        WHERE gm.guildid > 0
+                        WHERE gm.`{$guildMemberGuildIdColumn}` > 0
                           AND NOT (c.level = 1 AND c.xp = 0)
                           AND c.account NOT IN ({$botAccountIdSql})
                     ")->fetchAll(PDO::FETCH_COLUMN);
                 } else {
                     $guildRows = $statCharPdo->query("
-                        SELECT DISTINCT gm.guildid
+                        SELECT DISTINCT gm.`{$guildMemberGuildIdColumn}`
                         FROM guild_member gm
                         INNER JOIN characters c ON c.guid = gm.guid
-                        WHERE gm.guildid > 0
+                        WHERE gm.`{$guildMemberGuildIdColumn}` > 0
                           AND NOT (c.level = 1 AND c.xp = 0)
                     ")->fetchAll(PDO::FETCH_COLUMN);
                 }
@@ -265,14 +294,16 @@ if (!function_exists('spp_stat_load_page_state')) {
             $honorableKillsSql = '0';
             if (isset($characterColumns['stored_honorable_kills'])) {
                 $honorableKillsSql = 'COALESCE(c.stored_honorable_kills, 0)';
+            } elseif (isset($characterColumns['honor_stored_hk'])) {
+                $honorableKillsSql = 'COALESCE(c.honor_stored_hk, 0)';
             } elseif (isset($characterColumns['totalKills'])) {
                 $honorableKillsSql = 'COALESCE(c.totalKills, 0)';
             }
 
             $characterRows = $statCharPdo->query("
-                SELECT c.race, c.class, c.level, c.totaltime, c.account, c.online,
+                SELECT c.race, c.class, c.level, c.`{$playtimeColumn}` AS totaltime, c.account, c.online,
                        {$honorableKillsSql} AS honorable_kills,
-                       gm.guildid
+                       gm.`{$guildMemberGuildIdColumn}` AS guildid
                 FROM characters c
                 LEFT JOIN guild_member gm ON gm.guid = c.guid
                 WHERE NOT (c.level = 1 AND c.xp = 0)
@@ -362,7 +393,7 @@ if (!function_exists('spp_stat_load_page_state')) {
         try {
             if ($statCharPdo instanceof PDO && spp_stat_table_exists($statCharPdo, 'character_queststatus')) {
                 $questRows = $statCharPdo->query("
-                    SELECT c.class, c.account, gm.guildid, COUNT(*) AS completed_quests
+                    SELECT c.class, c.account, gm.`{$guildMemberGuildIdColumn}` AS guildid, COUNT(*) AS completed_quests
                     FROM character_queststatus qs
                     INNER JOIN characters c ON c.guid = qs.guid
                     LEFT JOIN guild_member gm ON gm.guid = c.guid
@@ -370,7 +401,7 @@ if (!function_exists('spp_stat_load_page_state')) {
                       AND c.class IS NOT NULL
                       AND c.level > 0
                       AND qs.rewarded <> 0
-                    GROUP BY qs.guid, c.class, c.account, gm.guildid
+                    GROUP BY qs.guid, c.class, c.account, gm.`{$guildMemberGuildIdColumn}`
                 ")->fetchAll(PDO::FETCH_ASSOC);
 
                 foreach ($questRows as $row) {
@@ -399,23 +430,25 @@ if (!function_exists('spp_stat_load_page_state')) {
         }
 
         try {
-            $itemLevelRows = $statCharPdo instanceof PDO ? $statCharPdo->query("
-                SELECT c.class, c.account, gm.guildid, ROUND(AVG(it.ItemLevel), 1) AS avg_item_level
+            $worldPdo = $statCharPdo instanceof PDO ? spp_get_pdo('world', $realmId) : null;
+            $itemLevelColumn = spp_realm_capability_pick_column($worldPdo, 'item_template', array('ItemLevel', 'item_level'), 'ItemLevel');
+            $inventoryItemColumn = spp_realm_capability_pick_column($statCharPdo, 'character_inventory', array('item_template', 'item_id'), 'item_template');
+            $itemLevelRows = ($statCharPdo instanceof PDO && !empty($realmCapabilities['supports_item_template'])) ? $statCharPdo->query("
+                SELECT c.class, c.account, gm.`{$guildMemberGuildIdColumn}` AS guildid, ROUND(AVG(it.`{$itemLevelColumn}`), 1) AS avg_item_level
                 FROM characters c
                 LEFT JOIN guild_member gm ON gm.guid = c.guid
                 INNER JOIN character_inventory ci ON ci.guid = c.guid
-                INNER JOIN " . spp_stat_world_db_name($realmId) . ".item_template it ON it.entry = ci.item_template
+                INNER JOIN " . spp_stat_world_db_name($realmId) . ".item_template it ON it.entry = ci.`{$inventoryItemColumn}`
                 WHERE NOT (c.level = 1 AND c.xp = 0)
                   AND c.class IS NOT NULL
                   AND c.level > 0
                   AND ci.bag = 0
                   AND ci.slot BETWEEN 0 AND 18
                   AND ci.slot NOT IN (3, 18)
-                  AND ci.item_template > 0
-                  AND it.ItemLevel > 0
-                GROUP BY c.guid, c.class, c.account, gm.guildid
+                  AND ci.`{$inventoryItemColumn}` > 0
+                  AND it.`{$itemLevelColumn}` > 0
+                GROUP BY c.guid, c.class, c.account, gm.`{$guildMemberGuildIdColumn}`
             ")->fetchAll(PDO::FETCH_ASSOC) : array();
-
             foreach ($itemLevelRows as $row) {
                 $classId = (int)($row['class'] ?? 0);
                 $accountId = (int)($row['account'] ?? 0);
@@ -510,7 +543,7 @@ if (!function_exists('spp_stat_load_page_state')) {
 
         $allianceMap = array(1 => 'human', 3 => 'dwarf', 4 => 'nightelf', 7 => 'gnome');
         $hordeMap = array(2 => 'orc', 5 => 'undead', 6 => 'tauren', 8 => 'troll');
-        if ($realmId >= 2) {
+        if (in_array($expansionKey, array('tbc', 'wotlk'), true)) {
             $allianceMap[11] = 'draenei';
             $hordeMap[10] = 'be';
         }

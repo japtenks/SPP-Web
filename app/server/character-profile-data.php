@@ -15,6 +15,7 @@ if (!function_exists('spp_character_load_profile_state')) {
         $gearProgression = (array)($args['gear_progression'] ?? []);
         $forumSocial = (array)($args['forum_social'] ?? []);
         $botSignatureText = (string)($args['bot_signature_text'] ?? '');
+        $botPlayHabitTraits = (array)($args['bot_play_habit_traits'] ?? array());
         $characterIsBot = (bool)($args['character_is_bot'] ?? false);
         $canManageBotPersonality = (bool)($args['can_manage_bot_personality'] ?? false);
         $characterPersonalityCsrfToken = (string)($args['character_personality_csrf_token'] ?? '');
@@ -26,14 +27,46 @@ if (!function_exists('spp_character_load_profile_state')) {
             $armoryPdo = spp_get_pdo('armory', $realmId);
 
             $characterColumns = spp_character_columns($charsPdo, 'characters');
-            $selectColumns = array('guid', 'name', 'account', 'race', 'class', 'gender', 'level', 'zone', 'map', 'online', 'totaltime', 'leveltime');
+            $guildMemberColumns = spp_character_columns($charsPdo, 'guild_member');
+            $guildColumns = spp_character_columns($charsPdo, 'guild');
+            $playtimeColumn = spp_character_resolve_column($charsPdo, 'characters', array('totaltime', 'played_time_total'));
+            $leveltimeColumn = spp_character_resolve_column($charsPdo, 'characters', array('leveltime', 'played_time_level'));
+            $guildMemberGuildIdColumn = spp_character_resolve_column($charsPdo, 'guild_member', array('guildid', 'guild_id'));
+            $guildGuildIdColumn = spp_character_resolve_column($charsPdo, 'guild', array('guildid', 'guild_id'));
+
+            $selectParts = array(
+                'c.`guid`',
+                'c.`name`',
+                'c.`account`',
+                'c.`race`',
+                'c.`class`',
+                'c.`gender`',
+                'c.`level`',
+                'c.`zone`',
+                'c.`map`',
+                'c.`online`',
+                ($playtimeColumn !== null ? 'c.`' . $playtimeColumn . '`' : '0') . ' AS `totaltime`',
+                ($leveltimeColumn !== null ? 'c.`' . $leveltimeColumn . '`' : '0') . ' AS `leveltime`',
+            );
             foreach (array('health', 'power1', 'power2', 'stored_honorable_kills', 'stored_honor_rating', 'honor_highest_rank', 'totalKills', 'totalHonorPoints') as $columnName) {
                 if (isset($characterColumns[$columnName])) {
-                    $selectColumns[] = $columnName;
+                    $selectParts[] = 'c.`' . $columnName . '`';
                 }
             }
+            if ($guildMemberGuildIdColumn !== null && isset($guildMemberColumns[$guildMemberGuildIdColumn])) {
+                $selectParts[] = 'gm.`' . $guildMemberGuildIdColumn . '` AS `guildid`';
+            } else {
+                $selectParts[] = '0 AS `guildid`';
+            }
+            $selectParts[] = 'g.`name` AS `guild_name`';
 
-            $sql = 'SELECT c.`' . implode('`, c.`', $selectColumns) . '`, gm.`guildid`, g.`name` AS `guild_name` FROM `characters` c LEFT JOIN `guild_member` gm ON gm.`guid` = c.`guid` LEFT JOIN `guild` g ON g.`guildid` = gm.`guildid`';
+            $sql = 'SELECT ' . implode(', ', $selectParts) . ' FROM `characters` c';
+            $sql .= ' LEFT JOIN `guild_member` gm ON gm.`guid` = c.`guid`';
+            if ($guildMemberGuildIdColumn !== null && $guildGuildIdColumn !== null && isset($guildColumns[$guildGuildIdColumn])) {
+                $sql .= ' LEFT JOIN `guild` g ON g.`' . $guildGuildIdColumn . '` = gm.`' . $guildMemberGuildIdColumn . '`';
+            } else {
+                $sql .= ' LEFT JOIN `guild` g ON 1 = 0';
+            }
             $stmt = $charsPdo->prepare($sql . ($characterGuid > 0 ? ' WHERE c.`guid` = ?' : ' WHERE c.`name` = ?') . ' LIMIT 1');
             $stmt->execute(array($characterGuid > 0 ? $characterGuid : $characterName));
             $character = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -117,6 +150,7 @@ if (!function_exists('spp_character_load_profile_state')) {
                     $forumSocial['identity_id'] = $identityId;
                     if ($identityId > 0) {
                         $forumSocial['signature'] = (string)spp_get_identity_signature($identityId);
+                        $botPlayHabitTraits = spp_get_identity_play_habit_traits($identityId, $identity ?: array());
                         if ($forumSocial['signature'] !== '') {
                             $normalizedSignature = str_replace(
                                 array('<br />', '<br/>', '<br>'),
@@ -247,6 +281,7 @@ if (!function_exists('spp_character_load_profile_state')) {
                 'gear_progression' => $gearProgression,
                 'forum_social' => $forumSocial,
                 'bot_signature_text' => $botSignatureText,
+                'bot_play_habit_traits' => $botPlayHabitTraits,
                 'character_is_bot' => $characterIsBot,
                 'can_manage_bot_personality' => $canManageBotPersonality,
                 'character_personality_csrf_token' => $characterPersonalityCsrfToken,
@@ -266,6 +301,7 @@ if (!function_exists('spp_character_load_profile_state')) {
                 'gear_progression' => $gearProgression,
                 'forum_social' => $forumSocial,
                 'bot_signature_text' => $botSignatureText,
+                'bot_play_habit_traits' => $botPlayHabitTraits,
                 'character_is_bot' => $characterIsBot,
                 'can_manage_bot_personality' => $canManageBotPersonality,
                 'character_personality_csrf_token' => $characterPersonalityCsrfToken,

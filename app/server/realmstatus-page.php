@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/realm-capabilities.php';
+
 if (!function_exists('spp_realmstatus_parse_time')) {
     function spp_realmstatus_parse_time($seconds): array
     {
@@ -80,9 +82,9 @@ if (!function_exists('spp_realmstatus_cache_ttl_minutes')) {
 }
 
 if (!function_exists('spp_realmstatus_cache_key')) {
-    function spp_realmstatus_cache_key(int $selectedRealmId, int $sourceRealmId, bool $debugMode, bool $useLocalIpPortTest, array $targetRealmIds = array()): string
+    function spp_realmstatus_cache_key(int $selectedRealmId, bool $debugMode, bool $useLocalIpPortTest, array $targetRealmIds = array()): string
     {
-        return 'realmstatus:' . $selectedRealmId . ':source:' . $sourceRealmId . ':ids:' . implode('-', array_map('intval', $targetRealmIds)) . ':debug:' . (int)$debugMode . ':local:' . (int)$useLocalIpPortTest;
+        return 'realmstatus:' . $selectedRealmId . ':ids:' . implode('-', array_map('intval', $targetRealmIds)) . ':debug:' . (int)$debugMode . ':local:' . (int)$useLocalIpPortTest;
     }
 }
 
@@ -531,6 +533,10 @@ if (!function_exists('spp_realmstatus_fetch_progression_states')) {
             'Naxx25' => 'uncleared', 'Ulduar' => 'uncleared', 'ICC' => 'uncleared',
         );
 
+        if (!spp_realm_capability_table_exists($charPdo, 'item_instance') || !spp_db_column_exists($charPdo, 'item_instance', 'itemEntry')) {
+            return $state;
+        }
+
         try {
             if ($exp === 'classic') {
                 $counts = $charPdo->query("\n                SELECT\n                  SUM(itemEntry IN (16866,16854,16867,16868,16865,16863,16861,16862)) AS mc_count,\n                  SUM(itemEntry IN (16963,16964,16965,16966,16967,16968,16969,16970)) AS ony_count,\n                  SUM(itemEntry IN (16911,16924,16932,16940,16945,16953,16961,16968)) AS bwl_count,\n                  SUM(itemEntry IN (19802,19854,19822,19862,19848,19910)) AS zg_count,\n                  SUM(itemEntry IN (21329,21330,21331,21332,21333,21220)) AS aq_count,\n                  SUM(itemEntry IN (22416,22417,22418,22419,22420,22421,22422,22423)) AS naxx_count\n                FROM `item_instance`\n            ")->fetch(PDO::FETCH_ASSOC);
@@ -813,8 +819,7 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
         $useLocalIpPortTest = spp_config_generic_bool('use_local_ip_port_test', false);
         $selectedRealmId = !empty($realmMap) ? (int)spp_resolve_realm_id($realmMap) : 1;
         $targetRealmIds = spp_realmstatus_target_realm_ids($realmMap, $get);
-        $sourceRealmId = !empty($targetRealmIds) ? (int)$targetRealmIds[0] : 1;
-        $cacheKey = spp_realmstatus_cache_key($selectedRealmId, $sourceRealmId, $debugMode, $useLocalIpPortTest, $targetRealmIds);
+        $cacheKey = spp_realmstatus_cache_key($selectedRealmId, $debugMode, $useLocalIpPortTest, $targetRealmIds);
         if (!$skipCache) {
             $cachedState = spp_realmstatus_cache_read($cacheKey);
             if (is_array($cachedState)) {
@@ -840,6 +845,7 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
             $exp = spp_realmstatus_expansion_for_build($buildVersion);
             $realmHost = trim((string)($realm['address'] ?? ''));
             $realmPort = (int)($realm['port'] ?? 0);
+            $realmCapabilities = spp_realm_capabilities($realmMap, $configRealmId);
 
             $charCfg = null;
             $worldCfg = null;
@@ -915,7 +921,11 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
                 'has_char_data' => $hasCharData,
             );
 
-            $item['state'] = $charPdo instanceof PDO ? spp_realmstatus_fetch_progression_states($charPdo, $exp) : spp_realmstatus_fetch_progression_states($realmPdo, 'none');
+            if ($charPdo instanceof PDO && !empty($realmCapabilities['supports_progression'])) {
+                $item['state'] = spp_realmstatus_fetch_progression_states($charPdo, $exp);
+            } else {
+                $item['state'] = spp_realmstatus_fetch_progression_states($realmPdo, 'none');
+            }
 
             if ($charPdo instanceof PDO) {
                 $characterStats = spp_realmstatus_fetch_character_stats($charPdo, $worldDbName);
@@ -942,7 +952,6 @@ if (!function_exists('spp_realmstatus_load_page_state')) {
 
         $pageState = array(
             'selectedRealmId' => $selectedRealmId,
-            'realmstatusSourceRealmId' => $sourceRealmId,
             'realmstatusTargetRealmIds' => $targetRealmIds,
             'realmstatusDebug' => $debugMode,
             'realmstatusItems' => $items,

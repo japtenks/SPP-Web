@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/realm-capabilities.php';
+
 if (!function_exists('spp_guilds_sort_compare')) {
     function spp_guilds_sort_compare(array $left, array $right, $sortBy, $sortDir): int
     {
@@ -101,7 +103,7 @@ if (!function_exists('spp_guilds_build_sort_urls')) {
 }
 
 if (!function_exists('spp_guilds_prepare_rows')) {
-    function spp_guilds_prepare_rows(array $guilds, int $realmId, array $allianceRaces, array $classNames): array
+    function spp_guilds_prepare_rows(array $guilds, int $realmId, array $allianceRaces, array $classNames, bool $supportsCharacterDetail): array
     {
         $rows = array();
 
@@ -115,7 +117,9 @@ if (!function_exists('spp_guilds_prepare_rows')) {
             $guild['leader_class_slug'] = $leaderClassSlug;
             $guild['faction_icon_url'] = spp_modern_faction_logo_url($factionSlug);
             $guild['guild_url'] = 'index.php?n=server&sub=guild&guildid=' . (int)($guild['guildid'] ?? 0) . '&realm=' . $realmId;
-            $guild['leader_url'] = 'index.php?n=server&sub=character&realm=' . $realmId . '&character=' . urlencode((string)($guild['leader_name'] ?? ''));
+            $guild['leader_url'] = $supportsCharacterDetail
+                ? 'index.php?n=server&sub=character&realm=' . $realmId . '&character=' . urlencode((string)($guild['leader_name'] ?? ''))
+                : '';
             $rows[] = $guild;
         }
 
@@ -136,7 +140,9 @@ if (!function_exists('spp_guilds_load_page_state')) {
             die('Realm DB map not loaded');
         }
 
-        $realmId = spp_resolve_realm_id($realmMap);
+        $requestedRealmId = isset($get['realm']) ? (int)$get['realm'] : 0;
+        $realmId = spp_resolve_realm_id($realmMap, $requestedRealmId > 0 ? $requestedRealmId : null);
+        $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);
         $realmWorldDB = $realmMap[$realmId]['world'];
         $classNames = array(
             1 => 'Warrior', 2 => 'Paladin', 3 => 'Hunter', 4 => 'Rogue', 5 => 'Priest',
@@ -168,6 +174,12 @@ if (!function_exists('spp_guilds_load_page_state')) {
         }
 
         $charPdo = spp_get_pdo('chars', $realmId);
+        $worldPdo = spp_get_pdo('world', $realmId);
+        $guildIdColumn = spp_realm_capability_pick_column($charPdo, 'guild', array('guildid', 'guild_id'), 'guildid');
+        $guildMemberGuildIdColumn = spp_realm_capability_pick_column($charPdo, 'guild_member', array('guildid', 'guild_id'), $guildIdColumn);
+        $leaderGuidColumn = spp_realm_capability_pick_column($charPdo, 'guild', array('leaderguid', 'leader_guid'), 'leaderguid');
+        $itemLevelColumn = spp_realm_capability_pick_column($worldPdo, 'item_template', array('ItemLevel', 'item_level'), 'ItemLevel');
+        $inventoryItemColumn = spp_realm_capability_pick_column($charPdo, 'character_inventory', array('item_template', 'item_id'), 'item_template');
 
         if ($serverMethod === 'POST' && isset($post['guilds_form_action']) && $post['guilds_form_action'] === 'save_gm_motds') {
             spp_require_csrf('guilds_page');
@@ -178,8 +190,8 @@ if (!function_exists('spp_guilds_load_page_state')) {
                 $updatedGuilds = 0;
                 $soapGuilds = 0;
                 $sqlFallbackGuilds = 0;
-                $updateStmt = $charPdo->prepare('UPDATE guild SET motd=? WHERE guildid=?');
-                $guildNameStmt = $charPdo->prepare('SELECT name FROM guild WHERE guildid = ? LIMIT 1');
+                $updateStmt = $charPdo->prepare('UPDATE guild SET motd=? WHERE `' . $guildIdColumn . '`=?');
+                $guildNameStmt = $charPdo->prepare('SELECT name FROM guild WHERE `' . $guildIdColumn . '` = ? LIMIT 1');
 
                 foreach ($submittedMotds as $guildId => $motd) {
                     $guildId = (int)$guildId;
@@ -234,7 +246,7 @@ if (!function_exists('spp_guilds_load_page_state')) {
 
         $guilds = $charPdo->query("
           SELECT
-            g.guildid,
+            g.`{$guildIdColumn}` AS guildid,
             g.name,
             g.motd,
             leader.guid AS leader_guid,
@@ -246,15 +258,15 @@ if (!function_exists('spp_guilds_load_page_state')) {
             COALESCE(AVG(c.level), 0) AS avg_level,
             COALESCE(MAX(c.level), 0) AS max_level
           FROM guild g
-          LEFT JOIN guild_member gm ON g.guildid = gm.guildid
+          LEFT JOIN guild_member gm ON g.`{$guildIdColumn}` = gm.`{$guildMemberGuildIdColumn}`
           LEFT JOIN characters c ON gm.guid = c.guid
-          LEFT JOIN characters leader ON g.leaderguid = leader.guid
-          GROUP BY g.guildid, g.name, g.motd, leader.guid, leader.name, leader.race, leader.class, leader.account
+          LEFT JOIN characters leader ON g.`{$leaderGuidColumn}` = leader.guid
+          GROUP BY g.`{$guildIdColumn}`, g.name, g.motd, leader.guid, leader.name, leader.race, leader.class, leader.account
           ORDER BY member_count DESC, g.name ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $guildGearStats = array();
-        if (!$showGmGuilds) {
+        if (!$showGmGuilds && !empty($realmCapabilities['supports_item_template'])) {
             $guildIds = array_values(array_filter(array_map(static function ($g) {
                 return (int)($g['guildid'] ?? 0);
             }, is_array($guilds) ? $guilds : array())));
@@ -264,19 +276,19 @@ if (!function_exists('spp_guilds_load_page_state')) {
                 try {
                     $gearRows = $charPdo->query("
                       SELECT
-                        gm.guildid,
+                        gm.`{$guildMemberGuildIdColumn}` AS guildid,
                         c.guid,
-                        ROUND(AVG(it.ItemLevel), 1) AS avg_item_level
+                        ROUND(AVG(it.`{$itemLevelColumn}`), 1) AS avg_item_level
                       FROM guild_member gm
                       INNER JOIN characters c ON c.guid = gm.guid
                       INNER JOIN character_inventory ci ON ci.guid = c.guid
-                      INNER JOIN {$realmWorldDB}.item_template it ON it.entry = ci.item_template
-                      WHERE gm.guildid IN ({$guildIdSql})
+                      INNER JOIN {$realmWorldDB}.item_template it ON it.entry = ci.`{$inventoryItemColumn}`
+                      WHERE gm.`{$guildMemberGuildIdColumn}` IN ({$guildIdSql})
                         AND ci.bag = 0
                         AND ci.slot BETWEEN 0 AND 18
                         AND ci.slot NOT IN (3, 18)
-                        AND ci.item_template > 0
-                      GROUP BY gm.guildid, c.guid
+                        AND ci.`{$inventoryItemColumn}` > 0
+                      GROUP BY gm.`{$guildMemberGuildIdColumn}`, c.guid
                     ")->fetchAll(PDO::FETCH_ASSOC);
 
                     if (is_array($gearRows)) {
@@ -356,7 +368,7 @@ if (!function_exists('spp_guilds_load_page_state')) {
             $p = 1;
         }
         $offset = ($p - 1) * $itemsPerPage;
-        $guildsPage = spp_guilds_prepare_rows(array_slice($guilds, $offset, $itemsPerPage), $realmId, $allianceRaces, $classNames);
+        $guildsPage = spp_guilds_prepare_rows(array_slice($guilds, $offset, $itemsPerPage), $realmId, $allianceRaces, $classNames, !empty($realmCapabilities['supports_character_detail']));
         $resultStart = $count > 0 ? $offset + 1 : 0;
         $resultEnd = min($offset + $itemsPerPage, $count);
         $baseUrl = 'index.php?n=server&sub=guilds&realm=' . (int)$realmId . '&per_page=' . (int)$itemsPerPage;
@@ -377,6 +389,7 @@ if (!function_exists('spp_guilds_load_page_state')) {
 
         return array(
             'realm_id' => $realmId,
+            'realm_capabilities' => $realmCapabilities,
             'realm_world_db' => $realmWorldDB,
             'class_names' => $classNames,
             'alliance_races' => $allianceRaces,
@@ -399,6 +412,7 @@ if (!function_exists('spp_guilds_load_page_state')) {
             'base_url' => $baseUrl,
             'pagination_route_url' => $paginationRouteUrl,
             'realmId' => $realmId,
+            'realmCapabilities' => $realmCapabilities,
             'realmWorldDb' => $realmWorldDB,
             'classNames' => $classNames,
             'allianceRaces' => $allianceRaces,

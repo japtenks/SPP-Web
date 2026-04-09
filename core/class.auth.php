@@ -9,11 +9,9 @@ class AUTH {
 
 private function initializeAuth()
 {
-    $realmDbMap = $GLOBALS['realmDbMap'] ?? array();
-    $activeRealmId = function_exists('spp_current_realm_id')
-        ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
-        : 1;
-    $this->DB = spp_get_pdo('realmd', $activeRealmId);
+    $this->DB = function_exists('spp_canonical_auth_pdo')
+        ? spp_canonical_auth_pdo()
+        : spp_get_pdo('realmd', 1);
 
     $this->check();
     $this->user['ip'] = $_SERVER['REMOTE_ADDR'];
@@ -128,6 +126,9 @@ function load_characters_for_user() {
     $GLOBALS['account_characters'] = [];
     $GLOBALS['characters'] = [];
     $GLOBALS['has_characters'] = false;
+    $managedAccountMap = function_exists('spp_auth_resolve_managed_account_map')
+        ? spp_auth_resolve_managed_account_map((int)$this->user['id'], (string)($this->user['username'] ?? ''))
+        : array();
 
     // Build PDO options once
     $pdoOptions = [
@@ -174,9 +175,13 @@ function load_characters_for_user() {
         }
 
         try {
+            $lookupAccountId = (int)($managedAccountMap[(int)$id] ?? $this->user['id']);
+            if ($lookupAccountId <= 0) {
+                continue;
+            }
             $charPdo = new PDO("{$dsnBase};dbname={$charsDbName}", $db['user'], $db['pass'], $pdoOptions);
             $stmt = $charPdo->prepare("SELECT guid, name, race, class, level FROM characters WHERE account=? ORDER BY level DESC");
-            $stmt->execute([(int)$this->user['id']]);
+            $stmt->execute([$lookupAccountId]);
             $chars = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             if (!is_array($chars) || empty($chars)) {
@@ -194,7 +199,8 @@ function load_characters_for_user() {
             foreach ($chars as &$char) {
                 $char['realm_id']   = $id;
                 $char['realm_name'] = $realmName;
-                $char['account']    = (int)$this->user['id'];
+                $char['account']    = $lookupAccountId;
+                $char['website_account_id'] = (int)$this->user['id'];
             }
             unset($char);
 
@@ -293,6 +299,9 @@ function load_characters_for_user() {
     } else {
         setcookie($cookie_name, $uservars_hash, $cookie_delay, '/');
     }
+    if (function_exists('spp_auth_sync_canonical_account')) {
+        spp_auth_sync_canonical_account((int)$res['id'], (string)$params['password']);
+    }
     spp_login_throttle_clear($username);
 
     if ((int)spp_config_generic('onlinelist_on', 0)) {
@@ -346,8 +355,11 @@ function load_characters_for_user() {
     {
         $success = 1;
         $realmDbMap = $GLOBALS['realmDbMap'] ?? array();
-        $activeRealmId = function_exists('spp_current_realm_id')
+        $selectedRealmId = function_exists('spp_current_realm_id')
             ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
+            : 1;
+        $activeRealmId = function_exists('spp_canonical_auth_realm_id')
+            ? spp_canonical_auth_realm_id()
             : 1;
         if(empty($params)) return false;
         if(empty($params['username'])){
@@ -375,7 +387,7 @@ function load_characters_for_user() {
         $params['s'] = $salt;
         $params['v'] = $verifier;
         if (function_exists('spp_db_column_exists') && spp_db_column_exists($this->DB, 'account', 'current_realm')) {
-            $params['current_realm'] = max(0, (int)$activeRealmId);
+            $params['current_realm'] = max(0, (int)$selectedRealmId);
         }
 
         if ($params['expansion'] == '32')
@@ -407,6 +419,9 @@ function load_characters_for_user() {
                 }
                 if (function_exists('spp_ensure_account_identity')) {
                     spp_ensure_account_identity(max(1, (int)$activeRealmId), $acc_id, $params['username']);
+                }
+                if (function_exists('spp_auth_sync_canonical_account')) {
+                    spp_auth_sync_canonical_account($acc_id, $password);
                 }
                 return true;
             } else {

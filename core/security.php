@@ -196,7 +196,7 @@ if (!function_exists('spp_login_throttle_pdo')) {
         $resolved = true;
 
         try {
-            $pdo = spp_get_pdo('realmd', 1);
+            $pdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
         } catch (Throwable $e) {
             error_log('[security.login_throttle] PDO bootstrap failed: ' . $e->getMessage());
             $pdo = null;

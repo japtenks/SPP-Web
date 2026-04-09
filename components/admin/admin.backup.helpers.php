@@ -95,7 +95,7 @@ function spp_admin_backup_route_help(?array $routeOption): string
     }
 
     if (!empty($routeOption['target_is_vmangos']) && empty($routeOption['source_is_vmangos'])) {
-        return 'For CMaNGOS -> vMaNGOS, Xfer builds one manual transform-export package per job. Account and guild resolve into reviewable realmd.sql plus chars.sql, with a manifest and mirrored converter helpers for the operator workflow. Individual character export is intentionally not offered on this route.';
+        return 'For CMaNGOS -> vMaNGOS, Xfer builds one manual transform-export package per job. Account and guild resolve into reviewable package.sql only. Each owning source account, including each bot account, maps to its own target account unless the target already has the same username. Individual character export is intentionally not offered on this route.';
     }
 
     if (!empty($routeOption['target_is_vmangos']) || !empty($routeOption['source_is_vmangos'])) {
@@ -184,6 +184,59 @@ function spp_admin_backup_first_array_key(array $items, string $fallback = ''): 
     }
 
     return $fallback;
+}
+
+function spp_admin_backup_current_admin_user(): array
+{
+    $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+    $activeRealmId = function_exists('spp_current_realm_id')
+        ? spp_current_realm_id($realmDbMap)
+        : 1;
+    $siteCookieName = function_exists('spp_config_generic')
+        ? (string)spp_config_generic('site_cookie', 'sppArmory')
+        : 'sppArmory';
+    $rawCookie = (string)($_COOKIE[$siteCookieName] ?? '');
+
+    if ($rawCookie === '' || !function_exists('spp_parse_account_cookie_payload')) {
+        return array();
+    }
+
+    $cookie = (array)spp_parse_account_cookie_payload($rawCookie);
+    $userId = (int)($cookie['user_id'] ?? 0);
+    $accountKey = (string)($cookie['account_key'] ?? '');
+    if ($userId <= 0 || $accountKey === '' || !function_exists('matchAccountKey') || !matchAccountKey($userId, $accountKey)) {
+        return array();
+    }
+
+    try {
+        $pdo = spp_get_pdo('realmd', $activeRealmId);
+        $stmt = $pdo->prepare("
+            SELECT *
+            FROM account
+            LEFT JOIN website_accounts ON account.id=website_accounts.account_id
+            LEFT JOIN website_account_groups ON website_accounts.g_id=website_account_groups.g_id
+            WHERE id = ?
+            LIMIT 1
+        ");
+        $stmt->execute(array($userId));
+        $user = (array)($stmt->fetch(PDO::FETCH_ASSOC) ?: array());
+        if (empty($user)) {
+            return array();
+        }
+
+        $gmLevel = (int)($user['gmlevel'] ?? 0);
+        if ($gmLevel >= 3) {
+            $user['g_is_admin'] = 1;
+        }
+        if ($gmLevel >= 4) {
+            $user['g_is_supadmin'] = 1;
+        }
+
+        return $user;
+    } catch (Throwable $e) {
+        error_log('[admin.backup] Failed admin session lookup: ' . $e->getMessage());
+        return array();
+    }
 }
 
 function spp_admin_backup_is_random_bot_account_name(?string $username): bool
@@ -781,6 +834,14 @@ function spp_admin_backup_vmangos_map_row(string $table, array $sourceRow): arra
         foreach (spp_admin_backup_vmangos_character_appearance($sourceRow) as $column => $value) {
             $mapped[$column] = $value;
         }
+        if (isset($mapped['watched_faction'])) {
+            $watchedFactionRaw = trim((string)$mapped['watched_faction']);
+            if ($watchedFactionRaw === '-1' || $watchedFactionRaw === '4294967295') {
+                $mapped['watched_faction'] = -1;
+            } elseif ($watchedFactionRaw !== '' && preg_match('/^-?\d+$/', $watchedFactionRaw)) {
+                $mapped['watched_faction'] = (int)$watchedFactionRaw;
+            }
+        }
     }
 
     return $mapped;
@@ -983,6 +1044,48 @@ function spp_admin_backup_fetch_account_rows_by_ids(PDO $realmdPdo, array $accou
     return $rows;
 }
 
+function spp_admin_backup_fetch_target_account_resolution_summary(PDO $sourceRealmdPdo, PDO $targetRealmdPdo, array $accountIds): array
+{
+    $accountIds = array_values(array_filter(array_unique(array_map('intval', $accountIds))));
+    if (empty($accountIds)) {
+        return array(
+            'create_count' => 0,
+            'reuse_count' => 0,
+        );
+    }
+
+    $sourceRows = spp_admin_backup_fetch_account_rows_by_ids($sourceRealmdPdo, $accountIds);
+    $usernames = array();
+    foreach ($accountIds as $accountId) {
+        $username = trim((string)(($sourceRows[$accountId] ?? array())['username'] ?? ''));
+        if ($username !== '') {
+            $usernames[$username] = true;
+        }
+    }
+    $usernames = array_keys($usernames);
+    if (empty($usernames)) {
+        return array(
+            'create_count' => 0,
+            'reuse_count' => 0,
+        );
+    }
+
+    $placeholders = implode(',', array_fill(0, count($usernames), '?'));
+    $stmt = $targetRealmdPdo->prepare("SELECT username FROM account WHERE username IN ($placeholders)");
+    $stmt->execute($usernames);
+
+    $existing = array();
+    foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $username) {
+        $existing[(string)$username] = true;
+    }
+
+    $reuseCount = count($existing);
+    return array(
+        'create_count' => max(0, count($usernames) - $reuseCount),
+        'reuse_count' => $reuseCount,
+    );
+}
+
 function spp_admin_backup_fetch_guild_summary(PDO $realmdPdo, PDO $charsPdo, int $guildId): array
 {
     $members = spp_admin_backup_fetch_guild_members($charsPdo, $guildId);
@@ -1126,7 +1229,11 @@ function spp_admin_backup_write_output(string $filename, array $lines): array
     }
 
     $path = spp_admin_backup_output_dir() . DIRECTORY_SEPARATOR . $filename;
-    $ok = @file_put_contents($path, implode(PHP_EOL, $lines) . PHP_EOL);
+    $content = implode(PHP_EOL, $lines) . PHP_EOL;
+    if (strncmp($content, "\xEF\xBB\xBF", 3) === 0) {
+        $content = substr($content, 3);
+    }
+    $ok = @file_put_contents($path, $content);
     if ($ok === false) {
         return array('ok' => false, 'message' => 'The SQL package could not be written.');
     }
@@ -1181,19 +1288,37 @@ function spp_admin_backup_basename(string $path): string
 
 function spp_admin_backup_download_url(string $filename): string
 {
-    $siteHref = '/';
+    $url = 'index.php?n=admin&sub=backup&download_file=' . rawurlencode($filename);
     if (function_exists('spp_config_temp_string')) {
-        $siteHref = (string)spp_config_temp_string('site_href', '/');
-    }
-    $siteHref = trim(str_replace('\\', '/', $siteHref));
-    if ($siteHref === '' || strpos($siteHref, ':') !== false || $siteHref[0] !== '/') {
-        $siteHref = '/';
-    }
-    if (substr($siteHref, -1) !== '/') {
-        $siteHref .= '/';
+        $siteHref = trim(str_replace('\\', '/', (string)spp_config_temp_string('site_href', '/')));
+        if ($siteHref !== '' && strpos($siteHref, ':') === false && $siteHref[0] === '/') {
+            if (substr($siteHref, -1) !== '/') {
+                $siteHref .= '/';
+            }
+            $url = $siteHref . ltrim($url, '/');
+        }
     }
 
-    return $siteHref . 'components/admin/admin.backup.download.php?file=' . rawurlencode($filename);
+    return $url;
+}
+
+function spp_admin_backup_admin_url(array $params = array()): string
+{
+    $query = array_merge(
+        array(
+            'n' => 'admin',
+            'sub' => 'backup',
+        ),
+        $params
+    );
+    $scriptName = trim(str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '')));
+    if ($scriptName === '' || $scriptName[0] !== '/') {
+        $scriptName = '/index.php';
+    }
+
+    $url = $scriptName . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+
+    return $url;
 }
 
 function spp_admin_backup_list_files(int $limit = 20): array
@@ -1228,6 +1353,61 @@ function spp_admin_backup_list_files(int $limit = 20): array
     }
 
     return $files;
+}
+
+function spp_admin_backup_clear_output_dir(): array
+{
+    $dir = spp_admin_backup_output_dir();
+    if (!is_dir($dir)) {
+        return array(
+            'ok' => true,
+            'message' => 'The cache folder is already empty.',
+        );
+    }
+
+    $realDir = realpath($dir);
+    if ($realDir === false || !is_writable($realDir)) {
+        return array(
+            'ok' => false,
+            'message' => 'The backup output directory is not writable: ' . $dir,
+        );
+    }
+
+    $deletedCount = 0;
+    $failed = array();
+    foreach (array('sql', 'txt', 'bat', 'vbs') as $extension) {
+        $matched = glob($realDir . DIRECTORY_SEPARATOR . '*.' . $extension);
+        if (!is_array($matched)) {
+            continue;
+        }
+
+        foreach ($matched as $path) {
+            $realPath = realpath($path);
+            if ($realPath === false || dirname($realPath) !== $realDir || !is_file($realPath)) {
+                continue;
+            }
+
+            if (@unlink($realPath)) {
+                $deletedCount++;
+            } else {
+                $failed[] = basename($realPath);
+            }
+        }
+    }
+
+    if (!empty($failed)) {
+        return array(
+            'ok' => false,
+            'message' => 'Some cache files could not be removed: ' . implode(', ', $failed),
+        );
+    }
+
+    return array(
+        'ok' => true,
+        'message' => $deletedCount > 0
+            ? 'Cleared ' . $deletedCount . ' cached package file' . ($deletedCount === 1 ? '' : 's') . '.'
+            : 'The cache folder is already empty.',
+    );
 }
 
 function spp_admin_backup_map_character_rows_for_transfer(array $bundle, PDO $targetCharsPdo, int $targetAccountId, string $newName = ''): array

@@ -96,6 +96,7 @@ if (!function_exists('spp_character_bootstrap_state')) {
             ),
             'bot_personality_text' => '',
             'bot_signature_text' => '',
+            'bot_play_habit_traits' => array(),
             'character_admin_feedback' => '',
             'character_admin_error' => '',
             'bot_strategy_profiles' => spp_admin_playerbots_bot_strategy_profiles(),
@@ -115,6 +116,7 @@ if (!function_exists('spp_character_bootstrap_state')) {
             'personality_saved' => (int)($get['personality_saved'] ?? 0) === 1,
             'personality_mode' => trim((string)($get['personality_mode'] ?? '')),
             'signature_saved' => (int)($get['signature_saved'] ?? 0) === 1,
+            'bot_habits_saved' => (int)($get['bot_habits_saved'] ?? 0) === 1,
             'bot_strategy_saved' => (int)($get['bot_strategy_saved'] ?? 0) === 1,
             'bot_strategy_mode' => trim((string)($get['bot_strategy_mode'] ?? '')),
         );
@@ -177,6 +179,7 @@ if (!function_exists('spp_character_load_page_state')) {
                 'gear_progression' => $pageState['gear_progression'] ?? array(),
                 'forum_social' => $pageState['forum_social'] ?? array(),
                 'bot_signature_text' => $pageState['bot_signature_text'] ?? '',
+                'bot_play_habit_traits' => $pageState['bot_play_habit_traits'] ?? array(),
                 'character_is_bot' => $pageState['character_is_bot'] ?? false,
                 'can_manage_bot_personality' => $pageState['can_manage_bot_personality'] ?? false,
                 'character_personality_csrf_token' => $pageState['character_personality_csrf_token'] ?? '',
@@ -189,6 +192,7 @@ if (!function_exists('spp_character_load_page_state')) {
             $pageState['gear_progression'] = $profileState['gear_progression'] ?? ($pageState['gear_progression'] ?? array());
             $pageState['forum_social'] = $profileState['forum_social'] ?? ($pageState['forum_social'] ?? array());
             $pageState['bot_signature_text'] = (string)($profileState['bot_signature_text'] ?? ($pageState['bot_signature_text'] ?? ''));
+            $pageState['bot_play_habit_traits'] = (array)($profileState['bot_play_habit_traits'] ?? ($pageState['bot_play_habit_traits'] ?? array()));
             $pageState['character_is_bot'] = !empty($profileState['character_is_bot']);
             $pageState['can_manage_bot_personality'] = !empty($profileState['can_manage_bot_personality']);
             $pageState['character_personality_csrf_token'] = (string)($profileState['character_personality_csrf_token'] ?? ($pageState['character_personality_csrf_token'] ?? ''));
@@ -211,81 +215,99 @@ if (!function_exists('spp_character_load_page_state')) {
                 && $worldPdo instanceof PDO
                 && $armoryPdo instanceof PDO
             ) {
-                $coreContentState = spp_character_load_core_content_state(array(
-                    'character_guid' => $pageState['character_guid'],
-                    'character' => $pageState['character'],
-                    'chars_pdo' => $charsPdo,
-                    'world_pdo' => $worldPdo,
-                    'armory_pdo' => $armoryPdo,
-                    'slot_names' => $pageState['slot_names'] ?? array(),
-                ));
-                $pageState['stats'] = $coreContentState['stats'] ?? ($pageState['stats'] ?? array());
-                $pageState['equipment'] = $coreContentState['equipment'] ?? ($pageState['equipment'] ?? array());
-                $pageState['active_quest_log'] = $coreContentState['active_quest_log'] ?? ($pageState['active_quest_log'] ?? array());
-                $pageState['completed_quest_history'] = $coreContentState['completed_quest_history'] ?? ($pageState['completed_quest_history'] ?? array());
-                $pageState['completed_quest_total'] = (int)($coreContentState['completed_quest_total'] ?? ($pageState['completed_quest_total'] ?? 0));
+                try {
+                    $coreContentState = spp_character_load_core_content_state(array(
+                        'character_guid' => $pageState['character_guid'],
+                        'character' => $pageState['character'],
+                        'chars_pdo' => $charsPdo,
+                        'world_pdo' => $worldPdo,
+                        'armory_pdo' => $armoryPdo,
+                        'slot_names' => $pageState['slot_names'] ?? array(),
+                    ));
+                    $pageState['stats'] = $coreContentState['stats'] ?? ($pageState['stats'] ?? array());
+                    $pageState['equipment'] = $coreContentState['equipment'] ?? ($pageState['equipment'] ?? array());
+                    $pageState['active_quest_log'] = $coreContentState['active_quest_log'] ?? ($pageState['active_quest_log'] ?? array());
+                    $pageState['completed_quest_history'] = $coreContentState['completed_quest_history'] ?? ($pageState['completed_quest_history'] ?? array());
+                    $pageState['completed_quest_total'] = (int)($coreContentState['completed_quest_total'] ?? ($pageState['completed_quest_total'] ?? 0));
+                } catch (Throwable $e) {
+                    error_log('[character-core-content] ' . $e->getMessage());
+                }
 
-                $advancementState = spp_character_load_advancement_state(array(
-                    'character_guid' => $pageState['character_guid'],
-                    'character' => $pageState['character'],
-                    'chars_pdo' => $charsPdo,
-                    'world_pdo' => $worldPdo,
-                    'armory_pdo' => $armoryPdo,
-                    'talent_tabs' => $pageState['talent_tabs'] ?? array(),
-                    'reputations' => $pageState['reputations'] ?? array(),
-                    'reputation_sections' => $pageState['reputation_sections'] ?? array(),
-                    'skills_by_category' => $pageState['skills_by_category'] ?? array(),
-                    'professions_by_category' => $pageState['professions_by_category'] ?? array(),
-                    'profession_recipes_by_skill_id' => $pageState['profession_recipes_by_skill_id'] ?? array(),
-                    'known_character_spells' => $pageState['known_character_spells'] ?? array(),
-                ));
-                $pageState['talent_tabs'] = $advancementState['talent_tabs'] ?? ($pageState['talent_tabs'] ?? array());
-                $pageState['reputations'] = $advancementState['reputations'] ?? ($pageState['reputations'] ?? array());
-                $pageState['reputation_sections'] = $advancementState['reputation_sections'] ?? ($pageState['reputation_sections'] ?? array());
-                $pageState['skills_by_category'] = $advancementState['skills_by_category'] ?? ($pageState['skills_by_category'] ?? array());
-                $pageState['professions_by_category'] = $advancementState['professions_by_category'] ?? ($pageState['professions_by_category'] ?? array());
-                $pageState['profession_recipes_by_skill_id'] = $advancementState['profession_recipes_by_skill_id'] ?? ($pageState['profession_recipes_by_skill_id'] ?? array());
-                $pageState['known_character_spells'] = $advancementState['known_character_spells'] ?? ($pageState['known_character_spells'] ?? array());
+                try {
+                    $advancementState = spp_character_load_advancement_state(array(
+                        'character_guid' => $pageState['character_guid'],
+                        'character' => $pageState['character'],
+                        'chars_pdo' => $charsPdo,
+                        'world_pdo' => $worldPdo,
+                        'armory_pdo' => $armoryPdo,
+                        'talent_tabs' => $pageState['talent_tabs'] ?? array(),
+                        'reputations' => $pageState['reputations'] ?? array(),
+                        'reputation_sections' => $pageState['reputation_sections'] ?? array(),
+                        'skills_by_category' => $pageState['skills_by_category'] ?? array(),
+                        'professions_by_category' => $pageState['professions_by_category'] ?? array(),
+                        'profession_recipes_by_skill_id' => $pageState['profession_recipes_by_skill_id'] ?? array(),
+                        'known_character_spells' => $pageState['known_character_spells'] ?? array(),
+                    ));
+                    $pageState['talent_tabs'] = $advancementState['talent_tabs'] ?? ($pageState['talent_tabs'] ?? array());
+                    $pageState['reputations'] = $advancementState['reputations'] ?? ($pageState['reputations'] ?? array());
+                    $pageState['reputation_sections'] = $advancementState['reputation_sections'] ?? ($pageState['reputation_sections'] ?? array());
+                    $pageState['skills_by_category'] = $advancementState['skills_by_category'] ?? ($pageState['skills_by_category'] ?? array());
+                    $pageState['professions_by_category'] = $advancementState['professions_by_category'] ?? ($pageState['professions_by_category'] ?? array());
+                    $pageState['profession_recipes_by_skill_id'] = $advancementState['profession_recipes_by_skill_id'] ?? ($pageState['profession_recipes_by_skill_id'] ?? array());
+                    $pageState['known_character_spells'] = $advancementState['known_character_spells'] ?? ($pageState['known_character_spells'] ?? array());
+                } catch (Throwable $e) {
+                    error_log('[character-advancement] ' . $e->getMessage());
+                }
 
-                $achievementState = spp_character_load_achievement_state(array(
-                    'character_guid' => $pageState['character_guid'],
-                    'chars_pdo' => $charsPdo,
-                    'world_pdo' => $worldPdo,
-                    'armory_pdo' => $armoryPdo,
-                    'achievement_summary' => $pageState['achievement_summary'] ?? array(),
-                ));
-                $pageState['achievement_summary'] = $achievementState['achievement_summary'] ?? ($pageState['achievement_summary'] ?? array());
+                try {
+                    $achievementState = spp_character_load_achievement_state(array(
+                        'character_guid' => $pageState['character_guid'],
+                        'chars_pdo' => $charsPdo,
+                        'world_pdo' => $worldPdo,
+                        'armory_pdo' => $armoryPdo,
+                        'achievement_summary' => $pageState['achievement_summary'] ?? array(),
+                    ));
+                    $pageState['achievement_summary'] = $achievementState['achievement_summary'] ?? ($pageState['achievement_summary'] ?? array());
+                } catch (Throwable $e) {
+                    error_log('[character-achievements] ' . $e->getMessage());
+                }
 
-                $activityAdminState = spp_character_load_activity_admin_state(array(
-                    'realm_id' => $realmId,
-                    'character_guid' => $pageState['character_guid'],
-                    'character_name' => $pageState['character_name'],
-                    'character' => $pageState['character'],
-                    'chars_pdo' => $charsPdo,
-                    'world_pdo' => $worldPdo,
-                    'armory_pdo' => $armoryPdo,
-                    'forum_social' => $pageState['forum_social'] ?? array(),
-                    'recent_gear' => $pageState['recent_gear'] ?? array(),
-                    'last_instance' => $pageState['last_instance'] ?? '',
-                    'last_instance_date' => $pageState['last_instance_date'] ?? 0,
-                    'can_manage_bot_personality' => $pageState['can_manage_bot_personality'] ?? false,
-                    'bot_personality_text' => $pageState['bot_personality_text'] ?? '',
-                    'bot_signature_text' => $pageState['bot_signature_text'] ?? '',
-                    'character_admin_feedback' => $pageState['character_admin_feedback'] ?? '',
-                    'character_admin_error' => $pageState['character_admin_error'] ?? '',
-                    'character_strategy_state' => $pageState['character_strategy_state'] ?? array(),
-                    'post' => $post,
-                    'server_method' => $serverMethod,
-                ));
-                $pageState['recent_gear'] = $activityAdminState['recent_gear'] ?? ($pageState['recent_gear'] ?? array());
-                $pageState['last_instance'] = (string)($activityAdminState['last_instance'] ?? ($pageState['last_instance'] ?? ''));
-                $pageState['last_instance_date'] = (int)($activityAdminState['last_instance_date'] ?? ($pageState['last_instance_date'] ?? 0));
-                $pageState['bot_personality_text'] = (string)($activityAdminState['bot_personality_text'] ?? ($pageState['bot_personality_text'] ?? ''));
-                $pageState['bot_signature_text'] = (string)($activityAdminState['bot_signature_text'] ?? ($pageState['bot_signature_text'] ?? ''));
-                $pageState['forum_social'] = $activityAdminState['forum_social'] ?? ($pageState['forum_social'] ?? array());
-                $pageState['character_admin_feedback'] = (string)($activityAdminState['character_admin_feedback'] ?? ($pageState['character_admin_feedback'] ?? ''));
-                $pageState['character_admin_error'] = (string)($activityAdminState['character_admin_error'] ?? ($pageState['character_admin_error'] ?? ''));
-                $pageState['character_strategy_state'] = $activityAdminState['character_strategy_state'] ?? ($pageState['character_strategy_state'] ?? array());
+                try {
+                    $activityAdminState = spp_character_load_activity_admin_state(array(
+                        'realm_id' => $realmId,
+                        'character_guid' => $pageState['character_guid'],
+                        'character_name' => $pageState['character_name'],
+                        'character' => $pageState['character'],
+                        'chars_pdo' => $charsPdo,
+                        'world_pdo' => $worldPdo,
+                        'armory_pdo' => $armoryPdo,
+                        'forum_social' => $pageState['forum_social'] ?? array(),
+                        'recent_gear' => $pageState['recent_gear'] ?? array(),
+                        'last_instance' => $pageState['last_instance'] ?? '',
+                        'last_instance_date' => $pageState['last_instance_date'] ?? 0,
+                        'can_manage_bot_personality' => $pageState['can_manage_bot_personality'] ?? false,
+                        'bot_personality_text' => $pageState['bot_personality_text'] ?? '',
+                        'bot_signature_text' => $pageState['bot_signature_text'] ?? '',
+                        'bot_play_habit_traits' => $pageState['bot_play_habit_traits'] ?? array(),
+                        'character_admin_feedback' => $pageState['character_admin_feedback'] ?? '',
+                        'character_admin_error' => $pageState['character_admin_error'] ?? '',
+                        'character_strategy_state' => $pageState['character_strategy_state'] ?? array(),
+                        'post' => $post,
+                        'server_method' => $serverMethod,
+                    ));
+                    $pageState['recent_gear'] = $activityAdminState['recent_gear'] ?? ($pageState['recent_gear'] ?? array());
+                    $pageState['last_instance'] = (string)($activityAdminState['last_instance'] ?? ($pageState['last_instance'] ?? ''));
+                    $pageState['last_instance_date'] = (int)($activityAdminState['last_instance_date'] ?? ($pageState['last_instance_date'] ?? 0));
+                    $pageState['bot_personality_text'] = (string)($activityAdminState['bot_personality_text'] ?? ($pageState['bot_personality_text'] ?? ''));
+                    $pageState['bot_signature_text'] = (string)($activityAdminState['bot_signature_text'] ?? ($pageState['bot_signature_text'] ?? ''));
+                    $pageState['bot_play_habit_traits'] = (array)($activityAdminState['bot_play_habit_traits'] ?? ($pageState['bot_play_habit_traits'] ?? array()));
+                    $pageState['forum_social'] = $activityAdminState['forum_social'] ?? ($pageState['forum_social'] ?? array());
+                    $pageState['character_admin_feedback'] = (string)($activityAdminState['character_admin_feedback'] ?? ($pageState['character_admin_feedback'] ?? ''));
+                    $pageState['character_admin_error'] = (string)($activityAdminState['character_admin_error'] ?? ($pageState['character_admin_error'] ?? ''));
+                    $pageState['character_strategy_state'] = $activityAdminState['character_strategy_state'] ?? ($pageState['character_strategy_state'] ?? array());
+                } catch (Throwable $e) {
+                    error_log('[character-activity-admin] ' . $e->getMessage());
+                }
             }
 
             $character = $pageState['character'];
@@ -371,6 +393,7 @@ if (!function_exists('spp_character_load_page_state')) {
             'forumSocial' => (array)($pageState['forum_social'] ?? array()),
             'botPersonalityText' => (string)($pageState['bot_personality_text'] ?? ''),
             'botSignatureText' => (string)($pageState['bot_signature_text'] ?? ''),
+            'botPlayHabitTraits' => (array)($pageState['bot_play_habit_traits'] ?? array()),
             'characterAdminFeedback' => (string)($pageState['character_admin_feedback'] ?? ''),
             'characterAdminError' => (string)($pageState['character_admin_error'] ?? ''),
             'botStrategyProfiles' => (array)($pageState['bot_strategy_profiles'] ?? array()),
@@ -387,6 +410,7 @@ if (!function_exists('spp_character_load_page_state')) {
             'personality_saved' => !empty($pageState['personality_saved']),
             'personality_mode' => (string)($pageState['personality_mode'] ?? ''),
             'signature_saved' => !empty($pageState['signature_saved']),
+            'bot_habits_saved' => !empty($pageState['bot_habits_saved']),
             'bot_strategy_saved' => !empty($pageState['bot_strategy_saved']),
             'bot_strategy_mode' => (string)($pageState['bot_strategy_mode'] ?? ''),
         ));

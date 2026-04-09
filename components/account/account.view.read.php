@@ -2,7 +2,7 @@
 
 function spp_account_view_build_profile(array $profile, int $uid, array $currentUser, array $realmDbMap): array
 {
-    $viewPdo = spp_get_pdo('realmd', function_exists('spp_current_realm_id') ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array()) : spp_resolve_realm_id($realmDbMap));
+    $viewPdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
     $stmtExt = $viewPdo->prepare("SELECT avatar, signature FROM website_accounts WHERE account_id=? LIMIT 1");
     $stmtExt->execute([(int)$uid]);
     $profileExtend = $stmtExt->fetch(PDO::FETCH_ASSOC);

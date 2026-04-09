@@ -283,6 +283,492 @@ if (!function_exists('spp_website_settings_pdo')) {
     }
 }
 
+if (!function_exists('spp_auth_candidate_realm_map')) {
+    function spp_auth_candidate_realm_map(): array
+    {
+        $realmDbMap = $GLOBALS['allConfiguredRealmDbMap'] ?? $GLOBALS['realmDbMap'] ?? array();
+        return is_array($realmDbMap) ? $realmDbMap : array();
+    }
+}
+
+if (!function_exists('spp_auth_candidate_realm_ids')) {
+    function spp_auth_candidate_realm_ids(?array $realmDbMap = null): array
+    {
+        $realmDbMap = is_array($realmDbMap) ? $realmDbMap : spp_auth_candidate_realm_map();
+        if (empty($realmDbMap)) {
+            return array(1);
+        }
+
+        $candidateIds = array();
+        $defaultRealmId = function_exists('spp_realm_runtime_default_realm_id')
+            ? (int)spp_realm_runtime_default_realm_id($realmDbMap)
+            : 0;
+        if ($defaultRealmId > 0 && isset($realmDbMap[$defaultRealmId])) {
+            $candidateIds[] = $defaultRealmId;
+        }
+
+        if (isset($realmDbMap[1])) {
+            $candidateIds[] = 1;
+        }
+
+        foreach (array_keys($realmDbMap) as $realmId) {
+            $candidateIds[] = (int)$realmId;
+        }
+
+        $candidateIds = array_values(array_unique(array_filter($candidateIds)));
+        return empty($candidateIds) ? array(1) : $candidateIds;
+    }
+}
+
+if (!function_exists('spp_db_table_exists')) {
+    function spp_db_table_exists(PDO $pdo, string $tableName): bool
+    {
+        $tableName = trim($tableName);
+        if ($tableName === '') {
+            return false;
+        }
+
+        try {
+            $stmt = $pdo->prepare('SHOW TABLES LIKE ?');
+            $stmt->execute(array($tableName));
+            return (bool)$stmt->fetchColumn();
+        } catch (Throwable $e) {
+            return false;
+        }
+    }
+}
+
+if (!function_exists('spp_db_table_columns')) {
+    function spp_db_table_columns(PDO $pdo, string $tableName): array
+    {
+        static $cache = array();
+
+        $tableName = trim($tableName);
+        if ($tableName === '') {
+            return array();
+        }
+
+        $cacheKey = spl_object_hash($pdo) . ':' . $tableName;
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
+        }
+
+        $columns = array();
+        try {
+            $stmt = $pdo->query("SHOW COLUMNS FROM `{$tableName}`");
+            $rows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : array();
+            foreach ($rows as $row) {
+                $field = (string)($row['Field'] ?? '');
+                if ($field !== '') {
+                    $columns[$field] = true;
+                }
+            }
+        } catch (Throwable $e) {
+            $columns = array();
+        }
+
+        $cache[$cacheKey] = $columns;
+        return $columns;
+    }
+}
+
+if (!function_exists('spp_db_column_exists')) {
+    function spp_db_column_exists(PDO $pdo, string $tableName, string $columnName): bool
+    {
+        $columns = spp_db_table_columns($pdo, $tableName);
+        return !empty($columns[$columnName]);
+    }
+}
+
+if (!function_exists('spp_auth_realm_capabilities')) {
+    function spp_auth_realm_capabilities(int $realmId): array
+    {
+        static $cache = array();
+
+        $realmId = max(1, (int)$realmId);
+        if (isset($cache[$realmId])) {
+            return $cache[$realmId];
+        }
+
+        $capabilities = array(
+            'realm_id' => $realmId,
+            'available' => false,
+            'has_account_table' => false,
+            'has_website_accounts' => false,
+            'has_website_account_groups' => false,
+            'has_website_account_keys' => false,
+            'has_account_logons' => false,
+            'has_ip_banned' => false,
+            'has_account_pass' => false,
+            'supports_canonical_website_tables' => false,
+            'supports_account_provisioning' => false,
+            'supports_ban_lookup' => false,
+            'account_columns' => array(),
+            'website_account_columns' => array(),
+        );
+
+        try {
+            $pdo = spp_get_pdo('realmd', $realmId);
+            $capabilities['available'] = true;
+            $capabilities['has_account_table'] = spp_db_table_exists($pdo, 'account');
+            $capabilities['has_website_accounts'] = spp_db_table_exists($pdo, 'website_accounts');
+            $capabilities['has_website_account_groups'] = spp_db_table_exists($pdo, 'website_account_groups');
+            $capabilities['has_website_account_keys'] = spp_db_table_exists($pdo, 'website_account_keys');
+            $capabilities['has_account_logons'] = spp_db_table_exists($pdo, 'account_logons');
+            $capabilities['has_ip_banned'] = spp_db_table_exists($pdo, 'ip_banned');
+            $capabilities['has_account_pass'] = spp_db_table_exists($pdo, 'account_pass');
+            $capabilities['account_columns'] = $capabilities['has_account_table'] ? spp_db_table_columns($pdo, 'account') : array();
+            $capabilities['website_account_columns'] = $capabilities['has_website_accounts'] ? spp_db_table_columns($pdo, 'website_accounts') : array();
+            $capabilities['supports_canonical_website_tables'] = $capabilities['has_website_accounts']
+                && $capabilities['has_website_account_groups']
+                && $capabilities['has_website_account_keys'];
+            $capabilities['supports_account_provisioning'] = $capabilities['has_account_table']
+                && !empty($capabilities['account_columns']['username'])
+                && !empty($capabilities['account_columns']['s'])
+                && !empty($capabilities['account_columns']['v']);
+            $capabilities['supports_ban_lookup'] = $capabilities['has_ip_banned'] && $capabilities['has_account_logons'];
+        } catch (Throwable $e) {
+            $capabilities['error'] = $e->getMessage();
+        }
+
+        $cache[$realmId] = $capabilities;
+        return $cache[$realmId];
+    }
+}
+
+if (!function_exists('spp_canonical_auth_realm_id')) {
+    function spp_canonical_auth_realm_id(?array $realmDbMap = null): int
+    {
+        static $resolvedId = null;
+
+        if ($resolvedId !== null && $realmDbMap === null) {
+            return $resolvedId;
+        }
+
+        $realmDbMap = is_array($realmDbMap) ? $realmDbMap : spp_auth_candidate_realm_map();
+        $candidateIds = spp_auth_candidate_realm_ids($realmDbMap);
+
+        foreach ($candidateIds as $realmId) {
+            $capabilities = spp_auth_realm_capabilities((int)$realmId);
+            if (!empty($capabilities['supports_canonical_website_tables'])) {
+                if ($realmDbMap === spp_auth_candidate_realm_map()) {
+                    $resolvedId = (int)$realmId;
+                }
+                return (int)$realmId;
+            }
+        }
+
+        $fallbackRealmId = isset($realmDbMap[1]) ? 1 : (int)array_key_first($realmDbMap);
+        if ($fallbackRealmId <= 0) {
+            $fallbackRealmId = 1;
+        }
+        if ($realmDbMap === spp_auth_candidate_realm_map()) {
+            $resolvedId = $fallbackRealmId;
+        }
+        return $fallbackRealmId;
+    }
+}
+
+if (!function_exists('spp_canonical_auth_pdo')) {
+    function spp_canonical_auth_pdo(): PDO
+    {
+        static $pdo = null;
+
+        if ($pdo instanceof PDO) {
+            return $pdo;
+        }
+
+        $pdo = spp_get_pdo('realmd', spp_canonical_auth_realm_id());
+        return $pdo;
+    }
+}
+
+if (!function_exists('spp_auth_managed_realm_map')) {
+    function spp_auth_managed_realm_map(): array
+    {
+        $realmDbMap = $GLOBALS['allEnabledRealmDbMap'] ?? $GLOBALS['allConfiguredRealmDbMap'] ?? $GLOBALS['realmDbMap'] ?? array();
+        return is_array($realmDbMap) ? $realmDbMap : array();
+    }
+}
+
+if (!function_exists('spp_auth_realm_account_row')) {
+    function spp_auth_realm_account_row(int $realmId, $accountId = 0, string $username = ''): ?array
+    {
+        $capabilities = spp_auth_realm_capabilities($realmId);
+        if (empty($capabilities['supports_account_provisioning'])) {
+            return null;
+        }
+
+        try {
+            $pdo = spp_get_pdo('realmd', $realmId);
+            if ((int)$accountId > 0) {
+                $stmt = $pdo->prepare("SELECT * FROM `account` WHERE `id` = ? LIMIT 1");
+                $stmt->execute(array((int)$accountId));
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($row) {
+                    return $row;
+                }
+            }
+
+            $username = strtoupper(trim($username));
+            if ($username !== '') {
+                $stmt = $pdo->prepare("SELECT * FROM `account` WHERE UPPER(`username`) = ? LIMIT 1");
+                $stmt->execute(array($username));
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if ($row) {
+                    return $row;
+                }
+            }
+        } catch (Throwable $e) {
+            error_log('[auth] Failed loading realm account row for realm ' . $realmId . ': ' . $e->getMessage());
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('spp_auth_resolve_managed_account_map')) {
+    function spp_auth_resolve_managed_account_map($canonicalAccountId, string $username): array
+    {
+        $canonicalAccountId = (int)$canonicalAccountId;
+        $username = strtoupper(trim($username));
+        $accountMap = array();
+
+        foreach (spp_auth_managed_realm_map() as $realmId => $realmInfo) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0) {
+                continue;
+            }
+
+            $row = spp_auth_realm_account_row($realmId, $canonicalAccountId, $username);
+            if (!empty($row['id'])) {
+                $accountMap[$realmId] = (int)$row['id'];
+            }
+        }
+
+        return $accountMap;
+    }
+}
+
+if (!function_exists('spp_auth_account_field_payload')) {
+    function spp_auth_account_field_payload(PDO $pdo, array $accountData): array
+    {
+        $columns = spp_db_table_columns($pdo, 'account');
+        $payload = array();
+        foreach ($accountData as $field => $value) {
+            if (!empty($columns[$field])) {
+                $payload[$field] = $value;
+            }
+        }
+
+        return $payload;
+    }
+}
+
+if (!function_exists('spp_auth_sync_account_pass_table')) {
+    function spp_auth_sync_account_pass_table(PDO $pdo, array $accountRow, ?string $plainPassword = null): void
+    {
+        if ((int)spp_config_generic('use_purepass_table', 0) !== 1 || !spp_db_table_exists($pdo, 'account_pass')) {
+            return;
+        }
+
+        $accountId = (int)($accountRow['id'] ?? 0);
+        if ($accountId <= 0) {
+            return;
+        }
+
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM `account_pass` WHERE `id` = ?");
+        $stmt->execute(array($accountId));
+        $exists = (int)$stmt->fetchColumn() > 0;
+
+        $payload = array(
+            'id' => $accountId,
+            'username' => (string)($accountRow['username'] ?? ''),
+            'email' => (string)($accountRow['email'] ?? ''),
+        );
+        if ($plainPassword !== null) {
+            $payload['password'] = $plainPassword;
+        }
+
+        if ($exists) {
+            $setClauses = array();
+            $values = array();
+            foreach ($payload as $field => $value) {
+                if ($field === 'id' || !spp_db_column_exists($pdo, 'account_pass', $field)) {
+                    continue;
+                }
+                $setClauses[] = "`{$field}` = ?";
+                $values[] = $value;
+            }
+            if (!empty($setClauses)) {
+                $values[] = $accountId;
+                $stmt = $pdo->prepare("UPDATE `account_pass` SET " . implode(', ', $setClauses) . " WHERE `id` = ? LIMIT 1");
+                $stmt->execute($values);
+            }
+            return;
+        }
+
+        $insertFields = array();
+        $insertValues = array();
+        $placeholders = array();
+        foreach ($payload as $field => $value) {
+            if (!spp_db_column_exists($pdo, 'account_pass', $field)) {
+                continue;
+            }
+            $insertFields[] = "`{$field}`";
+            $insertValues[] = $value;
+            $placeholders[] = '?';
+        }
+        if (!empty($insertFields)) {
+            $stmt = $pdo->prepare("INSERT INTO `account_pass` (" . implode(',', $insertFields) . ") VALUES (" . implode(',', $placeholders) . ")");
+            $stmt->execute($insertValues);
+        }
+    }
+}
+
+if (!function_exists('spp_auth_sync_account_to_realm')) {
+    function spp_auth_sync_account_to_realm(int $realmId, array $canonicalAccountRow, ?string $plainPassword = null): array
+    {
+        $realmId = max(1, (int)$realmId);
+        $capabilities = spp_auth_realm_capabilities($realmId);
+        $result = array(
+            'realm_id' => $realmId,
+            'status' => 'skipped',
+            'account_id' => 0,
+            'message' => '',
+        );
+
+        if (empty($capabilities['supports_account_provisioning'])) {
+            $result['message'] = 'Realm does not support account provisioning.';
+            return $result;
+        }
+
+        $canonicalAccountId = (int)($canonicalAccountRow['id'] ?? 0);
+        $username = strtoupper(trim((string)($canonicalAccountRow['username'] ?? '')));
+        if ($canonicalAccountId <= 0 || $username === '') {
+            $result['message'] = 'Missing canonical account id or username.';
+            return $result;
+        }
+
+        try {
+            $pdo = spp_get_pdo('realmd', $realmId);
+            $existingRow = spp_auth_realm_account_row($realmId, $canonicalAccountId, $username);
+            $payload = array(
+                'username' => $username,
+                'email' => (string)($canonicalAccountRow['email'] ?? ''),
+                's' => (string)($canonicalAccountRow['s'] ?? ''),
+                'v' => (string)($canonicalAccountRow['v'] ?? ''),
+                'locked' => isset($canonicalAccountRow['locked']) ? (int)$canonicalAccountRow['locked'] : 0,
+                'last_ip' => (string)($canonicalAccountRow['last_ip'] ?? ''),
+                'failed_logins' => isset($canonicalAccountRow['failed_logins']) ? (int)$canonicalAccountRow['failed_logins'] : 0,
+                'expansion' => isset($canonicalAccountRow['expansion']) ? (int)$canonicalAccountRow['expansion'] : 0,
+            );
+            if (!empty($capabilities['account_columns']['sessionkey'])) {
+                $payload['sessionkey'] = null;
+            }
+            if (!empty($capabilities['account_columns']['current_realm'])) {
+                $payload['current_realm'] = isset($canonicalAccountRow['current_realm']) ? (int)$canonicalAccountRow['current_realm'] : 0;
+            }
+
+            $payload = spp_auth_account_field_payload($pdo, $payload);
+
+            if ($existingRow) {
+                $setClauses = array();
+                $values = array();
+                foreach ($payload as $field => $value) {
+                    $setClauses[] = "`{$field}` = ?";
+                    $values[] = $value;
+                }
+                if (!empty($setClauses)) {
+                    $values[] = (int)$existingRow['id'];
+                    $stmt = $pdo->prepare("UPDATE `account` SET " . implode(', ', $setClauses) . " WHERE `id` = ? LIMIT 1");
+                    $stmt->execute($values);
+                }
+                $result['status'] = ((int)$existingRow['id'] === $canonicalAccountId) ? 'updated' : 'linked';
+                $result['account_id'] = (int)$existingRow['id'];
+                $result['message'] = $result['status'] === 'linked'
+                    ? 'Updated existing realm account matched by username.'
+                    : 'Updated existing realm account.';
+            } else {
+                $insertPayload = $payload;
+                if (!empty($capabilities['account_columns']['id'])) {
+                    $insertPayload = array('id' => $canonicalAccountId) + $insertPayload;
+                }
+                $fields = array();
+                $placeholders = array();
+                $values = array();
+                foreach ($insertPayload as $field => $value) {
+                    $fields[] = "`{$field}`";
+                    $placeholders[] = '?';
+                    $values[] = $value;
+                }
+                $stmt = $pdo->prepare("INSERT INTO `account` (" . implode(',', $fields) . ") VALUES (" . implode(',', $placeholders) . ")");
+                $stmt->execute($values);
+                $result['status'] = 'created';
+                $result['account_id'] = (int)($pdo->lastInsertId() ?: $canonicalAccountId);
+                $result['message'] = 'Created realm account.';
+            }
+
+            $resolvedAccountRow = spp_auth_realm_account_row($realmId, (int)$result['account_id'], $username) ?: array(
+                'id' => (int)$result['account_id'],
+                'username' => $username,
+                'email' => (string)($canonicalAccountRow['email'] ?? ''),
+            );
+            spp_auth_sync_account_pass_table($pdo, $resolvedAccountRow, $plainPassword);
+            if (function_exists('spp_ensure_account_identity')) {
+                spp_ensure_account_identity($realmId, (int)($resolvedAccountRow['id'] ?? 0), $username);
+            }
+        } catch (Throwable $e) {
+            $result['status'] = 'error';
+            $result['message'] = $e->getMessage();
+            error_log('[auth] Failed syncing account to realm ' . $realmId . ': ' . $e->getMessage());
+        }
+
+        return $result;
+    }
+}
+
+if (!function_exists('spp_auth_sync_canonical_account')) {
+    function spp_auth_sync_canonical_account($canonicalAccountId, ?string $plainPassword = null): array
+    {
+        $canonicalAccountId = (int)$canonicalAccountId;
+        if ($canonicalAccountId <= 0) {
+            return array();
+        }
+
+        $pdo = spp_canonical_auth_pdo();
+        $stmt = $pdo->prepare("SELECT * FROM `account` WHERE `id` = ? LIMIT 1");
+        $stmt->execute(array($canonicalAccountId));
+        $canonicalAccountRow = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$canonicalAccountRow) {
+            return array();
+        }
+
+        $results = array();
+        foreach (spp_auth_managed_realm_map() as $realmId => $realmInfo) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0) {
+                continue;
+            }
+            if ($realmId === (int)spp_canonical_auth_realm_id()) {
+                if (function_exists('spp_ensure_account_identity')) {
+                    spp_ensure_account_identity($realmId, $canonicalAccountId, (string)$canonicalAccountRow['username']);
+                }
+                $results[$realmId] = array(
+                    'realm_id' => $realmId,
+                    'status' => 'canonical',
+                    'account_id' => $canonicalAccountId,
+                    'message' => 'Canonical auth realm.',
+                );
+                continue;
+            }
+            $results[$realmId] = spp_auth_sync_account_to_realm($realmId, $canonicalAccountRow, $plainPassword);
+        }
+
+        return $results;
+    }
+}
+
 if (!function_exists('spp_ensure_website_settings_table')) {
     function spp_ensure_website_settings_table(?PDO $pdo = null): bool
     {
@@ -1690,7 +2176,7 @@ if (!function_exists('spp_website_accounts_columns')) {
         $columns = [];
 
         try {
-            $pdo = spp_get_pdo('realmd', 1);
+            $pdo = spp_canonical_auth_pdo();
             $rows = $pdo->query("SHOW COLUMNS FROM website_accounts")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($rows as $row) {
                 if (!empty($row['Field'])) {
@@ -1735,7 +2221,7 @@ if (!function_exists('spp_account_profile_columns')) {
         $columns = [];
 
         try {
-            $pdo = spp_get_pdo('realmd', 1);
+            $pdo = spp_canonical_auth_pdo();
             $tableName = spp_account_profile_table_name();
             $rows = $pdo->query("SHOW COLUMNS FROM `{$tableName}`")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($rows as $row) {
@@ -1851,8 +2337,7 @@ if (!function_exists('spp_update_account_profile_fields')) {
 
 if (!function_exists('spp_identity_pdo')) {
     function spp_identity_pdo() {
-        // Always realm 1 — that is where website_identities lives.
-        return spp_get_pdo('realmd', 1);
+        return spp_canonical_auth_pdo();
     }
 }
 if (!function_exists('spp_get_account_identity')) {
@@ -1953,6 +2438,17 @@ if (!function_exists('spp_ensure_char_identity')) {
                 'is_bot' => (int)$isBot,
             ]);
         }
+        if ($identityId > 0 && (int)$isBot === 1 && function_exists('spp_seed_identity_play_habit_defaults')) {
+            spp_seed_identity_play_habit_defaults($identityId, [
+                'realm_id' => (int)$realmId,
+                'character_guid' => (int)$charGuid,
+                'owner_account_id' => (int)$accountId,
+                'display_name' => (string)$charName,
+                'identity_type' => $type,
+                'guild_id' => $guildId ? (int)$guildId : null,
+                'is_bot' => (int)$isBot,
+            ]);
+        }
         return $identityId;
     }
 }
@@ -1997,6 +2493,163 @@ if (!function_exists('spp_identity_profile_table_name')) {
     }
 }
 
+if (!function_exists('spp_identity_profile_trait_column_sql')) {
+    function spp_identity_profile_trait_column_sql(string $columnName): string
+    {
+        switch (trim($columnName)) {
+            case 'play_style_key':
+                return '`play_style_key` VARCHAR(32) DEFAULT NULL';
+            case 'weekly_frequency_hint':
+                return '`weekly_frequency_hint` VARCHAR(40) DEFAULT NULL';
+            case 'session_duration_hint_min':
+                return '`session_duration_hint_min` SMALLINT(5) UNSIGNED DEFAULT NULL';
+            case 'session_duration_hint_max':
+                return '`session_duration_hint_max` SMALLINT(5) UNSIGNED DEFAULT NULL';
+            case 'preferred_days':
+                return '`preferred_days` VARCHAR(96) DEFAULT NULL';
+            case 'preferred_hours':
+                return '`preferred_hours` VARCHAR(96) DEFAULT NULL';
+            case 'cohort_key':
+                return '`cohort_key` VARCHAR(32) DEFAULT NULL';
+            case 'life_stage_hint':
+                return '`life_stage_hint` VARCHAR(32) DEFAULT NULL';
+        }
+
+        return '';
+    }
+}
+
+if (!function_exists('spp_identity_profile_bot_trait_keys')) {
+    function spp_identity_profile_bot_trait_keys(): array
+    {
+        return array(
+            'play_style_key',
+            'weekly_frequency_hint',
+            'session_duration_hint_min',
+            'session_duration_hint_max',
+            'preferred_days',
+            'preferred_hours',
+            'cohort_key',
+            'life_stage_hint',
+        );
+    }
+}
+
+if (!function_exists('spp_identity_profile_is_bot_identity')) {
+    function spp_identity_profile_is_bot_identity(array $identityRow): bool
+    {
+        return (int)($identityRow['is_bot'] ?? 0) === 1 || (string)($identityRow['identity_type'] ?? '') === 'bot_character';
+    }
+}
+
+if (!function_exists('spp_identity_profile_default_bot_traits')) {
+    function spp_identity_profile_default_bot_traits(array $identityRow = []): array
+    {
+        $defaults = array(
+            'play_style_key' => null,
+            'weekly_frequency_hint' => null,
+            'session_duration_hint_min' => null,
+            'session_duration_hint_max' => null,
+            'preferred_days' => null,
+            'preferred_hours' => null,
+            'cohort_key' => null,
+            'life_stage_hint' => null,
+        );
+
+        if (!spp_identity_profile_is_bot_identity($identityRow)) {
+            return $defaults;
+        }
+
+        $seedSource = trim(implode(':', array(
+            (string)(int)($identityRow['realm_id'] ?? 0),
+            (string)(int)($identityRow['character_guid'] ?? 0),
+            (string)(int)($identityRow['owner_account_id'] ?? 0),
+            strtolower(trim((string)($identityRow['display_name'] ?? ''))),
+            strtolower(trim((string)($identityRow['identity_key'] ?? ''))),
+        )), ':');
+        if ($seedSource === '') {
+            $seedSource = 'bot:default';
+        }
+
+        $seed = (int)sprintf('%u', crc32('habit:' . $seedSource));
+        $playStyles = array('balanced', 'social', 'grinder', 'night_owl', 'weekend', 'support', 'pvp', 'crafting');
+        $weeklyHints = array('daily', 'weekdays', 'weekends', '3-4 days/week', 'evenings', 'flexible');
+        $durationPairs = array(
+            array(30, 60),
+            array(45, 90),
+            array(60, 120),
+            array(90, 180),
+        );
+        $dayHints = array('Mon-Fri', 'Mon/Wed/Fri', 'Tue/Thu/Sat', 'Fri-Sun', 'Weekends', 'Daily');
+        $hourHints = array('18:00-22:00', '19:00-23:00', '20:00-00:00', '09:00-13:00', '12:00-16:00', 'Flexible');
+        $cohortKeys = array('general', 'dungeon', 'raid', 'pvp', 'crafting', 'social');
+        $lifeStageHints = array('leveling', 'midgame', 'endgame', 'maintenance', 'roaming');
+        $durationPair = $durationPairs[$seed % count($durationPairs)];
+
+        $defaults['play_style_key'] = $playStyles[$seed % count($playStyles)];
+        $defaults['weekly_frequency_hint'] = $weeklyHints[($seed >> 3) % count($weeklyHints)];
+        $defaults['session_duration_hint_min'] = (int)$durationPair[0];
+        $defaults['session_duration_hint_max'] = (int)$durationPair[1];
+        $defaults['preferred_days'] = $dayHints[($seed >> 5) % count($dayHints)];
+        $defaults['preferred_hours'] = $hourHints[($seed >> 7) % count($hourHints)];
+        $defaults['cohort_key'] = $cohortKeys[($seed >> 9) % count($cohortKeys)];
+        $defaults['life_stage_hint'] = $lifeStageHints[($seed >> 11) % count($lifeStageHints)];
+
+        return $defaults;
+    }
+}
+
+if (!function_exists('spp_identity_profile_normalize_bot_trait_value')) {
+    function spp_identity_profile_normalize_bot_trait_value(string $columnName, $value)
+    {
+        $value = is_scalar($value) || $value === null ? trim((string)$value) : '';
+        switch ($columnName) {
+            case 'session_duration_hint_min':
+            case 'session_duration_hint_max':
+                $intValue = (int)$value;
+                return $intValue > 0 ? $intValue : null;
+            case 'preferred_days':
+            case 'preferred_hours':
+                $value = preg_replace('/\s+/', ' ', $value);
+                return $value !== '' ? $value : null;
+            case 'play_style_key':
+            case 'weekly_frequency_hint':
+            case 'cohort_key':
+            case 'life_stage_hint':
+                $value = strtolower(preg_replace('/\s+/', ' ', $value));
+                return $value !== '' ? $value : null;
+        }
+
+        return $value !== '' ? $value : null;
+    }
+}
+
+if (!function_exists('spp_identity_profile_effective_bot_traits')) {
+    function spp_identity_profile_effective_bot_traits(array $identityRow = [], array $storedTraits = []): array
+    {
+        $effectiveTraits = spp_identity_profile_default_bot_traits($identityRow);
+
+        foreach (spp_identity_profile_bot_trait_keys() as $traitKey) {
+            if (!array_key_exists($traitKey, $storedTraits)) {
+                continue;
+            }
+
+            $normalizedValue = spp_identity_profile_normalize_bot_trait_value($traitKey, $storedTraits[$traitKey]);
+            if ($normalizedValue !== null) {
+                $effectiveTraits[$traitKey] = $normalizedValue;
+            }
+        }
+
+        $minValue = (int)($effectiveTraits['session_duration_hint_min'] ?? 0);
+        $maxValue = (int)($effectiveTraits['session_duration_hint_max'] ?? 0);
+        if ($minValue > 0 && $maxValue > 0 && $maxValue < $minValue) {
+            $effectiveTraits['session_duration_hint_max'] = $minValue;
+        }
+
+        return $effectiveTraits;
+    }
+}
+
 if (!function_exists('spp_ensure_identity_profile_table')) {
     function spp_ensure_identity_profile_table() {
         static $ensured = false;
@@ -2012,11 +2665,51 @@ if (!function_exists('spp_ensure_identity_profile_table')) {
                 CREATE TABLE IF NOT EXISTS `{$tableName}` (
                   `identity_id` INT(11) UNSIGNED NOT NULL,
                   `signature` TEXT DEFAULT NULL,
+                  `play_style_key` VARCHAR(32) DEFAULT NULL,
+                  `weekly_frequency_hint` VARCHAR(40) DEFAULT NULL,
+                  `session_duration_hint_min` SMALLINT(5) UNSIGNED DEFAULT NULL,
+                  `session_duration_hint_max` SMALLINT(5) UNSIGNED DEFAULT NULL,
+                  `preferred_days` VARCHAR(96) DEFAULT NULL,
+                  `preferred_hours` VARCHAR(96) DEFAULT NULL,
+                  `cohort_key` VARCHAR(32) DEFAULT NULL,
+                  `life_stage_hint` VARCHAR(32) DEFAULT NULL,
                   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                   PRIMARY KEY (`identity_id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
             ");
+            try {
+                $existingColumns = spp_db_table_columns($pdo, $tableName);
+                $orderedColumns = array(
+                    'play_style_key',
+                    'weekly_frequency_hint',
+                    'session_duration_hint_min',
+                    'session_duration_hint_max',
+                    'preferred_days',
+                    'preferred_hours',
+                    'cohort_key',
+                    'life_stage_hint',
+                );
+                $previousColumn = 'signature';
+                foreach ($orderedColumns as $columnName) {
+                    if (isset($existingColumns[$columnName])) {
+                        $previousColumn = $columnName;
+                        continue;
+                    }
+
+                    $columnSql = spp_identity_profile_trait_column_sql($columnName);
+                    if ($columnSql === '') {
+                        continue;
+                    }
+
+                    $afterClause = $previousColumn !== '' ? ' AFTER `' . $previousColumn . '`' : '';
+                    $pdo->exec('ALTER TABLE `' . $tableName . '` ADD COLUMN ' . $columnSql . $afterClause);
+                    $existingColumns[$columnName] = true;
+                    $previousColumn = $columnName;
+                }
+            } catch (Throwable $columnError) {
+                error_log('[config] Failed ensuring identity trait columns: ' . $columnError->getMessage());
+            }
             $ensured = true;
             return true;
         } catch (Throwable $e) {
@@ -2073,6 +2766,187 @@ if (!function_exists('spp_update_identity_signature')) {
         } catch (Throwable $e) {
             error_log('[config] Failed saving identity signature: ' . $e->getMessage());
             return false;
+        }
+    }
+}
+
+if (!function_exists('spp_get_identity_play_habit_traits')) {
+    function spp_get_identity_play_habit_traits($identityId, array $identityRow = []): array
+    {
+        $identityId = (int)$identityId;
+        $emptyTraits = array(
+            'play_style_key' => null,
+            'weekly_frequency_hint' => null,
+            'session_duration_hint_min' => null,
+            'session_duration_hint_max' => null,
+            'preferred_days' => null,
+            'preferred_hours' => null,
+            'cohort_key' => null,
+            'life_stage_hint' => null,
+        );
+
+        if ($identityId <= 0) {
+            return $emptyTraits;
+        }
+
+        if (empty($identityRow)) {
+            try {
+                $pdo = spp_identity_pdo();
+                $stmt = $pdo->prepare("
+                    SELECT `identity_id`, `identity_type`, `owner_account_id`, `realm_id`,
+                           `character_guid`, `display_name`, `identity_key`, `guild_id`, `is_bot`
+                    FROM `website_identities`
+                    WHERE `identity_id` = ?
+                    LIMIT 1
+                ");
+                $stmt->execute(array($identityId));
+                $identityRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: array();
+            } catch (Throwable $e) {
+                error_log('[config] Failed loading identity row for trait read: ' . $e->getMessage());
+                return $emptyTraits;
+            }
+        }
+
+        if (!spp_identity_profile_is_bot_identity($identityRow)) {
+            return $emptyTraits;
+        }
+
+        if (!spp_ensure_identity_profile_table()) {
+            return spp_identity_profile_default_bot_traits($identityRow);
+        }
+
+        try {
+            $pdo = spp_identity_pdo();
+            $tableName = spp_identity_profile_table_name();
+            $stmt = $pdo->prepare("
+                SELECT `play_style_key`, `weekly_frequency_hint`, `session_duration_hint_min`,
+                       `session_duration_hint_max`, `preferred_days`, `preferred_hours`,
+                       `cohort_key`, `life_stage_hint`
+                FROM `{$tableName}`
+                WHERE `identity_id` = ?
+                LIMIT 1
+            ");
+            $stmt->execute(array($identityId));
+            $storedTraits = $stmt->fetch(PDO::FETCH_ASSOC) ?: array();
+
+            return spp_identity_profile_effective_bot_traits($identityRow, $storedTraits);
+        } catch (Throwable $e) {
+            error_log('[config] Failed loading identity play habits: ' . $e->getMessage());
+            return spp_identity_profile_default_bot_traits($identityRow);
+        }
+    }
+}
+
+if (!function_exists('spp_update_identity_play_habit_traits')) {
+    function spp_update_identity_play_habit_traits($identityId, array $traits) {
+        $identityId = (int)$identityId;
+        if ($identityId <= 0 || !spp_ensure_identity_profile_table()) {
+            return false;
+        }
+
+        try {
+            $pdo = spp_identity_pdo();
+            $stmt = $pdo->prepare("
+                SELECT `identity_id`, `identity_type`, `owner_account_id`, `realm_id`,
+                       `character_guid`, `display_name`, `identity_key`, `guild_id`, `is_bot`
+                FROM `website_identities`
+                WHERE `identity_id` = ?
+                LIMIT 1
+            ");
+            $stmt->execute(array($identityId));
+            $identityRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: array();
+            if (!spp_identity_profile_is_bot_identity($identityRow)) {
+                return false;
+            }
+
+            $normalizedTraits = array();
+            foreach (spp_identity_profile_bot_trait_keys() as $traitKey) {
+                $normalizedTraits[$traitKey] = spp_identity_profile_normalize_bot_trait_value($traitKey, $traits[$traitKey] ?? null);
+            }
+
+            $tableName = spp_identity_profile_table_name();
+            $stmt = $pdo->prepare("
+                INSERT INTO `{$tableName}` (
+                    `identity_id`, `play_style_key`, `weekly_frequency_hint`,
+                    `session_duration_hint_min`, `session_duration_hint_max`,
+                    `preferred_days`, `preferred_hours`, `cohort_key`, `life_stage_hint`
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    `play_style_key` = VALUES(`play_style_key`),
+                    `weekly_frequency_hint` = VALUES(`weekly_frequency_hint`),
+                    `session_duration_hint_min` = VALUES(`session_duration_hint_min`),
+                    `session_duration_hint_max` = VALUES(`session_duration_hint_max`),
+                    `preferred_days` = VALUES(`preferred_days`),
+                    `preferred_hours` = VALUES(`preferred_hours`),
+                    `cohort_key` = VALUES(`cohort_key`),
+                    `life_stage_hint` = VALUES(`life_stage_hint`)
+            ");
+            return $stmt->execute(array(
+                $identityId,
+                $normalizedTraits['play_style_key'],
+                $normalizedTraits['weekly_frequency_hint'],
+                $normalizedTraits['session_duration_hint_min'],
+                $normalizedTraits['session_duration_hint_max'],
+                $normalizedTraits['preferred_days'],
+                $normalizedTraits['preferred_hours'],
+                $normalizedTraits['cohort_key'],
+                $normalizedTraits['life_stage_hint'],
+            ));
+        } catch (Throwable $e) {
+            error_log('[config] Failed saving identity play habits: ' . $e->getMessage());
+            return false;
+        }
+    }
+}
+
+if (!function_exists('spp_seed_identity_play_habit_defaults')) {
+    function spp_seed_identity_play_habit_defaults($identityId, array $identityRow = []) {
+        $identityId = (int)$identityId;
+        if ($identityId <= 0) {
+            return array();
+        }
+
+        if (empty($identityRow)) {
+            try {
+                $pdo = spp_identity_pdo();
+                $stmt = $pdo->prepare("
+                    SELECT `identity_id`, `identity_type`, `owner_account_id`, `realm_id`,
+                           `character_guid`, `display_name`, `identity_key`, `guild_id`, `is_bot`
+                    FROM `website_identities`
+                    WHERE `identity_id` = ?
+                    LIMIT 1
+                ");
+                $stmt->execute(array($identityId));
+                $identityRow = $stmt->fetch(PDO::FETCH_ASSOC) ?: array();
+            } catch (Throwable $e) {
+                error_log('[config] Failed loading identity row for trait seeding: ' . $e->getMessage());
+                return array();
+            }
+        }
+
+        if (!spp_identity_profile_is_bot_identity($identityRow)) {
+            return array();
+        }
+
+        if (!spp_ensure_identity_profile_table()) {
+            return spp_identity_profile_default_bot_traits($identityRow);
+        }
+
+        try {
+            $pdo = spp_identity_pdo();
+            $tableName = spp_identity_profile_table_name();
+            $stmt = $pdo->prepare("SELECT 1 FROM `{$tableName}` WHERE `identity_id` = ? LIMIT 1");
+            $stmt->execute(array($identityId));
+            $hasRow = (bool)$stmt->fetchColumn();
+            if ($hasRow) {
+                return spp_get_identity_play_habit_traits($identityId, $identityRow);
+            }
+
+            $defaultTraits = spp_identity_profile_default_bot_traits($identityRow);
+            return spp_update_identity_play_habit_traits($identityId, $defaultTraits) ? $defaultTraits : $defaultTraits;
+        } catch (Throwable $e) {
+            error_log('[config] Failed seeding identity play habits: ' . $e->getMessage());
+            return spp_identity_profile_default_bot_traits($identityRow);
         }
     }
 }
@@ -2233,6 +3107,11 @@ if (!function_exists('spp_seed_identity_signature_defaults')) {
             return '';
         }
 
-        return spp_update_identity_signature($identityId, $signature) ? $signature : '';
+        $savedSignature = spp_update_identity_signature($identityId, $signature) ? $signature : '';
+        if ($savedSignature !== '' && function_exists('spp_seed_identity_play_habit_defaults')) {
+            spp_seed_identity_play_habit_defaults($identityId, $identityRow);
+        }
+
+        return $savedSignature;
     }
 }

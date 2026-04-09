@@ -1,6 +1,7 @@
 <?php
 
 require_once dirname(__DIR__, 2) . '/components/forum/forum.func.php';
+require_once __DIR__ . '/realm-capabilities.php';
 
 if (!function_exists('spp_server_honor_rank_blurbs')) {
     function spp_server_honor_rank_blurbs(): array
@@ -25,7 +26,7 @@ if (!function_exists('spp_server_honor_rank_blurbs')) {
 }
 
 if (!function_exists('spp_server_honor_prepare_rows')) {
-    function spp_server_honor_prepare_rows(array $rows, int $realmId, array $allianceRaces, array $classNames, array $raceNames): array
+    function spp_server_honor_prepare_rows(array $rows, int $realmId, array $allianceRaces, array $classNames, array $raceNames, bool $supportsCharacterDetail): array
     {
         $mangos = new Mangos();
         $rankBlurbById = spp_server_honor_rank_blurbs();
@@ -48,7 +49,9 @@ if (!function_exists('spp_server_honor_prepare_rows')) {
             $row['race_name'] = $raceName;
             $row['class_slug'] = strtolower(str_replace(' ', '', $className));
             $row['portrait_url'] = get_character_portrait_path((int)$row['guid'], (int)$row['gender'], (int)$row['race'], (int)$row['class']);
-            $row['character_url'] = 'index.php?n=server&sub=character&realm=' . $realmId . '&character=' . urlencode((string)$row['name']);
+            $row['character_url'] = $supportsCharacterDetail
+                ? 'index.php?n=server&sub=character&realm=' . $realmId . '&character=' . urlencode((string)$row['name'])
+                : '';
             $characters[] = $row;
         }
 
@@ -89,7 +92,9 @@ if (!function_exists('spp_server_honor_load_page_state')) {
             die('Realm DB map not loaded');
         }
 
-        $realmId = spp_resolve_realm_id($realmMap);
+        $requestedRealmId = isset($get['realm']) ? (int)$get['realm'] : 0;
+        $realmId = spp_resolve_realm_id($realmMap, $requestedRealmId > 0 ? $requestedRealmId : null);
+        $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);
         $p = isset($get['p']) ? max(1, (int)$get['p']) : 1;
         $itemsPerPage = isset($get['per_page']) ? max(1, (int)$get['per_page']) : 25;
         $search = trim((string)($get['search'] ?? ''));
@@ -110,6 +115,14 @@ if (!function_exists('spp_server_honor_load_page_state')) {
         $allianceRaces = array(1, 3, 4, 7, 11, 22, 25, 29);
 
         $charPdo = spp_get_pdo('chars', $realmId);
+        $honorableKillsColumn = spp_realm_capability_pick_column($charPdo, 'characters', array('stored_honorable_kills', 'honor_stored_hk', 'honor_last_week_hk'));
+        $dishonorableKillsColumn = spp_realm_capability_pick_column($charPdo, 'characters', array('stored_dishonorable_kills', 'honor_stored_dk'));
+        $honorPointsColumn = spp_realm_capability_pick_column($charPdo, 'characters', array('stored_honor_rating', 'honor_rank_points', 'honor_last_week_cp'));
+        $rankColumn = spp_realm_capability_pick_column($charPdo, 'characters', array('honor_highest_rank'));
+        $honorableKillsSql = $honorableKillsColumn !== null ? 'COALESCE(c.`' . $honorableKillsColumn . '`, 0)' : '0';
+        $dishonorableKillsSql = $dishonorableKillsColumn !== null ? 'COALESCE(c.`' . $dishonorableKillsColumn . '`, 0)' : '0';
+        $honorPointsSql = $honorPointsColumn !== null ? 'COALESCE(c.`' . $honorPointsColumn . '`, 0)' : '0';
+        $rankSql = $rankColumn !== null ? 'COALESCE(c.`' . $rankColumn . '`, 0)' : '0';
         $rows = $charPdo->query("
           SELECT
             c.guid,
@@ -118,16 +131,16 @@ if (!function_exists('spp_server_honor_load_page_state')) {
             c.class,
             c.gender,
             c.level,
-            COALESCE(c.stored_honorable_kills, 0) AS honorable_kills,
-            COALESCE(c.stored_dishonorable_kills, 0) AS dishonorable_kills,
-            COALESCE(c.stored_honor_rating, 0) AS honor_points,
-            COALESCE(c.honor_highest_rank, 0) AS rank_id
+            {$honorableKillsSql} AS honorable_kills,
+            {$dishonorableKillsSql} AS dishonorable_kills,
+            {$honorPointsSql} AS honor_points,
+            {$rankSql} AS rank_id
           FROM characters c
-          WHERE COALESCE(c.stored_honorable_kills, 0) > 0
+          WHERE {$honorableKillsSql} > 0
           ORDER BY honor_points DESC, honorable_kills DESC, level DESC, name ASC
         ")->fetchAll(PDO::FETCH_ASSOC);
 
-        $characters = spp_server_honor_prepare_rows(is_array($rows) ? $rows : array(), $realmId, $allianceRaces, $classNames, $raceNames);
+        $characters = spp_server_honor_prepare_rows(is_array($rows) ? $rows : array(), $realmId, $allianceRaces, $classNames, $raceNames, !empty($realmCapabilities['supports_character_detail']));
         $characters = array_values(array_filter($characters, function (array $row) use ($factionFilter, $searchNeedle, $allianceRaces) {
             if ($factionFilter === 'alliance' && !in_array((int)($row['race'] ?? 0), $allianceRaces, true)) {
                 return false;
@@ -158,6 +171,7 @@ if (!function_exists('spp_server_honor_load_page_state')) {
 
         return array(
             'realmId' => $realmId,
+            'realmCapabilities' => $realmCapabilities,
             'p' => $p,
             'pnum' => $pnum,
             'itemsPerPage' => $itemsPerPage,

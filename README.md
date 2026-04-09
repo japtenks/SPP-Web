@@ -70,6 +70,8 @@ After the site is up, visit [http://127.0.0.1/index.php?n=admin&sub=identities](
 
 `admin/botevents` is supported only when PHP CLI is available in the target environment, such as a Windows SPP install with portable PHP on `PATH`.
 
+`admin/bots` and `admin/botrotation` are available as Windows-safe admin surfaces for previewing maintenance scope and rotation health. Legacy helper commands are shown conditionally when their local tool scripts are present.
+
 Useful scripts in `tools/` include:
 
 - `process_bot_events.php` to process bot event data

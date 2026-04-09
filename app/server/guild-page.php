@@ -125,9 +125,15 @@ if (!function_exists('spp_guild_load_page_state')) {
     function spp_guild_load_page_state(array $args): array
     {
         extract($args, EXTR_SKIP);
+        $guildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild', array('guildid', 'guild_id'), 'guildid');
+        $guildLeaderColumn = spp_realm_capability_pick_column($charsPdo, 'guild', array('leaderguid', 'leader_guid'), 'leaderguid');
+        $guildMemberGuildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_member', array('guildid', 'guild_id'), $guildIdColumn);
+        $guildRankGuildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_rank', array('guildid', 'guild_id'), $guildMemberGuildIdColumn);
+        $guildRankIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_rank', array('rid', 'rankid', 'rank_id', 'id'), 'rid');
+        $guildLeaderGuid = (int)($guild['leaderguid'] ?? $guild['leader_guid'] ?? 0);
 
         if (!array_key_exists('info', $guild)) {
-            $stmt = $charsPdo->prepare("SELECT info FROM {$realmDB}.guild WHERE guildid=?");
+            $stmt = $charsPdo->prepare("SELECT info FROM {$realmDB}.guild WHERE `{$guildIdColumn}`=?");
             $stmt->execute([(int)$guildId]);
             $guild['info'] = (string)$stmt->fetchColumn();
         }
@@ -143,19 +149,23 @@ if (!function_exists('spp_guild_load_page_state')) {
         if ($selectedWebsiteCharacterId > 0) {
             $stmt = $charsPdo->prepare("SELECT gm.guid, gm.rank, COALESCE(gr.rights, 0) AS rank_rights
                  FROM {$realmDB}.guild_member gm
-                 LEFT JOIN {$realmDB}.guild_rank gr ON gr.guildid = gm.guildid AND gr.rid = gm.rank
-                 WHERE gm.guildid=? AND gm.guid=?");
+                 LEFT JOIN {$realmDB}.guild_rank gr ON gr.`{$guildRankGuildIdColumn}` = gm.`{$guildMemberGuildIdColumn}` AND gr.`{$guildRankIdColumn}` = gm.rank
+                 WHERE gm.`{$guildMemberGuildIdColumn}`=? AND gm.guid=?");
             $stmt->execute([(int)$guildId, (int)$selectedWebsiteCharacterId]);
             $selectedGuildMember = $stmt->fetch(PDO::FETCH_ASSOC);
         }
 
-        $isSelectedGuildLeader = $selectedWebsiteCharacterId > 0 && $selectedWebsiteCharacterId === (int)$guild['leaderguid'];
+        $guildMemberHasPublicNote = spp_db_column_exists($charsPdo, 'guild_member', 'pnote');
+        $guildMemberHasOfficerNote = spp_db_column_exists($charsPdo, 'guild_member', 'offnote');
+        $supportsGuildNotes = $guildMemberHasPublicNote && $guildMemberHasOfficerNote;
+
+        $isSelectedGuildLeader = $selectedWebsiteCharacterId > 0 && $selectedWebsiteCharacterId === $guildLeaderGuid;
         $isGm = (int)($user['gmlevel'] ?? 0) >= 1;
         $selectedGuildRankRights = isset($selectedGuildMember['rank_rights']) ? (int)$selectedGuildMember['rank_rights'] : 0;
         $guildSetMotdRight = 4096;
         $guildViewOfficerNoteRight = 16384;
-        $canEditGuildNotes = $isSelectedGuildLeader || $isGm;
-        $canViewOfficerNotes = $isSelectedGuildLeader || $isGm || (($selectedGuildRankRights & $guildViewOfficerNoteRight) === $guildViewOfficerNoteRight);
+        $canEditGuildNotes = $supportsGuildNotes && ($isSelectedGuildLeader || $isGm);
+        $canViewOfficerNotes = $supportsGuildNotes && ($isSelectedGuildLeader || $isGm || (($selectedGuildRankRights & $guildViewOfficerNoteRight) === $guildViewOfficerNoteRight));
         $canEditGuildMotd = $isSelectedGuildLeader || $isGm || (($selectedGuildRankRights & $guildSetMotdRight) === $guildSetMotdRight);
         $canManageGuildRoster = $isSelectedGuildLeader || $isGm;
         $canAccessGuildLeaderTab = $canEditGuildNotes || $canEditGuildMotd || $canManageGuildRoster || $isSelectedGuildLeader || $isGm;
@@ -202,18 +212,18 @@ if (!function_exists('spp_guild_load_page_state')) {
                 $stmt = $charsPdo->prepare("SELECT c.guid, c.name, gm.rank
                      FROM {$realmDB}.guild_member gm
                      INNER JOIN {$realmDB}.characters c ON c.guid = gm.guid
-                     WHERE gm.guildid=? AND gm.guid=?");
+                     WHERE gm.`{$guildMemberGuildIdColumn}`=? AND gm.guid=?");
                 $stmt->execute([(int)$guildId, (int)$targetGuid]);
                 $targetMember = $stmt->fetch(PDO::FETCH_ASSOC);
 
                 if (!$targetMember) {
                     $guildNoteError = 'That guild member could not be found.';
-                } elseif ((int)$targetMember['guid'] === (int)$guild['leaderguid']) {
+                } elseif ((int)$targetMember['guid'] === $guildLeaderGuid) {
                     $guildNoteError = 'The guild leader cannot be managed from the website.';
                 } else {
                     $targetName = (string)$targetMember['name'];
                     $targetRank = (int)$targetMember['rank'];
-                    $stmt = $charsPdo->prepare("SELECT COALESCE(MAX(rid), 0) FROM {$realmDB}.guild_rank WHERE guildid=?");
+                    $stmt = $charsPdo->prepare("SELECT COALESCE(MAX(`{$guildRankIdColumn}`), 0) FROM {$realmDB}.guild_rank WHERE `{$guildRankGuildIdColumn}`=?");
                     $stmt->execute([(int)$guildId]);
                     $maxGuildRankId = (int)$stmt->fetchColumn();
                     $soapCommand = '';
@@ -319,7 +329,7 @@ if (!function_exists('spp_guild_load_page_state')) {
 
                                 if ($publicSoapResult === false || $officerSoapResult === false) {
                                     try {
-                                        $stmt = $charsPdo->prepare('UPDATE guild_member SET pnote = ?, offnote = ? WHERE guildid = ? AND guid = ?');
+                                        $stmt = $charsPdo->prepare('UPDATE guild_member SET pnote = ?, offnote = ? WHERE `' . $guildMemberGuildIdColumn . '` = ? AND guid = ?');
                                         $stmt->execute(array($publicNote, $officerNote, (int)$guildId, (int)$validGuid));
                                         $guildNoteWriteMode = 'sql_fallback';
                                     } catch (Throwable $e) {
@@ -347,7 +357,7 @@ if (!function_exists('spp_guild_load_page_state')) {
                         $realmId,
                         $soapCommand,
                         static function () use ($charsPdo, $guildId, $newMotd): void {
-                            $stmt = $charsPdo->prepare('UPDATE guild SET motd = ? WHERE guildid = ? LIMIT 1');
+                            $stmt = $charsPdo->prepare('UPDATE guild SET motd = ? WHERE `' . $guildIdColumn . '` = ? LIMIT 1');
                             $stmt->execute(array($newMotd, (int)$guildId));
                         },
                         array(
@@ -442,7 +452,7 @@ if (!function_exists('spp_guild_load_page_state')) {
                 if (!array_key_exists($newFlavor, $guildFlavorProfiles)) {
                     $flavorError = 'Invalid flavor selected.';
                 } else {
-                    $stmt = $charsPdo->prepare("SELECT COUNT(*) FROM {$realmDB}.guild_member WHERE guildid=?");
+                    $stmt = $charsPdo->prepare("SELECT COUNT(*) FROM {$realmDB}.guild_member WHERE `{$guildMemberGuildIdColumn}`=?");
                     $stmt->execute([(int)$guildId]);
                     $memberCount = (int)$stmt->fetchColumn();
 
@@ -468,7 +478,7 @@ if (!function_exists('spp_guild_load_page_state')) {
         $stmt = $charsPdo->prepare(
             "SELECT `key`, value FROM {$realmDB}.ai_playerbot_db_store
              WHERE preset='default'
-             AND guid = (SELECT guid FROM {$realmDB}.guild_member WHERE guildid=? LIMIT 1)"
+             AND guid = (SELECT guid FROM {$realmDB}.guild_member WHERE `{$guildMemberGuildIdColumn}`=? LIMIT 1)"
         );
         $stmt->execute([(int)$guildId]);
         $sampleOverrides = [];
@@ -513,7 +523,7 @@ if (!function_exists('spp_guild_load_page_state')) {
             }
 
             if ($createdColumn !== null) {
-                $stmt = $charsPdo->prepare("SELECT `{$createdColumn}` FROM {$realmDB}.guild WHERE guildid=?");
+                $stmt = $charsPdo->prepare("SELECT `{$createdColumn}` FROM {$realmDB}.guild WHERE `{$guildIdColumn}`=?");
                 $stmt->execute([(int)$guildId]);
                 $createdValue = $stmt->fetchColumn();
                 if (!empty($createdValue) && $createdValue !== '0000-00-00 00:00:00') {
@@ -535,7 +545,8 @@ if (!function_exists('spp_guild_load_page_state')) {
                     }
 
                     if ($eventTimeColumn !== null) {
-                        $stmt = $charsPdo->prepare("SELECT MIN(`{$eventTimeColumn}`) FROM {$realmDB}.guild_eventlog WHERE guildid=?");
+                        $guildEventlogGuildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_eventlog', array('guildid', 'guild_id'), $guildIdColumn);
+                        $stmt = $charsPdo->prepare("SELECT MIN(`{$eventTimeColumn}`) FROM {$realmDB}.guild_eventlog WHERE `{$guildEventlogGuildIdColumn}`=?");
                         $stmt->execute([(int)$guildId]);
                         $firstEventValue = $stmt->fetchColumn();
                         if (!empty($firstEventValue)) {
@@ -552,8 +563,22 @@ if (!function_exists('spp_guild_load_page_state')) {
         }
 
         $stmt = $charsPdo->prepare("SELECT guid, name, race, class, level, gender FROM {$realmDB}.characters WHERE guid=?");
-        $stmt->execute([(int)$guild['leaderguid']]);
+        $stmt->execute([$guildLeaderGuid]);
         $leader = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $playerNoteSelect = $guildMemberHasPublicNote
+            ? 'gm.pnote AS pnote'
+            : "'' AS pnote";
+        $officerNoteSelect = $guildMemberHasOfficerNote
+            ? 'gm.offnote AS offnote'
+            : "'' AS offnote";
+        $guildRankNameSelect = "CONCAT('Rank ', gm.rank) AS rank_name";
+        foreach (array('rname', 'rankname', 'name') as $candidateColumn) {
+            if (spp_db_column_exists($charsPdo, 'guild_rank', $candidateColumn)) {
+                $guildRankNameSelect = "gr.`{$candidateColumn}` AS rank_name";
+                break;
+            }
+        }
 
         $stmt = $charsPdo->prepare("
             SELECT
@@ -565,13 +590,13 @@ if (!function_exists('spp_guild_load_page_state')) {
               c.level,
               c.gender,
               gm.rank,
-              gm.pnote,
-              gm.offnote,
-              gr.rname AS rank_name
+              {$playerNoteSelect},
+              {$officerNoteSelect},
+              {$guildRankNameSelect}
             FROM {$realmDB}.guild_member gm
             LEFT JOIN {$realmDB}.characters c ON gm.guid = c.guid
-            LEFT JOIN {$realmDB}.guild_rank gr ON gr.guildid = gm.guildid AND gr.rid = gm.rank
-            WHERE gm.guildid=?
+            LEFT JOIN {$realmDB}.guild_rank gr ON gr.`{$guildRankGuildIdColumn}` = gm.`{$guildMemberGuildIdColumn}` AND gr.`{$guildRankIdColumn}` = gm.rank
+            WHERE gm.`{$guildMemberGuildIdColumn}`=?
             ORDER BY gm.rank ASC, c.level DESC, c.name ASC
         ");
         $stmt->execute([(int)$guildId]);

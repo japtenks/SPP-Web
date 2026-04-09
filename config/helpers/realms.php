@@ -20,6 +20,7 @@ if (!function_exists('spp_default_realm_id')) {
 
 if (!function_exists('spp_resolve_realm_id')) {
     function spp_resolve_realm_id(array $realmDbMap, $fallback = null) {
+        $enabledRealmMap = $GLOBALS['allEnabledRealmDbMap'] ?? array();
         $candidates = [];
 
         // When a caller passes a realm explicitly, keep that intent instead of
@@ -36,9 +37,19 @@ if (!function_exists('spp_resolve_realm_id')) {
 
         foreach ($candidates as $candidate) {
             $realmId = (int)$candidate;
-            if ($realmId > 0 && isset($realmDbMap[$realmId])) {
+            if ($realmId <= 0 || !isset($realmDbMap[$realmId])) {
+                continue;
+            }
+            if (is_array($enabledRealmMap) && !empty($enabledRealmMap) && !isset($enabledRealmMap[$realmId])) {
+                continue;
+            }
+            if ($realmId > 0) {
                 return $realmId;
             }
+        }
+
+        if (is_array($enabledRealmMap) && !empty($enabledRealmMap)) {
+            return spp_default_realm_id($enabledRealmMap);
         }
 
         return spp_default_realm_id($realmDbMap);

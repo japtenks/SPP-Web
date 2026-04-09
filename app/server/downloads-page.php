@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/realm-capabilities.php';
+
 if (!function_exists('spp_downloads_format_size')) {
     function spp_downloads_format_size($bytes): string
     {
@@ -66,9 +68,12 @@ if (!function_exists('spp_server_downloads_load_page_state')) {
     function spp_server_downloads_load_page_state(array $args = array()): array
     {
         $realmMap = (array)($args['realm_map'] ?? ($GLOBALS['realmDbMap'] ?? array()));
+        $get = (array)($args['get'] ?? $_GET);
         $siteRoot = dirname(__DIR__, 2);
         $downloadsRoot = $siteRoot . DIRECTORY_SEPARATOR . 'downloads';
-        $downloadsRealmId = !empty($realmMap) ? (int)spp_resolve_realm_id($realmMap) : 1;
+        $requestedRealmId = isset($get['realm']) ? (int)$get['realm'] : 0;
+        $downloadsRealmId = !empty($realmMap) ? (int)spp_resolve_realm_id($realmMap, $requestedRealmId > 0 ? $requestedRealmId : null) : 1;
+        $realmCapabilities = spp_realm_capabilities($realmMap, $downloadsRealmId);
         $realmlistHref = 'index.php?n=server&sub=realmlist&nobody=1&realm=' . $downloadsRealmId;
 
         $sectionDefinitions = array(
@@ -97,6 +102,7 @@ if (!function_exists('spp_server_downloads_load_page_state')) {
             'downloadsRealmId' => $downloadsRealmId,
             'downloadsRealmlistHref' => $realmlistHref,
             'downloadsSections' => $downloadsSections,
+            'realmCapabilities' => $realmCapabilities,
             'pathway_info' => array(
                 array('title' => 'Downloads', 'link' => ''),
             ),

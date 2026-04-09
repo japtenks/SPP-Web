@@ -41,7 +41,7 @@ if (!function_exists('spp_account_register_resolve_realmlist_host')) {
         }
 
         try {
-            $realmdPdo = spp_get_pdo('realmd', (int)$realmId);
+            $realmdPdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
             $stmt = $realmdPdo->prepare('SELECT `address` FROM `realmlist` WHERE `id` = ? LIMIT 1');
             $stmt->execute(array((int)$realmId));
             $realmInfo = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -87,7 +87,7 @@ if (!function_exists('spp_account_register_handle_submission')) {
         }
 
         try {
-            $realmdPdo = spp_get_pdo('realmd', (int)$state['realm_id']);
+            $realmdPdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
 
             $maxAccountsPerIp = (int)spp_config_generic('max_accounts_per_ip', 0);
             if ($maxAccountsPerIp > 0) {

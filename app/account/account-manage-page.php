@@ -45,7 +45,7 @@ if (!function_exists('spp_account_manage_load_page_state')) {
                 ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
                 : spp_resolve_realm_id($realmDbMap);
         }
-        $managePdo = spp_get_pdo('realmd', $currentRealmId);
+        $managePdo = function_exists('spp_canonical_auth_pdo') ? spp_canonical_auth_pdo() : spp_get_pdo('realmd', 1);
         spp_ensure_website_account_row($managePdo, $user['id']);
         $manageCharPdo = spp_get_pdo('chars', $currentRealmId);
 
@@ -111,7 +111,8 @@ if (!function_exists('spp_account_manage_load_page_state')) {
         $ownedCharacters = $GLOBALS['account_characters'] ?? array();
         if (!empty($ownedCharacters) && is_array($ownedCharacters)) {
             foreach ($ownedCharacters as $character) {
-                if ((int)($character['account'] ?? $user['id']) !== (int)$user['id']) {
+                $websiteAccountId = (int)($character['website_account_id'] ?? $character['account'] ?? $user['id']);
+                if ($websiteAccountId !== (int)$user['id']) {
                     continue;
                 }
                 $accountCharacters[] = array(

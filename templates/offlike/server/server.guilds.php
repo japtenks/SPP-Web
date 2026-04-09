@@ -1,5 +1,7 @@
 <?php
 builddiv_start(1, 'Guilds', 1);
+$guildsRealmCapabilities = $realmCapabilities ?? $realm_capabilities ?? array();
+$guildCharacterLinksEnabled = !empty($guildsRealmCapabilities['supports_character_detail']);
 ?>
 
 <div class="guild-list-shell list-page-shell feature-shell">
@@ -103,9 +105,13 @@ builddiv_start(1, 'Guilds', 1);
         </div>
         <div class="guild-table__cell guild-table__leader class-<?php echo htmlspecialchars($guild['leader_class_slug']); ?>">
           <?php if (!empty($guild['leader_name'])): ?>
-            <a href="<?php echo htmlspecialchars($guild['leader_url']); ?>">
-              <?php echo htmlspecialchars($guild['leader_name']); ?>
-            </a>
+            <?php if ($guildCharacterLinksEnabled && !empty($guild['leader_url'])): ?>
+              <a href="<?php echo htmlspecialchars($guild['leader_url']); ?>">
+                <?php echo htmlspecialchars($guild['leader_name']); ?>
+              </a>
+            <?php else: ?>
+              <span><?php echo htmlspecialchars($guild['leader_name']); ?></span>
+            <?php endif; ?>
           <?php else: ?>
             -
           <?php endif; ?>

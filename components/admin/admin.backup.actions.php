@@ -699,68 +699,6 @@ function spp_admin_backup_create_backup_package(array $view): array
     return spp_admin_backup_export_character($sourceRealmdPdo, $sourceCharsPdo, $view);
 }
 
-function spp_admin_backup_vmangos_converter_parts(): array
-{
-    $parts = array();
-    $converterFiles = array(
-        'pdump_convert' => array(
-            'path' => 'C:\\Git\\vmangos\\pdump_convert.txt',
-            'extension' => 'vbs',
-        ),
-        'pdump_converter' => array(
-            'path' => 'C:\\Git\\vmangos\\pdump_convertert.txt',
-            'extension' => 'bat',
-        ),
-    );
-
-    foreach ($converterFiles as $lane => $meta) {
-        $path = (string)($meta['path'] ?? '');
-        if ($path === '' || !is_file($path) || !is_readable($path)) {
-            continue;
-        }
-
-        $content = (string)file_get_contents($path);
-        $parts[$lane] = array(
-            'extension' => (string)($meta['extension'] ?? 'txt'),
-            'lines' => preg_split("/\r\n|\r|\n/", $content),
-        );
-    }
-
-    return $parts;
-}
-
-function spp_admin_backup_vmangos_manifest_lines(array $view, array $scope): array
-{
-    $lines = array(
-        'vMaNGOS Transform-Export Manifest',
-        'Generated: ' . date('Y-m-d H:i:s'),
-        'Route: ' . (string)($view['source_realm_name'] ?? 'Unknown') . ' -> ' . (string)($view['target_realm_name'] ?? 'Unknown'),
-        'Entity: ' . spp_admin_backup_entity_label((string)($scope['entity_type'] ?? 'account')),
-        'Label: ' . (string)($scope['label'] ?? ''),
-        'Accounts resolved: ' . count((array)($scope['account_ids'] ?? array())),
-        'Characters resolved: ' . count((array)($scope['character_rows'] ?? array())),
-    );
-
-    $guildSummary = (array)(($scope['meta']['guild_summary'] ?? array()));
-    if (!empty($guildSummary)) {
-        $lines[] = 'Guild members resolved: ' . (int)($guildSummary['member_count'] ?? 0);
-        $lines[] = 'Guild account mix: ' . (int)($guildSummary['human_account_count'] ?? 0) . ' human / ' . (int)($guildSummary['bot_account_count'] ?? 0) . ' bot';
-    }
-
-    $lines[] = '';
-    $lines[] = 'Apply order';
-    $lines[] = '1. Review realmd.sql and chars.sql before importing anything.';
-    $lines[] = '2. Apply realmd.sql to the target realmd/auth database.';
-    $lines[] = '3. Apply chars.sql to the target characters database.';
-    $lines[] = '4. This package is manual-review and manual-apply only. No live transfer is performed.';
-    $lines[] = '';
-    $lines[] = 'Converter assets';
-    $lines[] = '- Mirrored pdump converter helper files are included beside this manifest.';
-    $lines[] = '- The generated SQL already targets the validated target schema, so the mirrored converter files are operator reference material rather than an automatic step.';
-
-    return $lines;
-}
-
 function spp_admin_backup_vmangos_guild_lines(PDO $sourceCharsPdo, PDO $targetCharsPdo, array $guildRow, array $memberRows, array $characterVarMap): array
 {
     $targetGuildColumns = spp_admin_backup_target_columns($targetCharsPdo, 'guild');
@@ -884,6 +822,8 @@ function spp_admin_backup_xfer_vmangos_package(array $view): array
     $targetCharsPdo = spp_get_pdo('chars', $targetRealmId);
 
     $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+    $targetRealmdDbName = str_replace('`', '', trim((string)($realmDbMap[$targetRealmId]['realmd'] ?? '')));
+    $targetCharsDbName = str_replace('`', '', trim((string)($realmDbMap[$targetRealmId]['chars'] ?? '')));
     $validation = spp_admin_backup_vmangos_transform_validation(
         $sourceRealmdPdo,
         $sourceCharsPdo,
@@ -1007,6 +947,22 @@ function spp_admin_backup_xfer_vmangos_package(array $view): array
         $realmdLines[] = '';
     }
 
+    if (!empty($accountVariableMap)) {
+        $charsLines[] = spp_admin_backup_comment('Resolve target account ids from the target realmd database for this chars import session.');
+        foreach ((array)$scope['account_ids'] as $accountId) {
+            $accountId = (int)$accountId;
+            $accountRow = (array)($scope['account_rows_by_id'][$accountId] ?? array());
+            $accountVar = (string)($accountVariableMap[$accountId] ?? '');
+            $username = (string)($accountRow['username'] ?? '');
+            if ($accountVar === '' || $username === '' || $targetRealmdDbName === '') {
+                continue;
+            }
+
+            $charsLines[] = 'SET ' . $accountVar . ' := (SELECT `id` FROM `' . $targetRealmdDbName . '`.`account` WHERE `username` = ' . spp_admin_backup_sql_literal($username) . ' LIMIT 1);';
+        }
+        $charsLines[] = '';
+    }
+
     foreach ((array)$scope['character_rows'] as $characterRow) {
         $sourceGuid = (int)($characterRow['guid'] ?? 0);
         $sourceAccountId = (int)($characterRow['account'] ?? 0);
@@ -1045,24 +1001,54 @@ function spp_admin_backup_xfer_vmangos_package(array $view): array
         }
     }
 
+    $packageLines = array(
+        spp_admin_backup_comment($entityLabel . ' transform-export package'),
+        spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
+        spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
+        spp_admin_backup_comment('This package.sql file contains review-first vMaNGOS transform SQL only. No live apply is performed.'),
+        spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
+        '',
+    );
+
+    if ($targetRealmdDbName !== '') {
+        $packageLines[] = spp_admin_backup_comment('Realmd/auth section');
+        $packageLines[] = 'USE `' . $targetRealmdDbName . '`;';
+        $packageLines[] = '';
+    }
+    $packageLines = array_merge($packageLines, array_slice($realmdLines, 6));
+
+    if ($targetCharsDbName !== '') {
+        $packageLines[] = spp_admin_backup_comment('Characters section');
+        $packageLines[] = 'USE `' . $targetCharsDbName . '`;';
+        $packageLines[] = '';
+    }
+    $packageLines = array_merge($packageLines, array_slice($charsLines, 6));
+
+    if ($targetRealmdDbName !== '') {
+        $realmSyncLines = array();
+        foreach ($accountVariableMap as $accountVar) {
+            $realmSyncLines = array_merge(
+                $realmSyncLines,
+                spp_admin_backup_realmcharacters_sync_lines($targetRealmdPdo, $targetRealmId, (string)$accountVar, $targetCharsDbName)
+            );
+        }
+        if (!empty($realmSyncLines)) {
+            $packageLines[] = spp_admin_backup_comment('Realmcharacters sync section');
+            $packageLines[] = 'USE `' . $targetRealmdDbName . '`;';
+            $packageLines[] = '';
+            $packageLines = array_merge($packageLines, $realmSyncLines);
+        }
+    }
+
     $parts = array(
-        'manifest' => array(
-            'extension' => 'txt',
-            'lines' => spp_admin_backup_vmangos_manifest_lines($view, $scope),
-        ),
-        'realmd' => array(
+        'package' => array(
             'extension' => 'sql',
-            'lines' => $realmdLines,
-        ),
-        'chars' => array(
-            'extension' => 'sql',
-            'lines' => $charsLines,
+            'lines' => $packageLines,
         ),
     );
-    $parts = array_merge($parts, spp_admin_backup_vmangos_converter_parts());
 
     return spp_admin_backup_result_with_files(
-        'vMaNGOS ' . strtolower($entityLabel) . ' transform-export created as a manual package with manifest, realmd.sql, and chars.sql.',
+        'vMaNGOS ' . strtolower($entityLabel) . ' transform-export created as a single manual package.sql file.',
         spp_admin_backup_write_output_set(
             'xfer',
             (string)($scope['entity_type'] ?? 'account'),
@@ -1451,6 +1437,8 @@ function spp_admin_backup_handle_action(array $view): array
         $result = spp_admin_backup_create_backup_package($view);
     } elseif ($action === 'create_xfer_package') {
         $result = spp_admin_backup_create_xfer_package($view);
+    } elseif ($action === 'clear_cache') {
+        $result = spp_admin_backup_clear_output_dir();
     } else {
         $result = array('ok' => false, 'message' => 'Unknown backup action.');
     }

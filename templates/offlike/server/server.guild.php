@@ -4,6 +4,7 @@ require_once($siteRoot . '/config/config-protected.php');
 require_once($siteRoot . '/components/forum/forum.func.php');
 require_once($siteRoot . '/components/admin/admin.playerbots.helpers.php');
 require_once($siteRoot . '/app/server/guild-page.php');
+require_once($siteRoot . '/app/server/realm-capabilities.php');
 
 if (!function_exists('spp_class_icon_url')) {
     function spp_class_icon_url($classId)
@@ -139,7 +140,8 @@ if (!function_exists('spp_guild_apply_flavor_sql_fallback')) {
             return false;
         }
 
-        $stmt = $charsPdo->prepare("SELECT guid FROM guild_member WHERE guildid = ? ORDER BY guid ASC");
+        $guildMemberGuildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_member', array('guildid', 'guild_id'), 'guildid');
+        $stmt = $charsPdo->prepare("SELECT guid FROM guild_member WHERE `{$guildMemberGuildIdColumn}` = ? ORDER BY guid ASC");
         $stmt->execute(array($guildId));
         $memberGuids = array_values(array_unique(array_filter(array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN, 0) ?: array()))));
         if (empty($memberGuids)) {
@@ -286,6 +288,9 @@ $armoryRealm = spp_get_armory_realm_name($realmId) ?? '';
 $currtmp = '/armory';
 $charsPdo  = spp_get_pdo('chars', $realmId);
 $realmdPdo = spp_get_pdo('realmd', $realmId);
+if (function_exists('spp_canonical_auth_pdo')) {
+    $realmdPdo = spp_canonical_auth_pdo();
+}
 
 $guildId = isset($_GET['guildid']) ? (int)$_GET['guildid'] : 0;
 if ($guildId < 1) {
@@ -303,7 +308,9 @@ $raceNames = [
 ];
 $allianceRaces = [1, 3, 4, 7, 11, 22, 25, 29];
 
-$stmt = $charsPdo->prepare("SELECT guildid, name, leaderguid, motd FROM {$realmDB}.guild WHERE guildid=?");
+$guildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild', array('guildid', 'guild_id'), 'guildid');
+$guildLeaderColumn = spp_realm_capability_pick_column($charsPdo, 'guild', array('leaderguid', 'leader_guid'), 'leaderguid');
+$stmt = $charsPdo->prepare("SELECT `{$guildIdColumn}` AS guildid, name, `{$guildLeaderColumn}` AS leaderguid, motd FROM {$realmDB}.guild WHERE `{$guildIdColumn}`=?");
 $stmt->execute([(int)$guildId]);
 $guild = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$guild) {
@@ -311,22 +318,34 @@ if (!$guild) {
     return;
 }
 
-$guildPageState = spp_guild_load_page_state(array(
-    'realmMap' => $realmMap,
-    'realmId' => $realmId,
-    'guildId' => $guildId,
-    'guild' => $guild,
-    'realmDB' => $realmDB,
-    'realmWorldDB' => $realmWorldDB,
-    'charsPdo' => $charsPdo,
-    'realmdPdo' => $realmdPdo,
-    'armoryRealm' => $armoryRealm,
-    'classNames' => $classNames,
-    'raceNames' => $raceNames,
-    'allianceRaces' => $allianceRaces,
-    'user' => $user,
-));
-extract($guildPageState, EXTR_SKIP);
+$guildPageState = array();
+$guildRenderError = '';
+try {
+    $guildPageState = spp_guild_load_page_state(array(
+        'realmMap' => $realmMap,
+        'realmId' => $realmId,
+        'guildId' => $guildId,
+        'guild' => $guild,
+        'realmDB' => $realmDB,
+        'realmWorldDB' => $realmWorldDB,
+        'charsPdo' => $charsPdo,
+        'realmdPdo' => $realmdPdo,
+        'armoryRealm' => $armoryRealm,
+        'classNames' => $classNames,
+        'raceNames' => $raceNames,
+        'allianceRaces' => $allianceRaces,
+        'user' => $user,
+    ));
+    extract($guildPageState, EXTR_SKIP);
+} catch (Throwable $e) {
+    $guildRenderError = $e->getMessage();
+    error_log('[guild] Reduced-mode render fallback: ' . $guildRenderError);
+}
+
+if ($guildRenderError !== '') {
+    echo "<div class='guild-page'><div class='guild-detail'><div style='padding:24px;color:#f5c46b;'>This guild page is running in reduced mode for realm " . (int)$realmId . ". Some guild details are not available on this schema yet.</div></div></div>";
+    return;
+}
 
 $guildOrderShareBlock = trim((string)($guildOrderShareBlock ?? ($guildInfo ?? ($guild['info'] ?? ''))));
 $guildOrderSharePreview = array('errors' => array(), 'entries' => array());
