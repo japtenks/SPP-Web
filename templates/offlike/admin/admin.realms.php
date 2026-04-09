@@ -7,6 +7,7 @@ $runtimeWarnings = array_values((array)($runtime_warnings ?? array()));
 $schemaScan = (array)($schema_scan ?? array());
 $schemaWarnings = array_values((array)($schemaScan['warnings'] ?? array()));
 $slotErrors = array_values((array)($slot_errors ?? array()));
+$realmBuildOptions = function_exists('spp_admin_realms_build_options') ? spp_admin_realms_build_options() : array();
 $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
   'id' => '',
   'name' => '',
@@ -26,6 +27,9 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
   'enabled' => 1,
   'make_default' => 0,
 );
+$slotBuildSelection = function_exists('spp_admin_realms_build_selection')
+  ? spp_admin_realms_build_selection((string)($slotFormState['realmbuilds'] ?? ''))
+  : array('approved' => array(), 'custom' => '');
 ?>
 <?php if ($view_mode === 'list') { ?>
   <div class="realm-admin__intro feature-hero">
@@ -183,7 +187,7 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
             </td>
             <td>
               <a class="realm-admin__button realm-admin__button--secondary" href="index.php?n=admin&amp;sub=realms&amp;action=edit&amp;id=<?php echo (int)$item['id']; ?>">Manage</a>
-              <?php if (empty($item['has_realmlist_row'])) { ?>
+              <?php if (empty($item['has_realmlist_row']) && in_array((int)$item['id'], (array)($runtime_settings['enabled_realm_ids'] ?? array()), true)) { ?>
                 <form action="index.php?n=admin&amp;sub=realms&amp;action=sync-slot&amp;id=<?php echo (int)$item['id']; ?>" method="post" style="display:inline-block; margin-top:6px;">
                   <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($admin_realms_csrf_token ?? spp_csrf_token('admin_realms')); ?>">
                   <button class="realm-admin__button realm-admin__button--secondary" type="submit">Sync realmlist row</button>
@@ -316,7 +320,18 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
         <div class="realm-admin__field"><label>Timezone</label><select name="timezone"><?php foreach ($realm_timezone_def as $tmp_id => $tmp_name) { ?><option value="<?php echo (int)$tmp_id; ?>"<?php echo ((int)($slotFormState['timezone'] ?? 1) === (int)$tmp_id) ? ' selected' : ''; ?>><?php echo htmlspecialchars($tmp_name); ?></option><?php } ?></select></div>
         <div class="realm-admin__field"><label>Allowed Security Level</label><input type="text" name="allowedSecurityLevel" value="<?php echo htmlspecialchars((string)($slotFormState['allowedSecurityLevel'] ?? 0)); ?>"></div>
         <div class="realm-admin__field"><label>Population</label><input type="text" name="population" value="<?php echo htmlspecialchars((string)($slotFormState['population'] ?? '0')); ?>"></div>
-        <div class="realm-admin__field"><label>Realm Builds</label><input type="text" name="realmbuilds" value="<?php echo htmlspecialchars((string)($slotFormState['realmbuilds'] ?? '')); ?>"></div>
+        <div class="realm-admin__field">
+          <label>Realm Builds</label>
+          <div class="realm-admin__muted">Approved builds</div>
+          <?php foreach ($realmBuildOptions as $buildValue => $buildLabel) { ?>
+            <label class="realm-admin__toggle">
+              <input type="checkbox" name="approved_builds[]" value="<?php echo htmlspecialchars((string)$buildValue); ?>"<?php echo in_array((string)$buildValue, (array)($slotBuildSelection['approved'] ?? array()), true) ? ' checked' : ''; ?>>
+              <?php echo htmlspecialchars((string)$buildLabel); ?>
+            </label>
+          <?php } ?>
+          <div class="realm-admin__muted" style="margin-top:8px;">Custom builds</div>
+          <input type="text" name="custom_builds" value="<?php echo htmlspecialchars((string)($slotBuildSelection['custom'] ?? '')); ?>" placeholder="Example: 5595 6546">
+        </div>
       </div>
       <div class="realm-admin__advanced">
         <label><input type="hidden" name="enabled" value="0"><input type="checkbox" name="enabled" value="1"<?php echo ((int)($slotFormState['enabled'] ?? 1) === 1) ? ' checked' : ''; ?>> Enable this runtime slot after save</label><br>
@@ -348,7 +363,19 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
         <div class="realm-admin__field"><label>Timezone</label><select name="timezone"><?php foreach ($realm_timezone_def as $tmp_id => $tmp_name) { ?><option value="<?php echo (int)$tmp_id; ?>"<?php echo ((int)($item['timezone'] ?? 1) === (int)$tmp_id) ? ' selected' : ''; ?>><?php echo htmlspecialchars($tmp_name); ?></option><?php } ?></select></div>
         <div class="realm-admin__field"><label>Allowed Security Level</label><input type="text" name="allowedSecurityLevel" value="<?php echo htmlspecialchars((string)($item['allowedSecurityLevel'] ?? 0)); ?>"></div>
         <div class="realm-admin__field"><label>Population</label><input type="text" name="population" value="<?php echo htmlspecialchars((string)($item['population'] ?? '0')); ?>"></div>
-        <div class="realm-admin__field"><label>Realm Builds</label><input type="text" name="realmbuilds" value="<?php echo htmlspecialchars((string)($item['realmbuilds'] ?? '')); ?>"></div>
+        <?php $itemBuildSelection = function_exists('spp_admin_realms_build_selection') ? spp_admin_realms_build_selection((string)($item['realmbuilds'] ?? '')) : array('approved' => array(), 'custom' => ''); ?>
+        <div class="realm-admin__field">
+          <label>Realm Builds</label>
+          <div class="realm-admin__muted">Approved builds</div>
+          <?php foreach ($realmBuildOptions as $buildValue => $buildLabel) { ?>
+            <label class="realm-admin__toggle">
+              <input type="checkbox" name="approved_builds[]" value="<?php echo htmlspecialchars((string)$buildValue); ?>"<?php echo in_array((string)$buildValue, (array)($itemBuildSelection['approved'] ?? array()), true) ? ' checked' : ''; ?>>
+              <?php echo htmlspecialchars((string)$buildLabel); ?>
+            </label>
+          <?php } ?>
+          <div class="realm-admin__muted" style="margin-top:8px;">Custom builds</div>
+          <input type="text" name="custom_builds" value="<?php echo htmlspecialchars((string)($itemBuildSelection['custom'] ?? '')); ?>" placeholder="Example: 5595 6546">
+        </div>
       </div>
       <div class="realm-admin__advanced">
         <label><input type="hidden" name="enabled" value="0"><input type="checkbox" name="enabled" value="1"<?php echo in_array((int)$item['id'], (array)($runtime_settings['enabled_realm_ids'] ?? array()), true) ? ' checked' : ''; ?>> Enable this runtime slot</label><br>

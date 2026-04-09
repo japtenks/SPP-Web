@@ -35,6 +35,14 @@ if (!function_exists('spp_admin_realms_runtime_definition_defaults')) {
 if (!function_exists('spp_admin_realms_runtime_slot_form')) {
     function spp_admin_realms_runtime_slot_form(array $payload, array $existingDefinition = array()): array
     {
+        if (array_key_exists('approved_builds', $payload) || array_key_exists('custom_builds', $payload)) {
+            $approvedBuilds = array_values(array_filter(array_map('trim', (array)($payload['approved_builds'] ?? array())), static function ($value) {
+                return $value !== '';
+            }));
+            $customBuilds = spp_admin_realms_parse_builds((string)($payload['custom_builds'] ?? ''));
+            $payload['realmbuilds'] = implode(' ', array_values(array_unique(array_merge($approvedBuilds, $customBuilds))));
+        }
+
         $defaults = spp_admin_realms_runtime_definition_defaults((int)($existingDefinition['id'] ?? 0));
         $form = array_merge($defaults, $existingDefinition, $payload);
 

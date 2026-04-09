@@ -51,6 +51,81 @@ function spp_admin_realms_timezone_definitions()
     );
 }
 
+if (!function_exists('spp_admin_realms_first_non_empty')) {
+    function spp_admin_realms_first_non_empty(...$values)
+    {
+        foreach ($values as $value) {
+            if (is_string($value)) {
+                $trimmed = trim($value);
+                if ($trimmed !== '') {
+                    return $trimmed;
+                }
+                continue;
+            }
+
+            if ($value !== null && $value !== '') {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+}
+
+if (!function_exists('spp_admin_realms_build_options')) {
+    function spp_admin_realms_build_options(): array
+    {
+        return array(
+            '5875' => '1.12.1 (5875)',
+            '6005' => '1.12.x (6005)',
+            '6141' => '1.12.x (6141)',
+            '8606' => '2.4.3 (8606)',
+            '12340' => '3.3.5a (12340)',
+        );
+    }
+}
+
+if (!function_exists('spp_admin_realms_parse_builds')) {
+    function spp_admin_realms_parse_builds(string $builds): array
+    {
+        $tokens = preg_split('/[\s,]+/', trim($builds)) ?: array();
+        $parsed = array();
+
+        foreach ($tokens as $token) {
+            $token = trim((string)$token);
+            if ($token === '') {
+                continue;
+            }
+            $parsed[$token] = $token;
+        }
+
+        return array_values($parsed);
+    }
+}
+
+if (!function_exists('spp_admin_realms_build_selection')) {
+    function spp_admin_realms_build_selection(string $builds): array
+    {
+        $knownOptions = spp_admin_realms_build_options();
+        $selected = spp_admin_realms_parse_builds($builds);
+        $approved = array();
+        $custom = array();
+
+        foreach ($selected as $token) {
+            if (isset($knownOptions[$token])) {
+                $approved[] = $token;
+            } else {
+                $custom[] = $token;
+            }
+        }
+
+        return array(
+            'approved' => $approved,
+            'custom' => implode(' ', $custom),
+        );
+    }
+}
+
 function spp_admin_realms_filter_fields(array $data)
 {
     $allowed = array(
@@ -137,11 +212,20 @@ if (!function_exists('spp_admin_realms_runtime_catalog')) {
 if (!function_exists('spp_admin_realms_definition_from_row')) {
     function spp_admin_realms_definition_from_row(int $realmId, array $definition = array(), array $realmlistRow = array()): array
     {
+        $resolvedName = spp_admin_realms_first_non_empty($definition['name'] ?? null, $realmlistRow['name'] ?? null, '');
+        $resolvedAddress = spp_admin_realms_first_non_empty($definition['address'] ?? null, $realmlistRow['address'] ?? null, '');
+        $resolvedPopulation = spp_admin_realms_first_non_empty($definition['population'] ?? null, $realmlistRow['population'] ?? null, '0');
+        $resolvedBuilds = spp_admin_realms_first_non_empty($definition['realmbuilds'] ?? null, $realmlistRow['realmbuilds'] ?? null, '');
+        $resolvedPort = (int)($definition['port'] ?? 0);
+        if ($resolvedPort <= 0) {
+            $resolvedPort = (int)($realmlistRow['port'] ?? 0);
+        }
+
         return array(
             'id' => $realmId,
-            'name' => trim((string)($definition['name'] ?? $realmlistRow['name'] ?? '')),
-            'address' => trim((string)($definition['address'] ?? $realmlistRow['address'] ?? '')),
-            'port' => (int)($definition['port'] ?? $realmlistRow['port'] ?? 0),
+            'name' => trim((string)$resolvedName),
+            'address' => trim((string)$resolvedAddress),
+            'port' => $resolvedPort,
             'realmd' => trim((string)($definition['realmd'] ?? '')),
             'world' => trim((string)($definition['world'] ?? '')),
             'chars' => trim((string)($definition['chars'] ?? '')),
@@ -151,8 +235,8 @@ if (!function_exists('spp_admin_realms_definition_from_row')) {
             'realmflags' => (int)($definition['realmflags'] ?? $realmlistRow['realmflags'] ?? 0),
             'timezone' => (int)($definition['timezone'] ?? $realmlistRow['timezone'] ?? 0),
             'allowedSecurityLevel' => (int)($definition['allowedSecurityLevel'] ?? $realmlistRow['allowedSecurityLevel'] ?? 0),
-            'population' => trim((string)($definition['population'] ?? $realmlistRow['population'] ?? '0')),
-            'realmbuilds' => trim((string)($definition['realmbuilds'] ?? $realmlistRow['realmbuilds'] ?? '')),
+            'population' => trim((string)$resolvedPopulation),
+            'realmbuilds' => trim((string)$resolvedBuilds),
         );
     }
 }
