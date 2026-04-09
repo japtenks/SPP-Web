@@ -16,8 +16,9 @@ if (!function_exists('spp_forum_load_viewcategory_page_state')) {
             'categoryItems' => array(),
         );
 
-        $realmPdo = spp_get_pdo('realmd', spp_resolve_realm_id($realmMap));
-        $allForumItems = spp_forum_build_index_items($realmPdo, $user, false);
+        $realmId = spp_resolve_realm_id($realmMap);
+        $realmPdo = spp_get_pdo('realmd', $realmId);
+        $allForumItems = spp_forum_build_index_items($realmPdo, $user, false, $realmId);
 
         if ($state['category_id'] > 0 && !empty($allForumItems[$state['category_id']]) && is_array($allForumItems[$state['category_id']])) {
             $state['categoryItems'] = $allForumItems[$state['category_id']];

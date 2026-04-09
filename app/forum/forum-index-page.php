@@ -8,10 +8,11 @@ if (!function_exists('spp_forum_load_index_page_state')) {
         $realmMap = (array)($args['realm_map'] ?? ($GLOBALS['realmDbMap'] ?? array()));
         $user = (array)($args['user'] ?? ($GLOBALS['user'] ?? array()));
 
-        $realmPdo = spp_get_pdo('realmd', spp_resolve_realm_id($realmMap));
+        $realmId = spp_resolve_realm_id($realmMap);
+        $realmPdo = spp_get_pdo('realmd', $realmId);
 
         return array(
-            'items' => spp_forum_build_index_items($realmPdo, $user),
+            'items' => spp_forum_build_index_items($realmPdo, $user, true, $realmId),
         );
     }
 }

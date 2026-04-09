@@ -2,6 +2,7 @@
 $siteRoot = dirname(__DIR__, 3);
 
 require_once($siteRoot . '/config/config-protected.php');
+require_once($siteRoot . '/app/server/realm-capabilities.php');
 require_once($siteRoot . '/core/dbsimple/Generic.php');
 require_once($siteRoot . '/config/armory/mysql.php');
 require_once($siteRoot . '/config/armory/defines.php');
@@ -14,10 +15,35 @@ if (!defined('REQUESTED_ACTION')) {
     define('REQUESTED_ACTION', 'talentscalc');
 }
 
-$realmMap = $realmDbMap ?? ($GLOBALS['realmDbMap'] ?? null);
+$configuredRealmMap = $GLOBALS['allConfiguredRealmDbMap'] ?? $GLOBALS['fallbackConfiguredRealmDbMap'] ?? $realmDbMap ?? ($GLOBALS['realmDbMap'] ?? null);
+$enabledRealmMap = $GLOBALS['allEnabledRealmDbMap'] ?? null;
+if ((!is_array($enabledRealmMap) || empty($enabledRealmMap)) && function_exists('spp_bootstrap_enabled_realm_map') && is_array($configuredRealmMap)) {
+    $enabledRealmMap = spp_bootstrap_enabled_realm_map($configuredRealmMap);
+}
+$realmMap = (is_array($enabledRealmMap) && !empty($enabledRealmMap)) ? $enabledRealmMap : $configuredRealmMap;
 if (!is_array($realmMap) || empty($realmMap)) {
     die('Realm DB map not loaded');
 }
+
+$GLOBALS['allEnabledRealmDbMap'] = is_array($realmMap) ? $realmMap : array();
+
+if (!function_exists('server_talents_enabled_realm_map')) {
+    function server_talents_enabled_realm_map(array $realmMap): array
+    {
+        $filtered = array();
+        foreach ($realmMap as $candidateRealmId => $realmInfo) {
+            $candidateRealmId = (int)$candidateRealmId;
+            if ($candidateRealmId <= 0 || !is_array($realmInfo)) {
+                continue;
+            }
+            $filtered[$candidateRealmId] = $realmInfo;
+        }
+        return $filtered;
+    }
+}
+
+$realmMap = server_talents_enabled_realm_map($realmMap);
+$GLOBALS['allEnabledRealmDbMap'] = $realmMap;
 
 if (!function_exists('server_talents_resolve_armory_realm_name')) {
     function server_talents_resolve_armory_realm_name($realmId, array $realmMap, array $legacyRealms = array()): string
@@ -59,6 +85,9 @@ if (is_string($requestedRealm) && $requestedRealm !== '' && !ctype_digit($reques
     }
 }
 if ($realmId === null) {
+    $realmId = spp_resolve_realm_id($realmMap);
+}
+if ($realmId <= 0 || !isset($realmMap[$realmId])) {
     $realmId = spp_resolve_realm_id($realmMap);
 }
 

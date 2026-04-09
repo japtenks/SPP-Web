@@ -123,6 +123,11 @@ if (!function_exists('spp_admin_forum_standard_section_templates')) {
                 'scope_type' => 'guild_recruitment',
                 'forum_desc_format' => 'Guild recruitment and guild-focused posts for the %s realm.',
             ),
+            'Comments' => array(
+                'category_name' => 'Comments',
+                'scope_type' => 'realm',
+                'forum_desc_format' => 'Item, set, and database discussion for the %s realm.',
+            ),
         );
     }
 }

@@ -32,10 +32,55 @@ if (!function_exists('spp_server_realmlist_lookup_name')) {
     }
 }
 
+if (!function_exists('spp_server_realmlist_enabled_realm_map')) {
+    function spp_server_realmlist_enabled_realm_map(array $realmMap): array
+    {
+        $configuredRealmMap = (array)($GLOBALS['allConfiguredRealmDbMap'] ?? $GLOBALS['fallbackConfiguredRealmDbMap'] ?? array());
+        if (empty($configuredRealmMap)) {
+            $configuredRealmMap = $realmMap;
+        }
+
+        $dbBackedRealmMap = (array)($GLOBALS['dbBackedRealmDbMap'] ?? array());
+        if (empty($dbBackedRealmMap) && function_exists('spp_realm_runtime_catalog') && !empty($configuredRealmMap)) {
+            $runtimeCatalog = (array)spp_realm_runtime_catalog($configuredRealmMap);
+            $dbBackedRealmMap = (array)($runtimeCatalog['realm_db_map'] ?? array());
+        }
+        if (empty($dbBackedRealmMap)) {
+            $dbBackedRealmMap = $realmMap;
+        }
+
+        $enabledRealmIds = array();
+        if (function_exists('spp_realm_runtime_state') && !empty($dbBackedRealmMap)) {
+            $runtimeState = (array)spp_realm_runtime_state($dbBackedRealmMap);
+            $enabledRealmIds = array_values(array_map('intval', (array)($runtimeState['enabled_realm_ids'] ?? array())));
+        }
+
+        $enabledRealmMap = array();
+        if (!empty($enabledRealmIds)) {
+            foreach ($enabledRealmIds as $realmId) {
+                if (isset($dbBackedRealmMap[$realmId])) {
+                    $enabledRealmMap[$realmId] = $dbBackedRealmMap[$realmId];
+                }
+            }
+        }
+
+        if (empty($enabledRealmMap)) {
+            $enabledRealmMap = (array)($GLOBALS['allEnabledRealmDbMap'] ?? array());
+        }
+
+        if (empty($enabledRealmMap)) {
+            $enabledRealmMap = $dbBackedRealmMap;
+        }
+
+        return $enabledRealmMap;
+    }
+}
+
 if (!function_exists('spp_server_realmlist_download_options')) {
     function spp_server_realmlist_download_options(array $realmMap, ?int $selectedRealmId = null): array
     {
         $options = array();
+        $realmMap = spp_server_realmlist_enabled_realm_map($realmMap);
         $realmIds = array_keys($realmMap);
         sort($realmIds, SORT_NUMERIC);
 
@@ -65,8 +110,11 @@ if (!function_exists('spp_server_realmlist_endpoint_state')) {
     {
         $query = is_array($args['query'] ?? null) ? $args['query'] : $_GET;
         $server = is_array($args['server'] ?? null) ? $args['server'] : $_SERVER;
-        $realmMap = (array)($GLOBALS['realmDbMap'] ?? array());
+        $realmMap = spp_server_realmlist_enabled_realm_map((array)($GLOBALS['realmDbMap'] ?? array()));
         $realmId = isset($query['realm']) ? (int)$query['realm'] : 1;
+        if ($realmId <= 0 || !isset($realmMap[$realmId])) {
+            $realmId = !empty($realmMap) ? (int)spp_resolve_realm_id($realmMap) : 1;
+        }
         $host = '';
         $clientConnectionHost = '';
         $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);

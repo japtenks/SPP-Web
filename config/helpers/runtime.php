@@ -1601,6 +1601,14 @@ if (!function_exists('spp_forum_comments_category_id')) {
     }
 }
 
+if (!function_exists('spp_forum_is_comments_context')) {
+    function spp_forum_is_comments_context(array $forum): bool
+    {
+        $categoryName = strtolower(trim((string)($forum['cat_name'] ?? '')));
+        return $categoryName !== '' && strpos($categoryName, 'comment') !== false;
+    }
+}
+
 if (!function_exists('spp_forum_help_category_id')) {
     function spp_forum_help_category_id(?int $realmId = null): int
     {
@@ -1724,9 +1732,9 @@ if (!function_exists('spp_forum_comments_discussion_context')) {
                 $forumId = (int)($forum['forum_id'] ?? 0);
                 $scopeType = strtolower(trim((string)($forum['scope_type'] ?? '')));
                 $scopeValue = strtolower(trim((string)($forum['scope_value'] ?? '')));
-                $categoryName = strtolower(trim((string)($forum['cat_name'] ?? '')));
+                $hidden = (int)($forum['hidden'] ?? 0);
 
-                if ($forumId <= 0 || strpos($categoryName, 'comment') === false) {
+                if ($forumId <= 0 || !spp_forum_is_comments_context($forum) || $hidden !== 1) {
                     continue;
                 }
 
@@ -1888,14 +1896,14 @@ if (!function_exists('spp_forum_help_menu_url')) {
     function spp_forum_help_menu_url(?int $realmId = null): string
     {
         $realmId = (int)($realmId ?: spp_selected_realm_id());
-        $forumId = spp_forum_help_forum_id($realmId);
-        if ($forumId > 0) {
-            return 'index.php?n=forum&sub=viewforum&fid=' . $forumId;
-        }
-
         $categoryId = spp_forum_help_category_id($realmId);
         if ($categoryId > 0) {
-            return 'index.php?n=forum&sub=viewcategory&catid=' . $categoryId;
+            return 'index.php?n=forum&sub=viewcategory&realm=' . $realmId . '&catid=' . $categoryId;
+        }
+
+        $forumId = spp_forum_help_forum_id($realmId);
+        if ($forumId > 0) {
+            return 'index.php?n=forum&sub=viewforum&realm=' . $realmId . '&fid=' . $forumId;
         }
 
         return 'index.php?n=forum';

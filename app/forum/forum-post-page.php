@@ -53,29 +53,33 @@ if (!function_exists('spp_forum_load_post_page_state')) {
             die('Realm DB map not loaded');
         }
 
+        $requestRealmId = isset($get['realm']) ? (int)$get['realm'] : 0;
         $cookieRealmId = (int)($cookie['cur_selected_realmd'] ?? ($cookie['cur_selected_realm'] ?? 0));
         $realmId = ($cookieRealmId > 0 && isset($realmMap[$cookieRealmId]))
             ? $cookieRealmId
             : spp_resolve_realm_id($realmMap);
+        if ($requestRealmId > 0 && isset($realmMap[$requestRealmId])) {
+            $realmId = $requestRealmId;
+        }
 
         if (!empty($get['fid']) && empty($get['f'])) {
             $get['f'] = $get['fid'];
         }
 
         if (!empty($get['post'])) {
-            $state['this_post'] = get_post_byid($get['post']);
+            $state['this_post'] = get_post_byid($get['post'], $realmId);
             if (!empty($state['this_post']['topic_id'])) {
                 $get['t'] = $state['this_post']['topic_id'];
             }
         }
         if (!empty($get['t'])) {
-            $state['this_topic'] = get_topic_byid($get['t']);
+            $state['this_topic'] = get_topic_byid($get['t'], $realmId);
             if (!empty($state['this_topic']['forum_id'])) {
                 $get['f'] = $state['this_topic']['forum_id'];
             }
         }
         if (!empty($get['f'])) {
-            $state['this_forum'] = get_forum_byid($get['f']);
+            $state['this_forum'] = get_forum_byid($get['f'], $realmId);
         }
 
         $realmId = spp_forum_target_realm_id($state['this_forum'], $realmMap, $realmId);
@@ -249,7 +253,7 @@ if (!function_exists('spp_forum_load_post_page_state')) {
                 $charReadPdo,
                 $result,
                 $realmId,
-                spp_forum_url('viewtopic', array('tid' => (int)$state['this_topic']['topic_id'])),
+                spp_forum_url('viewtopic', array('realm' => $realmId, 'tid' => (int)$state['this_topic']['topic_id'])),
                 0,
                 false
             );

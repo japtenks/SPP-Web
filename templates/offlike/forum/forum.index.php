@@ -27,7 +27,7 @@ builddiv_start(1, 'Forums');
       ?>
       <section class="forum-category feature-panel">
         <div class="modern-title">
-          <a class="forum-title" href="<?php echo spp_forum_url('viewcategory', array('catid' => (int)$catitem[0]['cat_id'])); ?>">
+          <a class="forum-title" href="<?php echo spp_forum_url('viewcategory', array('realm' => (int)spp_resolve_realm_id($realmDbMap ?? ($GLOBALS['realmDbMap'] ?? array())), 'catid' => (int)$catitem[0]['cat_id'])); ?>">
             <?php if ($categoryIcon !== ''): ?><img class="forum-category-badge" src="<?php echo htmlspecialchars($categoryIcon); ?>" alt=""><?php endif; ?>
             <?php echo htmlspecialchars($categoryLabel); ?>
           </a>

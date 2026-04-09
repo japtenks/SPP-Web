@@ -141,16 +141,16 @@ if (!function_exists('spp_item_detail_load_core_data')) {
                 $upgradeCurrentScore = spp_item_upgrade_score($upgradeCurrentStats, $upgradeActiveWeights);
             }
 
-            $upgradeSql = 'SELECT `entry`, `name`, '
+            $upgradeSql = 'SELECT it.`entry`, it.`name`, '
                 . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' AS `Quality`, '
                 . spp_item_database_item_column_sql($itemColumns, 'ItemLevel') . ' AS `ItemLevel`, '
                 . spp_item_database_item_column_sql($itemColumns, 'RequiredLevel') . ' AS `RequiredLevel`, '
                 . spp_item_database_item_column_sql($itemColumns, 'displayid') . ' AS `displayid`, '
                 . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' AS `InventoryType`, '
-                . '`class`, `subclass`, `description`, '
+                . 'it.`class`, it.`subclass`, it.`description`, '
                 . spp_item_database_item_column_sql($itemColumns, 'Flags') . ' AS `Flags`, '
-                . '`Armor`, `stat_type1`, `stat_value1`, `stat_type2`, `stat_value2`, `stat_type3`, `stat_value3`, `stat_type4`, `stat_value4`, `stat_type5`, `stat_value5`, `stat_type6`, `stat_value6`, `stat_type7`, `stat_value7`, `stat_type8`, `stat_value8`, `stat_type9`, `stat_value9`, `stat_type10`, `stat_value10`, `holy_res`, `fire_res`, `nature_res`, `frost_res`, `shadow_res`, `arcane_res` FROM `item_template` WHERE `entry` <> :entry AND '
-                . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' = :inventory_type AND `class` = :item_class AND (`subclass` = :item_subclass OR :use_subclass = 0) AND '
+                . 'it.`Armor`, it.`stat_type1`, it.`stat_value1`, it.`stat_type2`, it.`stat_value2`, it.`stat_type3`, it.`stat_value3`, it.`stat_type4`, it.`stat_value4`, it.`stat_type5`, it.`stat_value5`, it.`stat_type6`, it.`stat_value6`, it.`stat_type7`, it.`stat_value7`, it.`stat_type8`, it.`stat_value8`, it.`stat_type9`, it.`stat_value9`, it.`stat_type10`, it.`stat_value10`, it.`holy_res`, it.`fire_res`, it.`nature_res`, it.`frost_res`, it.`shadow_res`, it.`arcane_res` FROM `item_template` it WHERE it.`entry` <> :entry AND '
+                . spp_item_database_item_column_sql($itemColumns, 'InventoryType') . ' = :inventory_type AND it.`class` = :item_class AND (it.`subclass` = :item_subclass OR :use_subclass = 0) AND '
                 . spp_item_database_item_column_sql($itemColumns, 'Quality') . ' > 0 ORDER BY `Quality` DESC, `ItemLevel` DESC, `RequiredLevel` ASC, `name` ASC LIMIT 150';
             $upgradeStmt = $worldPdo->prepare($upgradeSql);
             $useSubclass = in_array((int)$item['item_class_id'], [2, 4], true) ? 1 : 0;
@@ -312,7 +312,24 @@ if (!function_exists('spp_item_detail_load_core_data')) {
                 }
             }
 
-            $ownerStmt = $charsPdo->prepare('SELECT DISTINCT c.`guid`, c.`name`, c.`level`, c.`race`, c.`class`, c.`gender`, gm.`guildid`, g.`name` AS `guild_name` FROM `character_inventory` ci INNER JOIN `characters` c ON c.`guid` = ci.`guid` LEFT JOIN `guild_member` gm ON gm.`guid` = c.`guid` LEFT JOIN `guild` g ON g.`guildid` = gm.`guildid` WHERE ci.`item_template` = ? ORDER BY c.`level` DESC, c.`name` ASC LIMIT 100');
+            $inventoryItemEntryColumn = spp_realm_capability_pick_column($charsPdo, 'character_inventory', ['item_template', 'item_id', 'item_entry'], 'item_template');
+            $guildMemberGuildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild_member', ['guildid', 'guild_id'], 'guildid');
+            $guildGuildIdColumn = spp_realm_capability_pick_column($charsPdo, 'guild', ['guildid', 'guild_id'], $guildMemberGuildIdColumn);
+            $ownerSql = 'SELECT DISTINCT c.`guid`, c.`name`, c.`level`, c.`race`, c.`class`, c.`gender`';
+            if ($guildMemberGuildIdColumn !== null) {
+                $ownerSql .= ', gm.`' . $guildMemberGuildIdColumn . '` AS `guildid`';
+            } else {
+                $ownerSql .= ', 0 AS `guildid`';
+            }
+            $ownerSql .= ', g.`name` AS `guild_name` FROM `character_inventory` ci INNER JOIN `characters` c ON c.`guid` = ci.`guid`';
+            $ownerSql .= ' LEFT JOIN `guild_member` gm ON gm.`guid` = c.`guid`';
+            if ($guildMemberGuildIdColumn !== null && $guildGuildIdColumn !== null) {
+                $ownerSql .= ' LEFT JOIN `guild` g ON g.`' . $guildGuildIdColumn . '` = gm.`' . $guildMemberGuildIdColumn . '`';
+            } else {
+                $ownerSql .= ' LEFT JOIN `guild` g ON 1 = 0';
+            }
+            $ownerSql .= ' WHERE ci.`' . $inventoryItemEntryColumn . '` = ? ORDER BY c.`level` DESC, c.`name` ASC LIMIT 100';
+            $ownerStmt = $charsPdo->prepare($ownerSql);
             $ownerStmt->execute([$itemId]);
             foreach ($ownerStmt->fetchAll(PDO::FETCH_ASSOC) as $owner) {
                 $raceId = (int)($owner['race'] ?? 0);

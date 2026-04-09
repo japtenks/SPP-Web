@@ -17,8 +17,9 @@ if (!function_exists('spp_forum_load_viewforum_page_state')) {
             'p' => $page,
         );
 
+        $requestRealmId = isset($get['realm']) ? (int)$get['realm'] : 0;
         $forumId = isset($get['fid']) ? (int)$get['fid'] : 0;
-        $state['this_forum'] = get_forum_byid($forumId);
+        $state['this_forum'] = get_forum_byid($forumId, $requestRealmId > 0 ? $requestRealmId : null);
         if ((int)($state['this_forum']['forum_id'] ?? 0) <= 0) {
             output_message('alert', 'This forum does not exist.');
             $state['__stop'] = true;
@@ -30,21 +31,22 @@ if (!function_exists('spp_forum_load_viewforum_page_state')) {
             return $state;
         }
 
-        $state['this_forum']['linktonewtopic'] = spp_forum_url_with_site_href('post', array(
-            'action' => 'newtopic',
-            'f' => (int)$state['this_forum']['forum_id'],
-        ));
-        $state['this_forum']['linktomarkread'] = spp_forum_url_with_site_href('viewforum', array(
-            'fid' => (int)$state['this_forum']['forum_id'],
-            'markread' => 1,
-        ));
-
         $GLOBALS['pathway_info'][] = array(
             'title' => $state['this_forum']['forum_name'],
             'link' => '',
         );
 
         $realmId = spp_forum_target_realm_id($state['this_forum'], $realmMap, spp_resolve_realm_id($realmMap));
+        $state['this_forum']['linktonewtopic'] = spp_forum_url_with_site_href('post', array(
+            'realm' => $realmId,
+            'action' => 'newtopic',
+            'f' => (int)$state['this_forum']['forum_id'],
+        ));
+        $state['this_forum']['linktomarkread'] = spp_forum_url_with_site_href('viewforum', array(
+            'realm' => $realmId,
+            'fid' => (int)$state['this_forum']['forum_id'],
+            'markread' => 1,
+        ));
         $forumPdo = spp_get_pdo('realmd', $realmId);
         $postingBlockedReason = '';
 
@@ -105,7 +107,8 @@ if (!function_exists('spp_forum_load_viewforum_page_state')) {
             $itemsPerPage,
             $limitStart,
             $sortField,
-            $sortDir
+            $sortDir,
+            $realmId
         );
 
         return $state;

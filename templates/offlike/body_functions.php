@@ -623,18 +623,19 @@ function builddiv_start($type = 0, $title = "No title set", $realm = 0, $forumna
         $forumActions = '<div class="header-action-group forum-actions">';
 
         $sub = $_GET['sub'] ?? '';
+        $forumRealmId = (int)($_GET['realm'] ?? 0);
         $fid = (int)($_GET['fid'] ?? 0);
         $tid = (int)($_GET['tid'] ?? 0);
 
         if ($fid == 0 && $tid > 0) {
-            $topic = get_topic_byid($tid);
+            $topic = get_topic_byid($tid, $forumRealmId > 0 ? $forumRealmId : null);
             if (!empty($topic['forum_id'])) {
                 $fid = (int)$topic['forum_id'];
             }
         }
 
         if ($sub === 'viewtopic' && !$forumClosed) {
-            $forumActions .= '<a href="index.php?n=forum&sub=post&action=newpost&t=' . $tid . '&fid=' . $fid . '" class="btn primary">Reply</a>';
+            $forumActions .= '<a href="index.php?n=forum&sub=post&realm=' . $forumRealmId . '&action=newpost&t=' . $tid . '&fid=' . $fid . '" class="btn primary">Reply</a>';
         } elseif ($sub === 'post') {
             $postAction = (string)($_GET['action'] ?? '');
             $label = str_starts_with($postAction, 'newpost') || str_starts_with($postAction, 'donewpost')

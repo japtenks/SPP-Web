@@ -28,9 +28,10 @@ if (!function_exists('spp_forum_load_topic_page_state')) {
             'realm_id' => 0,
         );
 
-        $state['this_topic'] = get_topic_byid((int)($getVars['tid'] ?? ($_GET['tid'] ?? 0)));
+        $requestRealmId = (int)($getVars['realm'] ?? ($_GET['realm'] ?? 0));
+        $state['this_topic'] = get_topic_byid((int)($getVars['tid'] ?? ($_GET['tid'] ?? 0)), $requestRealmId > 0 ? $requestRealmId : null);
         $state['this_forum'] = !empty($state['this_topic']['forum_id'])
-            ? get_forum_byid((int)$state['this_topic']['forum_id'])
+            ? get_forum_byid((int)$state['this_topic']['forum_id'], $requestRealmId > 0 ? $requestRealmId : null)
             : array();
 
         $realmId = spp_forum_target_realm_id($state['this_forum'], $realmMap, spp_resolve_realm_id($realmMap));
@@ -57,7 +58,8 @@ if (!function_exists('spp_forum_load_topic_page_state')) {
             $state['this_forum'],
             $state['this_topic'],
             $siteHref,
-            $_vtCanPost
+            $_vtCanPost,
+            $realmId
         );
 
         $pathway_info[] = array('title' => $state['this_forum']['forum_name'], 'link' => $state['this_forum']['linktothis']);
@@ -67,7 +69,8 @@ if (!function_exists('spp_forum_load_topic_page_state')) {
         list($state['this_topic'], $state['pnum'], $state['limit_start'], $state['pages_str']) = spp_forum_prepare_viewtopic_pagination(
             $state['this_topic'],
             $p,
-            $itemsPerPage
+            $itemsPerPage,
+            $realmId
         );
 
         $forumPdo = spp_get_pdo('realmd', $realmId);
@@ -88,7 +91,7 @@ if (!function_exists('spp_forum_load_topic_page_state')) {
             $realmId,
             $state['limit_start'],
             $itemsPerPage,
-            spp_forum_url_with_site_href('viewtopic', array('tid' => (int)$state['this_topic']['topic_id'])),
+            spp_forum_url_with_site_href('viewtopic', array('realm' => $realmId, 'tid' => (int)$state['this_topic']['topic_id'])),
             (($p - 1) * $itemsPerPage)
         );
 

@@ -50,7 +50,7 @@ function spp_forum_handle_topic_moderation(
                 (int)$thisForum['forum_id']
             ]);
 
-            redirect(spp_forum_url('viewforum', array('fid' => (int)$thisForum['forum_id']), false), 1);
+            redirect(spp_forum_url('viewforum', array('realm' => $realmId, 'fid' => (int)$thisForum['forum_id']), false), 1);
             return true;
         }
 
@@ -68,7 +68,7 @@ function spp_forum_handle_topic_moderation(
             ]);
         }
 
-            redirect(spp_forum_url('viewtopic', array('tid' => (int)$thisTopic['topic_id']), false), 1);
+            redirect(spp_forum_url('viewtopic', array('realm' => $realmId, 'tid' => (int)$thisTopic['topic_id']), false), 1);
         return true;
     } catch (Throwable $e) {
         error_log('[forum.post.actions] Topic moderation toggle failed: ' . $e->getMessage());
@@ -130,7 +130,7 @@ function spp_forum_handle_new_topic_submission(
             );
             if ($existingThreadId !== null) {
                 $canPost = false;
-                    $forumPostErrors[] = 'Your guild already has an active recruitment thread. View it at ' . spp_forum_url('viewtopic', array('tid' => (int)$existingThreadId)) . '.';
+                    $forumPostErrors[] = 'Your guild already has an active recruitment thread. View it at ' . spp_forum_url('viewtopic', array('realm' => $realmId, 'tid' => (int)$existingThreadId)) . '.';
             }
         }
     }
@@ -243,7 +243,7 @@ function spp_forum_handle_new_topic_submission(
 
         spp_increment_forum_unread($forumPdo, (int)$thisForum['forum_id'], (int)$user['id']);
         $forumPdo->commit();
-        redirect(spp_forum_url('viewtopic', array('tid' => (int)$newTopicId, 'to' => 'lastpost'), false), 1);
+        redirect(spp_forum_url('viewtopic', array('realm' => $realmId, 'tid' => (int)$newTopicId, 'to' => 'lastpost'), false), 1);
         $result['stop'] = true;
     } catch (Throwable $e) {
         if (isset($forumPdo) && $forumPdo instanceof PDO && $forumPdo->inTransaction()) {
@@ -392,7 +392,7 @@ function spp_forum_handle_new_reply_submission(
 
         spp_increment_forum_unread($forumPdo, (int)$thisForum['forum_id'], (int)$user['id']);
         $forumPdo->commit();
-        redirect(spp_forum_url('viewtopic', array('tid' => (int)$thisTopic['topic_id'], 'to' => 'lastpost'), false), 1);
+        redirect(spp_forum_url('viewtopic', array('realm' => $realmId, 'tid' => (int)$thisTopic['topic_id'], 'to' => 'lastpost'), false), 1);
         $result['stop'] = true;
     } catch (Throwable $e) {
         if (isset($forumPdo) && $forumPdo instanceof PDO && $forumPdo->inTransaction()) {

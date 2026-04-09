@@ -7,15 +7,16 @@ $is_newtopic = ($forumPostMode === 'newtopic');
 $pageTitle = $is_newtopic ? 'Create New Topic' : 'Reply to Thread';
 $forumId = $this_forum['forum_id'] ?? 0;
 $topicId = $this_topic['topic_id'] ?? 0;
-$forumUrl = spp_forum_url('viewforum', array('fid' => $forumId));
+$forumRealmId = (int)($posting_context['realm_id'] ?? ($_GET['realm'] ?? 0));
+$forumUrl = spp_forum_url('viewforum', array('realm' => $forumRealmId, 'fid' => $forumId));
 $indexUrl = spp_forum_url();
-$topicUrl = $topicId > 0 ? spp_forum_url('viewtopic', array('tid' => $topicId)) : $forumUrl;
+$topicUrl = $topicId > 0 ? spp_forum_url('viewtopic', array('realm' => $forumRealmId, 'tid' => $topicId)) : $forumUrl;
 $formAction = $is_newtopic
-    ? spp_forum_url('post', array('action' => 'donewtopic', 'f' => $forumId))
-    : spp_forum_url('post', array('action' => 'donewpost', 't' => $topicId, 'f' => $forumId));
+    ? spp_forum_url('post', array('realm' => $forumRealmId, 'action' => 'donewtopic', 'f' => $forumId))
+    : spp_forum_url('post', array('realm' => $forumRealmId, 'action' => 'donewpost', 't' => $topicId, 'f' => $forumId));
 $contextFormAction = $is_newtopic
-    ? spp_forum_url('post', array('action' => 'newtopic', 'fid' => $forumId))
-    : spp_forum_url('post', array('action' => 'newpost', 't' => $topicId, 'fid' => $forumId));
+    ? spp_forum_url('post', array('realm' => $forumRealmId, 'action' => 'newtopic', 'fid' => $forumId))
+    : spp_forum_url('post', array('realm' => $forumRealmId, 'action' => 'newpost', 't' => $topicId, 'fid' => $forumId));
 $postingContext = $posting_context ?? array();
 $postingForumName = trim((string)($postingContext['forum_name'] ?? ($this_forum['forum_name'] ?? 'Unknown Forum')));
 $postingRealmName = trim((string)($postingContext['realm_name'] ?? ''));

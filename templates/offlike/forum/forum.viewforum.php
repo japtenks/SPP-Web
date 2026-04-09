@@ -9,7 +9,9 @@ $forumPageCount = max(1, (int)($this_forum['pnum'] ?? 1));
 $forumItemsPerPage = (int)($this_forum['items_per_page'] ?? 25);
 $forumSortField = (string)($this_forum['sort_field'] ?? 'posted');
 $forumSortDir = (string)($this_forum['sort_dir'] ?? 'desc');
+$forumRealmId = (int)($_GET['realm'] ?? ($GLOBALS['activeRealmId'] ?? 0));
 $forumPageBaseUrl = spp_forum_url('viewforum', array(
+  'realm' => $forumRealmId,
   'fid' => (int)$this_forum['forum_id'],
   'per_page' => $forumItemsPerPage,
   'sort' => $forumSortField,
@@ -19,6 +21,7 @@ $forumPageBaseUrl = spp_forum_url('viewforum', array(
 $forumSortUrl = function (string $field) use ($this_forum, $forumItemsPerPage, $forumSortField, $forumSortDir): string {
     $nextDir = ($forumSortField === $field && $forumSortDir === 'asc') ? 'desc' : 'asc';
     return spp_forum_url('viewforum', array(
+        'realm' => $forumRealmId,
         'fid' => (int)$this_forum['forum_id'],
         'per_page' => $forumItemsPerPage,
         'sort' => $field,
@@ -51,7 +54,7 @@ $forumLockIcon = spp_modern_forum_image_url('lock-icon.gif');
 <div class="feature-panel forum-view">
   <?php if (!empty($this_forum['can_start_topic'])): ?>
   <div class="forum-new-topic">
-    <a href="<?php echo spp_forum_url('post', array('action' => 'newtopic', 'fid' => (int)$this_forum['forum_id'])); ?>" class="feature-button is-primary">New Topic</a>
+    <a href="<?php echo spp_forum_url('post', array('realm' => $forumRealmId, 'action' => 'newtopic', 'fid' => (int)$this_forum['forum_id'])); ?>" class="feature-button is-primary">New Topic</a>
   </div>
   <?php elseif (!empty($this_forum['posting_block_reason'])): ?>
   <div class="forum-posting-note">
@@ -65,6 +68,7 @@ $forumLockIcon = spp_modern_forum_image_url('lock-icon.gif');
     <form method="get" action="index.php" class="forum-page-size">
       <input type="hidden" name="n" value="forum" />
       <input type="hidden" name="sub" value="viewforum" />
+      <input type="hidden" name="realm" value="<?php echo (int)$forumRealmId; ?>" />
       <input type="hidden" name="fid" value="<?php echo (int)$this_forum['forum_id']; ?>" />
       <input type="hidden" name="sort" value="<?php echo htmlspecialchars($forumSortField, ENT_QUOTES, 'UTF-8'); ?>" />
       <input type="hidden" name="dir" value="<?php echo htmlspecialchars($forumSortDir, ENT_QUOTES, 'UTF-8'); ?>" />

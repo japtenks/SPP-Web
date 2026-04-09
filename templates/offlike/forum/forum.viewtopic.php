@@ -1,6 +1,7 @@
 <?php
 $topicTitle = htmlspecialchars(html_entity_decode((string)$this_topic['topic_name'], ENT_QUOTES, 'UTF-8'));
 $forumTitle = htmlspecialchars(html_entity_decode((string)$this_forum['forum_name'], ENT_QUOTES, 'UTF-8'));
+$topicRealmId = (int)($realm_id ?? ($_GET['realm'] ?? 0));
 $topicRealmMap = $GLOBALS['realmDbMap'] ?? array();
 $topicBannerUrl = function_exists('spp_forum_badge_url')
     ? spp_forum_badge_url($this_forum, is_array($topicRealmMap) ? $topicRealmMap : array(), 1)
@@ -34,32 +35,32 @@ builddiv_start(1, $forumTitle, 0, false, $this_forum['forum_id'], $this_forum['c
       <?php if ((int)($user['g_forum_moderate'] ?? 0) === 1): ?>
         <div class="forum-topic__control-group forum-topic__control-group--admin">
           <?php if (!empty($this_topic['sticky'])): ?>
-            <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('t' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin">
+            <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('realm' => $topicRealmId, 't' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin">
               <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(spp_csrf_token('forum_actions')); ?>">
               <input type="hidden" name="action" value="unsticktopic">
               <button type="submit" class="feature-button forum-topic__admin-button">Unpin Topic</button>
             </form>
           <?php else: ?>
-            <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('t' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin">
+            <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('realm' => $topicRealmId, 't' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin">
               <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(spp_csrf_token('forum_actions')); ?>">
               <input type="hidden" name="action" value="sticktopic">
               <button type="submit" class="feature-button forum-topic__admin-button">Pin Topic</button>
             </form>
           <?php endif; ?>
           <?php if (!empty($this_topic['closed'])): ?>
-            <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('t' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin">
+            <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('realm' => $topicRealmId, 't' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin">
               <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(spp_csrf_token('forum_actions')); ?>">
               <input type="hidden" name="action" value="opentopic">
               <button type="submit" class="feature-button forum-topic__admin-button">Unlock Topic</button>
             </form>
           <?php else: ?>
-            <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('t' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin">
+            <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('realm' => $topicRealmId, 't' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin">
               <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(spp_csrf_token('forum_actions')); ?>">
               <input type="hidden" name="action" value="closetopic">
               <button type="submit" class="feature-button forum-topic__admin-button">Lock Topic</button>
             </form>
           <?php endif; ?>
-          <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('t' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin" onsubmit="return confirm('Delete this topic and all of its posts?');">
+          <form method="post" action="<?php echo htmlspecialchars(spp_forum_url('post', array('realm' => $topicRealmId, 't' => (int)$this_topic['topic_id'])), ENT_QUOTES, 'UTF-8'); ?>" class="forum-topic__inline-form forum-topic__inline-form--admin" onsubmit="return confirm('Delete this topic and all of its posts?');">
             <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars(spp_csrf_token('forum_actions')); ?>">
             <input type="hidden" name="action" value="dodeletetopic">
             <button type="submit" class="feature-button forum-topic__admin-button">Delete Topic</button>

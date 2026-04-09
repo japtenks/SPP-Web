@@ -1,5 +1,12 @@
 <?php
 
+if (!function_exists('spp_forum_has_markread_table')) {
+    function spp_forum_has_markread_table(PDO $forumPdo): bool
+    {
+        return function_exists('spp_db_table_exists') && spp_db_table_exists($forumPdo, 'f_markread');
+    }
+}
+
 function spp_forum_profile_url($primaryName)
 {
     $profileName = trim((string)$primaryName);
@@ -296,11 +303,11 @@ function spp_forum_hydrate_topic_posts(
     return $posts;
 }
 
-function spp_forum_build_index_items(PDO $realmPdo, array $user, bool $respectHiddenForumPreference = true): array
+function spp_forum_build_index_items(PDO $realmPdo, array $user, bool $respectHiddenForumPreference = true, ?int $realmId = null): array
 {
     global $yesterday_ts, $realmDbMap;
 
-    if (($user['id'] ?? 0) > 0) {
+    if (($user['id'] ?? 0) > 0 && spp_forum_has_markread_table($realmPdo)) {
         $queryparts = "
             SELECT f_categories.*,f_forums.*,f_topics.topic_name,f_topics.last_poster,f_topics.last_post,f_markread.* FROM f_categories
             JOIN f_forums ON f_categories.cat_id=f_forums.cat_id
@@ -341,6 +348,10 @@ function spp_forum_build_index_items(PDO $realmPdo, array $user, bool $respectHi
 
     $items = array();
     foreach ($result as $item) {
+        if (function_exists('spp_forum_is_comments_context') && spp_forum_is_comments_context($item)) {
+            continue;
+        }
+
         if (($user['id'] ?? 0) > 0) {
             if (($item['last_post'] ?? 0) > ($item['marker_last_cleared'] ?? 0)) {
                 $item['isnew'] = true;
@@ -360,8 +371,9 @@ function spp_forum_build_index_items(PDO $realmPdo, array $user, bool $respectHi
             $item['last_post'] = date('d-m-Y, H:i', $lastPostTs);
         }
 
-        $item['linktothis'] = spp_forum_url("viewforum", array("fid" => $item['forum_id']));
-        $item['linktolastpost'] = spp_forum_url("viewtopic", array("tid" => $item['last_topic_id'], "to" => "lastpost"));
+        $linkParams = array("realm" => (int)$realmId);
+        $item['linktothis'] = spp_forum_url("viewforum", array_merge($linkParams, array("fid" => $item['forum_id'])));
+        $item['linktolastpost'] = spp_forum_url("viewtopic", array_merge($linkParams, array("tid" => $item['last_topic_id'], "to" => "lastpost")));
         $item['linktoprofile'] = '';
 
         $items[$item['cat_id']][] = $item;
@@ -384,10 +396,14 @@ function spp_forum_prepare_viewforum_marker(PDO $vfPdo, array $user, array $foru
         return array($topicsmark, $mark);
     }
 
+    if (!spp_forum_has_markread_table($vfPdo)) {
+        return array($topicsmark, $mark);
+    }
+
     if (($_GETVARS['markread'] ?? null) == 1) {
         $stmtMr = $vfPdo->prepare("UPDATE f_markread SET marker_topics_read=?,marker_last_update=?,marker_unread=0,marker_last_cleared=? WHERE marker_member_id=? AND marker_forum_id=?");
         $stmtMr->execute([serialize($topicsmark), (int)$_SERVER['REQUEST_TIME'], (int)$_SERVER['REQUEST_TIME'], (int)$user['id'], (int)$forum['forum_id']]);
-        redirect(spp_forum_url_with_site_href('viewforum', array('fid' => (int)$forum['forum_id'])), 1);
+        redirect(spp_forum_url_with_site_href('viewforum', array('realm' => (int)($_GET['realm'] ?? 0), 'fid' => (int)$forum['forum_id'])), 1);
         return array($topicsmark, $mark);
     }
 
@@ -419,7 +435,8 @@ function spp_forum_build_viewforum_topics(
     int $itemsPerPage,
     int $limitStart,
     string $sortField,
-    string $sortDir
+    string $sortDir,
+    ?int $realmId = null
 ): array {
     global $yesterday_ts;
 
@@ -456,7 +473,7 @@ function spp_forum_build_viewforum_topics(
         if ($pnum > 1) {
             $cur_topic['pages_str'] = '&laquo; ';
             for ($pi = 1; $pi <= $pnum; $pi++) {
-                $cur_topic['pages_str'] .= '<a href="' . htmlspecialchars(spp_forum_url('viewtopic', array('tid' => (int)$cur_topic['topic_id'], 'p' => $pi)), ENT_QUOTES, 'UTF-8') . '">' . $pi . '</a> ';
+                $cur_topic['pages_str'] .= '<a href="' . htmlspecialchars(spp_forum_url('viewtopic', array('realm' => (int)$realmId, 'tid' => (int)$cur_topic['topic_id'], 'p' => $pi)), ENT_QUOTES, 'UTF-8') . '">' . $pi . '</a> ';
             }
             $cur_topic['pages_str'] .= ' &raquo;';
         }
@@ -478,8 +495,8 @@ function spp_forum_build_viewforum_topics(
             $cur_topic['last_post'] = date('M d, Y H:i', $cur_topic['last_post']);
         }
 
-        $cur_topic['linktothis'] = spp_forum_url_with_site_href('viewtopic', array('tid' => (int)$cur_topic['topic_id']));
-        $cur_topic['linktolastpost'] = spp_forum_url_with_site_href('viewtopic', array('tid' => (int)$cur_topic['topic_id'], 'to' => 'lastpost'));
+        $cur_topic['linktothis'] = spp_forum_url_with_site_href('viewtopic', array('realm' => (int)$realmId, 'tid' => (int)$cur_topic['topic_id']));
+        $cur_topic['linktolastpost'] = spp_forum_url_with_site_href('viewtopic', array('realm' => (int)$realmId, 'tid' => (int)$cur_topic['topic_id'], 'to' => 'lastpost'));
         $cur_topic['linktoprofile1'] = spp_forum_profile_url($cur_topic['username'] ?? '');
         $cur_topic['linktoprofile2'] = '';
         $topics[] = $cur_topic;
@@ -488,31 +505,31 @@ function spp_forum_build_viewforum_topics(
     return $topics;
 }
 
-function spp_forum_prepare_viewtopic_links(array $forum, array $topic, string $siteHref, bool $canPost): array
+function spp_forum_prepare_viewtopic_links(array $forum, array $topic, string $siteHref, bool $canPost, ?int $realmId = null): array
 {
-    $forum['linktothis'] = spp_forum_url_with_site_href('viewforum', array('fid' => (int)$forum['forum_id']));
-    $forum['linktonewtopic'] = spp_forum_url_with_site_href('post', array('action' => 'newtopic', 'f' => (int)$forum['forum_id']));
+    $forum['linktothis'] = spp_forum_url_with_site_href('viewforum', array('realm' => (int)$realmId, 'fid' => (int)$forum['forum_id']));
+    $forum['linktonewtopic'] = spp_forum_url_with_site_href('post', array('realm' => (int)$realmId, 'action' => 'newtopic', 'f' => (int)$forum['forum_id']));
 
-    $topic['linktothis'] = spp_forum_url_with_site_href('viewtopic', array('tid' => (int)$topic['topic_id']));
+    $topic['linktothis'] = spp_forum_url_with_site_href('viewtopic', array('realm' => (int)$realmId, 'tid' => (int)$topic['topic_id']));
     $topic['linktoreply'] = $canPost
-        ? spp_forum_url_with_site_href('post', array('action' => 'newpost', 't' => (int)$topic['topic_id'], 'fid' => (int)$forum['forum_id']))
+        ? spp_forum_url_with_site_href('post', array('realm' => (int)$realmId, 'action' => 'newpost', 't' => (int)$topic['topic_id'], 'fid' => (int)$forum['forum_id']))
         : '';
-    $topic['linktopostreply'] = spp_forum_url_with_site_href('post', array('action' => 'newpost', 't' => (int)$topic['topic_id'], 'fid' => (int)$forum['forum_id']));
-    $topic['linktodelete'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('action' => 'dodeletetopic', 't' => (int)$topic['topic_id'])));
-    $topic['linktoclose'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('action' => 'closetopic', 't' => (int)$topic['topic_id'])));
-    $topic['linktoopen'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('action' => 'opentopic', 't' => (int)$topic['topic_id'])));
-    $topic['linktostick'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('action' => 'sticktopic', 't' => (int)$topic['topic_id'])));
-    $topic['linktounstick'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('action' => 'unsticktopic', 't' => (int)$topic['topic_id'])));
+    $topic['linktopostreply'] = spp_forum_url_with_site_href('post', array('realm' => (int)$realmId, 'action' => 'newpost', 't' => (int)$topic['topic_id'], 'fid' => (int)$forum['forum_id']));
+    $topic['linktodelete'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('realm' => (int)$realmId, 'action' => 'dodeletetopic', 't' => (int)$topic['topic_id'])));
+    $topic['linktoclose'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('realm' => (int)$realmId, 'action' => 'closetopic', 't' => (int)$topic['topic_id'])));
+    $topic['linktoopen'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('realm' => (int)$realmId, 'action' => 'opentopic', 't' => (int)$topic['topic_id'])));
+    $topic['linktostick'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('realm' => (int)$realmId, 'action' => 'sticktopic', 't' => (int)$topic['topic_id'])));
+    $topic['linktounstick'] = spp_forum_action_url(spp_forum_url_with_site_href('post', array('realm' => (int)$realmId, 'action' => 'unsticktopic', 't' => (int)$topic['topic_id'])));
 
     return array($forum, $topic);
 }
 
-function spp_forum_prepare_viewtopic_pagination(array $topic, int $page, int $itemsPerPage): array
+function spp_forum_prepare_viewtopic_pagination(array $topic, int $page, int $itemsPerPage, ?int $realmId = null): array
 {
     $itemCount = (int)($topic['num_replies'] ?? 0) + 1;
     $pageCount = max(1, (int)ceil($itemCount / $itemsPerPage));
     $limitStart = ($page - 1) * $itemsPerPage;
-    $pagesStr = default_paginate($pageCount, $page, spp_forum_url('viewtopic', array('tid' => (int)$topic['topic_id'])));
+    $pagesStr = default_paginate($pageCount, $page, spp_forum_url('viewtopic', array('realm' => (int)$realmId, 'tid' => (int)$topic['topic_id'])));
 
     $topic['page_count'] = $pageCount;
     $topic['linktolastpost'] = (string)$topic['linktothis'] . '&to=lastpost';
@@ -541,6 +558,10 @@ function spp_forum_handle_viewtopic_jump(array $topic, int $itemsPerPage): void
 function spp_forum_mark_viewtopic_read(PDO $forumPdo, array $user, array $forum, array $topic): void
 {
     if (($user['id'] ?? 0) <= 0) {
+        return;
+    }
+
+    if (!spp_forum_has_markread_table($forumPdo)) {
         return;
     }
 
