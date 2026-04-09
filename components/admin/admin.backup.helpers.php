@@ -27,6 +27,71 @@ function spp_admin_backup_entity_options(): array
     );
 }
 
+function spp_admin_backup_route_option(array $source, array $target): array
+{
+    $sourceExpansion = (string)($source['expansion_key'] ?? '');
+    $targetExpansion = (string)($target['expansion_key'] ?? '');
+    $targetIsVmangos = ($targetExpansion === 'vmangos');
+    $sourceIsVmangos = ($sourceExpansion === 'vmangos');
+    $supportedEntities = array('character', 'account', 'guild');
+
+    if ($targetIsVmangos || $sourceIsVmangos) {
+        $supportedEntities = array('character', 'account');
+    }
+
+    $label = (string)$source['name'] . ' -> ' . (string)$target['name'];
+    if ($targetIsVmangos && !$sourceIsVmangos) {
+        $label .= ' (CMaNGOS -> vMaNGOS)';
+    }
+
+    return array(
+        'id' => (int)$source['id'] . ':' . (int)$target['id'],
+        'source_realm_id' => (int)$source['id'],
+        'target_realm_id' => (int)$target['id'],
+        'label' => $label,
+        'source_expansion_key' => $sourceExpansion,
+        'target_expansion_key' => $targetExpansion,
+        'source_is_vmangos' => $sourceIsVmangos,
+        'target_is_vmangos' => $targetIsVmangos,
+        'supported_entities' => $supportedEntities,
+    );
+}
+
+function spp_admin_backup_route_entity_options(?array $routeOption): array
+{
+    $entityOptions = spp_admin_backup_entity_options();
+    if (empty($routeOption['supported_entities']) || !is_array($routeOption['supported_entities'])) {
+        return $entityOptions;
+    }
+
+    $filtered = array();
+    foreach ($routeOption['supported_entities'] as $entityKey) {
+        $entityKey = (string)$entityKey;
+        if (isset($entityOptions[$entityKey])) {
+            $filtered[$entityKey] = $entityOptions[$entityKey];
+        }
+    }
+
+    return !empty($filtered) ? $filtered : $entityOptions;
+}
+
+function spp_admin_backup_route_help(?array $routeOption): string
+{
+    if (empty($routeOption) || !is_array($routeOption)) {
+        return '';
+    }
+
+    if (!empty($routeOption['target_is_vmangos']) && empty($routeOption['source_is_vmangos'])) {
+        return 'For CMaNGOS -> vMaNGOS, run account xfer first, then run character xfer separately. Guild xfer is not offered on vMaNGOS routes.';
+    }
+
+    if (!empty($routeOption['target_is_vmangos']) || !empty($routeOption['source_is_vmangos'])) {
+        return 'vMaNGOS routes only offer account and character packages. Character SQL stays separate and is schema-validated before export.';
+    }
+
+    return 'Account xfer includes character SQL on standard CMaNGOS routes. Guild xfer assumes member characters already exist on the target realm.';
+}
+
 function spp_admin_backup_sql_literal($value): string
 {
     if ($value === null) {
@@ -111,14 +176,19 @@ function spp_admin_backup_xfer_route_options(array $realmOptions): array
 
             $source = $realmOptions[$i];
             $target = $realmOptions[$j];
-            $routes[] = array(
-                'id' => (int)$source['id'] . ':' . (int)$target['id'],
-                'source_realm_id' => (int)$source['id'],
-                'target_realm_id' => (int)$target['id'],
-                'label' => (string)$source['name'] . ' -> ' . (string)$target['name'],
-            );
+            $routes[] = spp_admin_backup_route_option($source, $target);
         }
     }
+
+    usort($routes, static function ($a, $b) {
+        $aPriority = (!empty($a['target_is_vmangos']) && empty($a['source_is_vmangos'])) ? 0 : (!empty($a['target_is_vmangos']) ? 1 : 2);
+        $bPriority = (!empty($b['target_is_vmangos']) && empty($b['source_is_vmangos'])) ? 0 : (!empty($b['target_is_vmangos']) ? 1 : 2);
+        if ($aPriority !== $bPriority) {
+            return $aPriority <=> $bPriority;
+        }
+
+        return strcmp((string)($a['label'] ?? ''), (string)($b['label'] ?? ''));
+    });
 
     return $routes;
 }
@@ -377,7 +447,7 @@ function spp_admin_backup_fetch_account_related_rows(PDO $realmdPdo, int $accoun
     return $rows;
 }
 
-function spp_admin_backup_build_filename(string $prefix, string $entityType, string $label): string
+function spp_admin_backup_build_filename(string $prefix, string $entityType, string $label, string $lane = '', ?string $stamp = null): string
 {
     $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '_', trim($label)));
     $slug = trim($slug, '_');
@@ -385,7 +455,10 @@ function spp_admin_backup_build_filename(string $prefix, string $entityType, str
         $slug = $entityType;
     }
 
-    return $prefix . '_' . $entityType . '_' . $slug . '_' . date('Ymd_His') . '.sql';
+    $stamp = $stamp !== null && $stamp !== '' ? $stamp : date('Ymd_His');
+    $lane = strtolower(trim($lane));
+
+    return $prefix . '_' . $entityType . '_' . $slug . ($lane !== '' ? '_' . $lane : '') . '_' . $stamp . '.sql';
 }
 
 function spp_admin_backup_write_output(string $filename, array $lines): array
@@ -401,6 +474,40 @@ function spp_admin_backup_write_output(string $filename, array $lines): array
     }
 
     return array('ok' => true, 'path' => $path);
+}
+
+function spp_admin_backup_write_output_set(string $prefix, string $entityType, string $label, array $parts): array
+{
+    $stamp = date('Ymd_His');
+    $files = array();
+
+    foreach ($parts as $lane => $lines) {
+        $lane = trim((string)$lane);
+        if ($lane === '') {
+            continue;
+        }
+
+        $filename = spp_admin_backup_build_filename($prefix, $entityType, $label, $lane, $stamp);
+        $writeResult = spp_admin_backup_write_output($filename, (array)$lines);
+        if (empty($writeResult['ok'])) {
+            return $writeResult;
+        }
+
+        $path = (string)$writeResult['path'];
+        $basename = spp_admin_backup_basename($path);
+        $files[] = array(
+            'lane' => $lane,
+            'filename' => $basename,
+            'path' => $path,
+            'download_url' => spp_admin_backup_download_url($basename),
+        );
+    }
+
+    return array(
+        'ok' => true,
+        'paths' => array_values(array_map(static function ($file) { return (string)$file['path']; }, $files)),
+        'files' => $files,
+    );
 }
 
 function spp_admin_backup_basename(string $path): string

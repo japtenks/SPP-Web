@@ -87,6 +87,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var sourceCharacter = document.getElementById('xfer_source_character_guid');
     var sourceGuild = document.getElementById('xfer_source_guild_id');
     var targetAccount = document.getElementById('xfer_target_account_id');
+    var routeHelp = document.getElementById('xfer_route_help');
 
     if (!entityType || !xferRoute || !sourceAccount || !sourceCharacter || !sourceGuild || !targetAccount) return;
 
@@ -112,6 +113,12 @@ document.addEventListener('DOMContentLoaded', function () {
           return item.label;
         }, data.selected_xfer_route_id, 'No transfer routes available');
 
+        populateSelect(entityType, Object.keys(data.xfer_entity_options || {}).map(function (key) {
+          return { key: key, label: data.xfer_entity_options[key] };
+        }), 'key', function (item) {
+          return item.label;
+        }, entityType.value, 'No transfer types available');
+
         populateSelect(sourceAccount, data.source_account_options, 'id', function (item) {
           return '#' + item.id + ' - ' + item.username;
         }, data.selected_account_id, 'No accounts found on this realm');
@@ -127,6 +134,10 @@ document.addEventListener('DOMContentLoaded', function () {
         populateSelect(targetAccount, data.target_account_options, 'id', function (item) {
           return '#' + item.id + ' - ' + item.username;
         }, data.selected_target_account_id, 'No accounts found on target realm');
+
+        if (routeHelp && typeof data.xfer_route_help === 'string' && data.xfer_route_help !== '') {
+          routeHelp.textContent = data.xfer_route_help;
+        }
 
         applyVisibility();
       }).catch(function () {});

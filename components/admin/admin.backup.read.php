@@ -36,10 +36,11 @@ function spp_admin_backup_build_view(array $realmDbMap, ?array $request = null):
     $backupEntityType = (string)($request['backup_entity_type'] ?? 'character');
     $xferEntityType = (string)($request['xfer_entity_type'] ?? 'character');
     $entityOptions = spp_admin_backup_entity_options();
+    $xferEntityOptions = spp_admin_backup_route_entity_options($selectedXferRoute);
     if (!isset($entityOptions[$backupEntityType])) {
         $backupEntityType = 'character';
     }
-    if (!isset($entityOptions[$xferEntityType])) {
+    if (!isset($xferEntityOptions[$xferEntityType])) {
         $xferEntityType = 'character';
     }
 
@@ -101,10 +102,13 @@ function spp_admin_backup_build_view(array $realmDbMap, ?array $request = null):
         'xfer_route_options' => $xferRouteOptions,
         'selected_xfer_route_id' => $selectedXferRouteId,
         'entity_options' => $entityOptions,
+        'xfer_entity_options' => $xferEntityOptions,
         'source_realm_id' => $sourceRealmId,
         'target_realm_id' => $targetRealmId,
         'backup_entity_type' => $backupEntityType,
         'xfer_entity_type' => $xferEntityType,
+        'selected_xfer_route' => $selectedXferRoute,
+        'xfer_route_help' => function_exists('spp_admin_backup_route_help') ? spp_admin_backup_route_help($selectedXferRoute) : '',
         'source_account_options' => $sourceAccountOptions,
         'source_character_options' => $sourceCharacterOptions,
         'source_guild_options' => $sourceGuildOptions,

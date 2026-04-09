@@ -10,6 +10,79 @@ function spp_admin_backup_state_defaults(): array
         'error' => '',
         'download_url' => '',
         'filename' => '',
+        'downloads' => array(),
+    );
+}
+
+function spp_admin_backup_result_with_files(string $message, array $writeSet): array
+{
+    if (empty($writeSet['ok'])) {
+        return $writeSet;
+    }
+
+    return array(
+        'ok' => true,
+        'message' => $message,
+        'paths' => (array)($writeSet['paths'] ?? array()),
+        'files' => (array)($writeSet['files'] ?? array()),
+    );
+}
+
+function spp_admin_backup_realmd_companion_lines(string $title, array $details = array(), string $tailNote = ''): array
+{
+    $lines = array(
+        spp_admin_backup_comment($title),
+        spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
+    );
+
+    foreach ($details as $detail) {
+        $detail = trim((string)$detail);
+        if ($detail !== '') {
+            $lines[] = spp_admin_backup_comment($detail);
+        }
+    }
+
+    if ($tailNote !== '') {
+        $lines[] = spp_admin_backup_comment($tailNote);
+    }
+
+    return array_merge($lines, array('', 'SELECT 1;'));
+}
+
+function spp_admin_backup_realmcharacters_sync_lines(PDO $targetRealmdPdo, int $targetRealmId, string $targetAccountExpr, string $targetCharsDbName): array
+{
+    $targetColumns = spp_admin_backup_target_columns($targetRealmdPdo, 'realmcharacters');
+    if (empty($targetColumns)) {
+        return array();
+    }
+
+    $safeCharsDbName = str_replace('`', '', trim($targetCharsDbName));
+    if ($safeCharsDbName === '') {
+        return array();
+    }
+
+    $realmcharactersRow = array();
+    $rawColumns = array();
+    foreach ($targetColumns as $column) {
+        if ($column === 'acctid') {
+            $realmcharactersRow[$column] = $targetAccountExpr;
+            $rawColumns[$column] = true;
+        } elseif ($column === 'realmid') {
+            $realmcharactersRow[$column] = $targetRealmId;
+        } elseif ($column === 'numchars') {
+            $realmcharactersRow[$column] = '(SELECT COUNT(*) FROM `' . $safeCharsDbName . '`.`characters` WHERE `account` = ' . $targetAccountExpr . ')';
+            $rawColumns[$column] = true;
+        }
+    }
+
+    if (empty($realmcharactersRow)) {
+        return array();
+    }
+
+    return array(
+        'DELETE FROM `realmcharacters` WHERE `acctid` = ' . $targetAccountExpr . ' AND `realmid` = ' . $targetRealmId . ';',
+        spp_admin_backup_insert_sql_raw('realmcharacters', $realmcharactersRow, $rawColumns),
+        '',
     );
 }
 
@@ -387,7 +460,7 @@ function spp_admin_backup_character_bundle_xfer_lines(array $bundle, PDO $target
     return $lines;
 }
 
-function spp_admin_backup_export_character(PDO $sourceCharsPdo, array $view): array
+function spp_admin_backup_export_character(PDO $sourceRealmdPdo, PDO $sourceCharsPdo, array $view): array
 {
     $characterGuid = (int)($view['selected_character_guid'] ?? 0);
     $accountId = (int)($view['selected_account_id'] ?? 0);
@@ -401,22 +474,53 @@ function spp_admin_backup_export_character(PDO $sourceCharsPdo, array $view): ar
         return array('ok' => false, 'message' => 'That character could not be exported.');
     }
 
-    $lines = array(
+    $accountRow = spp_admin_backup_fetch_account_row($sourceRealmdPdo, $accountId);
+    $accountRows = $accountId > 0 ? spp_admin_backup_fetch_account_related_rows($sourceRealmdPdo, $accountId) : array();
+
+    $realmdLines = array(
+        spp_admin_backup_comment('Character backup export (realmd companion)'),
+        spp_admin_backup_comment('Realm: ' . (string)$view['source_realm_name']),
+        spp_admin_backup_comment('Character: ' . (string)($characterRow['name'] ?? ('GUID ' . $characterGuid))),
+        spp_admin_backup_comment('Account context is included so the character package can be paired with its auth record.'),
+        spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
+        '',
+    );
+    if (!empty($accountRow)) {
+        $realmdLines[] = spp_admin_backup_insert_sql('account', $accountRow);
+        foreach ($accountRows as $table => $rows) {
+            foreach ($rows as $row) {
+                $realmdLines[] = spp_admin_backup_insert_sql($table, $row);
+            }
+            if (!empty($rows)) {
+                $realmdLines[] = '';
+            }
+        }
+    } else {
+        $realmdLines[] = 'SELECT 1;';
+        $realmdLines[] = '';
+    }
+
+    $charsLines = array(
         spp_admin_backup_comment('Character backup export'),
         spp_admin_backup_comment('Realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Character: ' . (string)($characterRow['name'] ?? ('GUID ' . $characterGuid))),
         spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
         '',
     );
-    $lines = array_merge($lines, spp_admin_backup_character_bundle_lines($bundle));
+    $charsLines = array_merge($charsLines, spp_admin_backup_character_bundle_lines($bundle));
 
-    $filename = spp_admin_backup_build_filename('backup', 'character', (string)($characterRow['name'] ?? ('guid_' . $characterGuid)));
-    $writeResult = spp_admin_backup_write_output($filename, $lines);
-    if (empty($writeResult['ok'])) {
-        return $writeResult;
-    }
-
-    return array('ok' => true, 'message' => 'Character backup created.', 'path' => $writeResult['path']);
+    return spp_admin_backup_result_with_files(
+        'Character backup created.',
+        spp_admin_backup_write_output_set(
+            'backup',
+            'character',
+            (string)($characterRow['name'] ?? ('guid_' . $characterGuid)),
+            array(
+                'realmd' => $realmdLines,
+                'chars' => $charsLines,
+            )
+        )
+    );
 }
 
 function spp_admin_backup_export_account(PDO $sourceRealmdPdo, PDO $sourceCharsPdo, array $view): array
@@ -430,7 +534,7 @@ function spp_admin_backup_export_account(PDO $sourceRealmdPdo, PDO $sourceCharsP
     $accountRows = spp_admin_backup_fetch_account_related_rows($sourceRealmdPdo, $accountId);
     $characterRows = spp_admin_backup_fetch_characters($sourceCharsPdo, $accountId);
 
-    $lines = array(
+    $realmdLines = array(
         spp_admin_backup_comment('Account backup export'),
         spp_admin_backup_comment('Realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Account: ' . (string)($accountRow['username'] ?? ('ID ' . $accountId))),
@@ -441,28 +545,40 @@ function spp_admin_backup_export_account(PDO $sourceRealmdPdo, PDO $sourceCharsP
 
     foreach ($accountRows as $table => $rows) {
         foreach ($rows as $row) {
-            $lines[] = spp_admin_backup_insert_sql($table, $row);
+            $realmdLines[] = spp_admin_backup_insert_sql($table, $row);
         }
         if (!empty($rows)) {
-            $lines[] = '';
+            $realmdLines[] = '';
         }
     }
 
+    $charsLines = array(
+        spp_admin_backup_comment('Account backup export (characters)'),
+        spp_admin_backup_comment('Realm: ' . (string)$view['source_realm_name']),
+        spp_admin_backup_comment('Account: ' . (string)($accountRow['username'] ?? ('ID ' . $accountId))),
+        spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
+        '',
+    );
     foreach ($characterRows as $characterRow) {
         $bundle = spp_admin_backup_fetch_character_bundle($sourceCharsPdo, (int)$characterRow['guid'], $accountId);
         if (!empty($bundle)) {
-            $lines[] = spp_admin_backup_comment('Character: ' . (string)$characterRow['name']);
-            $lines = array_merge($lines, spp_admin_backup_character_bundle_lines($bundle));
+            $charsLines[] = spp_admin_backup_comment('Character: ' . (string)$characterRow['name']);
+            $charsLines = array_merge($charsLines, spp_admin_backup_character_bundle_lines($bundle));
         }
     }
 
-    $filename = spp_admin_backup_build_filename('backup', 'account', (string)($accountRow['username'] ?? ('account_' . $accountId)));
-    $writeResult = spp_admin_backup_write_output($filename, $lines);
-    if (empty($writeResult['ok'])) {
-        return $writeResult;
-    }
-
-    return array('ok' => true, 'message' => 'Account backup created.', 'path' => $writeResult['path']);
+    return spp_admin_backup_result_with_files(
+        'Account backup created.',
+        spp_admin_backup_write_output_set(
+            'backup',
+            'account',
+            (string)($accountRow['username'] ?? ('account_' . $accountId)),
+            array(
+                'realmd' => $realmdLines,
+                'chars' => $charsLines,
+            )
+        )
+    );
 }
 
 function spp_admin_backup_export_guild(PDO $sourceCharsPdo, array $view): array
@@ -473,7 +589,16 @@ function spp_admin_backup_export_guild(PDO $sourceCharsPdo, array $view): array
         return array('ok' => false, 'message' => 'Select a guild first.');
     }
 
-    $lines = array(
+    $realmdLines = spp_admin_backup_realmd_companion_lines(
+        'Guild backup export (realmd companion)',
+        array(
+            'Realm: ' . (string)$view['source_realm_name'],
+            'Guild: ' . (string)($guildRow['name'] ?? ('ID ' . $guildId)),
+        ),
+        'Guild exports operate on the characters database. No realmd rows are required for this package.'
+    );
+
+    $charsLines = array(
         spp_admin_backup_comment('Guild backup export'),
         spp_admin_backup_comment('Realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Guild: ' . (string)($guildRow['name'] ?? ('ID ' . $guildId))),
@@ -487,20 +612,25 @@ function spp_admin_backup_export_guild(PDO $sourceCharsPdo, array $view): array
         $stmt->execute(array($guildId));
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $row) {
-            $lines[] = spp_admin_backup_insert_sql($table, $row);
+            $charsLines[] = spp_admin_backup_insert_sql($table, $row);
         }
         if (!empty($rows)) {
-            $lines[] = '';
+            $charsLines[] = '';
         }
     }
 
-    $filename = spp_admin_backup_build_filename('backup', 'guild', (string)($guildRow['name'] ?? ('guild_' . $guildId)));
-    $writeResult = spp_admin_backup_write_output($filename, $lines);
-    if (empty($writeResult['ok'])) {
-        return $writeResult;
-    }
-
-    return array('ok' => true, 'message' => 'Guild backup created.', 'path' => $writeResult['path']);
+    return spp_admin_backup_result_with_files(
+        'Guild backup created.',
+        spp_admin_backup_write_output_set(
+            'backup',
+            'guild',
+            (string)($guildRow['name'] ?? ('guild_' . $guildId)),
+            array(
+                'realmd' => $realmdLines,
+                'chars' => $charsLines,
+            )
+        )
+    );
 }
 
 function spp_admin_backup_create_backup_package(array $view): array
@@ -521,7 +651,7 @@ function spp_admin_backup_create_backup_package(array $view): array
         return spp_admin_backup_export_guild($sourceCharsPdo, $view);
     }
 
-    return spp_admin_backup_export_character($sourceCharsPdo, $view);
+    return spp_admin_backup_export_character($sourceRealmdPdo, $sourceCharsPdo, $view);
 }
 
 function spp_admin_backup_xfer_character(array $view): array
@@ -542,6 +672,7 @@ function spp_admin_backup_xfer_character(array $view): array
 
     $sourceCharsPdo = spp_get_pdo('chars', $sourceRealmId);
     $targetCharsPdo = spp_get_pdo('chars', $targetRealmId);
+    $targetRealmdPdo = spp_get_pdo('realmd', $targetRealmId);
     $sourceIsVmangos = function_exists('spp_admin_backup_is_vmangos_realm')
         ? spp_admin_backup_is_vmangos_realm((array)($view['realm_options'] ?? array()), $sourceRealmId)
         : false;
@@ -560,7 +691,7 @@ function spp_admin_backup_xfer_character(array $view): array
     }
 
     $characterLabel = $newName !== '' ? $newName : (string)($bundle['character']['name'] ?? ('guid_' . $characterGuid));
-    $lines = array(
+    $charsLines = array(
         spp_admin_backup_comment('Character xfer package'),
         spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
@@ -570,15 +701,39 @@ function spp_admin_backup_xfer_character(array $view): array
         'SET @target_account_id := ' . $targetAccountId . ';',
         '',
     );
-    $lines = array_merge($lines, spp_admin_backup_character_bundle_xfer_lines($bundle, $targetCharsPdo, '@target_account_id', $newName));
+    $charsLines = array_merge($charsLines, spp_admin_backup_character_bundle_xfer_lines($bundle, $targetCharsPdo, '@target_account_id', $newName));
 
-    $filename = spp_admin_backup_build_filename('xfer', 'character', $characterLabel);
-    $writeResult = spp_admin_backup_write_output($filename, $lines);
-    if (empty($writeResult['ok'])) {
-        return $writeResult;
+    $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+    $targetCharsDbName = (string)($realmDbMap[$targetRealmId]['chars'] ?? '');
+    $realmdLines = array(
+        spp_admin_backup_comment('Character xfer package (realmd companion)'),
+        spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
+        spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
+        spp_admin_backup_comment('Target account id: ' . $targetAccountId),
+        spp_admin_backup_comment('Run this after the chars package so realmcharacters reflects the imported character count.'),
+        spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
+        '',
+        'SET @target_account_id := ' . $targetAccountId . ';',
+        '',
+    );
+    $realmdLines = array_merge($realmdLines, spp_admin_backup_realmcharacters_sync_lines($targetRealmdPdo, $targetRealmId, '@target_account_id', $targetCharsDbName));
+    if (count($realmdLines) <= 9) {
+        $realmdLines[] = 'SELECT 1;';
+        $realmdLines[] = '';
     }
 
-    return array('ok' => true, 'message' => 'Character xfer package created.', 'path' => $writeResult['path']);
+    return spp_admin_backup_result_with_files(
+        'Character xfer package created.',
+        spp_admin_backup_write_output_set(
+            'xfer',
+            'character',
+            $characterLabel,
+            array(
+                'realmd' => $realmdLines,
+                'chars' => $charsLines,
+            )
+        )
+    );
 }
 
 function spp_admin_backup_xfer_account(array $view): array
@@ -610,9 +765,8 @@ function spp_admin_backup_xfer_account(array $view): array
         : false;
     $targetAccountColumns = spp_admin_backup_target_columns($targetRealmdPdo, 'account');
     $characterRows = spp_admin_backup_fetch_characters($sourceCharsPdo, $accountId);
-    $transferCharacterRows = $targetIsVmangos ? array() : $characterRows;
 
-    $lines = array(
+    $realmdLines = array(
         spp_admin_backup_comment('Account xfer package'),
         spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
@@ -620,10 +774,20 @@ function spp_admin_backup_xfer_account(array $view): array
         spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
         '',
     );
+    $charsLines = array(
+        spp_admin_backup_comment('Account xfer package (chars)'),
+        spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
+        spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
+        spp_admin_backup_comment('Target account: ' . (string)($accountRow['username'] ?? ('ID ' . $accountId))),
+        spp_admin_backup_comment('Generated: ' . date('Y-m-d H:i:s')),
+        '',
+    );
+    $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+    $targetCharsDbName = (string)($realmDbMap[$targetRealmId]['chars'] ?? '');
 
     if ($creatingAccount) {
-        $lines[] = 'SET @target_account_id := (SELECT COALESCE(MAX(`id`), 0) + 1 FROM `account`);';
-        $lines[] = '';
+        $realmdLines[] = 'SET @target_account_id := (SELECT COALESCE(MAX(`id`), 0) + 1 FROM `account`);';
+        $realmdLines[] = '';
         $targetAccountRow = $targetIsVmangos
             ? spp_admin_backup_vmangos_target_account_row($accountRow, $targetRealmId, $targetAccountColumns)
             : $accountRow;
@@ -631,7 +795,7 @@ function spp_admin_backup_xfer_account(array $view): array
             $targetAccountRow['id'] = '@target_account_id';
             $targetAccountRow['online'] = 0;
         }
-        $lines[] = spp_admin_backup_insert_sql_raw(
+        $realmdLines[] = spp_admin_backup_insert_sql_raw(
             'account',
             spp_admin_backup_filter_row_to_target_columns($targetAccountRow, $targetAccountColumns),
             array('id' => true)
@@ -640,22 +804,6 @@ function spp_admin_backup_xfer_account(array $view): array
         foreach (spp_admin_backup_fetch_account_related_rows($sourceRealmdPdo, $accountId) as $table => $rows) {
             $targetColumns = spp_admin_backup_target_columns($targetRealmdPdo, $table);
             if ($table === 'realmcharacters') {
-                $realmcharactersRow = array();
-                foreach ($targetColumns as $column) {
-                    if ($column === 'acctid') {
-                        $realmcharactersRow[$column] = '@target_account_id';
-                    } elseif ($column === 'realmid') {
-                        $realmcharactersRow[$column] = $targetRealmId;
-                    } elseif ($column === 'numchars') {
-                        $realmcharactersRow[$column] = count($transferCharacterRows);
-                    }
-                }
-
-                if (!empty($realmcharactersRow)) {
-                    $lines[] = 'DELETE FROM `realmcharacters` WHERE `acctid` = @target_account_id AND `realmid` = ' . $targetRealmId . ';';
-                    $lines[] = spp_admin_backup_insert_sql_raw($table, $realmcharactersRow, array('acctid' => true));
-                    $lines[] = '';
-                }
                 continue;
             }
 
@@ -668,54 +816,45 @@ function spp_admin_backup_xfer_account(array $view): array
                 }
                 $filtered = spp_admin_backup_filter_row_to_target_columns($row, $targetColumns);
                 if (!empty($filtered)) {
-                    $lines[] = spp_admin_backup_insert_sql_raw($table, $filtered, array('id' => true, 'acctid' => true));
+                    $realmdLines[] = spp_admin_backup_insert_sql_raw($table, $filtered, array('id' => true, 'acctid' => true));
                 }
             }
             if (!empty($rows)) {
-                $lines[] = '';
+                $realmdLines[] = '';
             }
         }
     } else {
-        $lines[] = 'SET @target_account_id := ' . $targetAccountId . ';';
-        $lines[] = spp_admin_backup_comment('Target realm already has username "' . (string)$accountRow['username'] . '". Reusing account id ' . $targetAccountId . '.');
+        $realmdLines[] = 'SET @target_account_id := ' . $targetAccountId . ';';
+        $realmdLines[] = spp_admin_backup_comment('Target realm already has username "' . (string)$accountRow['username'] . '". Reusing account id ' . $targetAccountId . '.');
         if ($targetIsVmangos) {
             if (in_array('current_realm', $targetAccountColumns, true)) {
-                $lines[] = 'UPDATE `account` SET `current_realm` = ' . $targetRealmId . ' WHERE `id` = @target_account_id LIMIT 1;';
+                $realmdLines[] = 'UPDATE `account` SET `current_realm` = ' . $targetRealmId . ' WHERE `id` = @target_account_id LIMIT 1;';
             } elseif (in_array('active_realm_id', $targetAccountColumns, true)) {
-                $lines[] = 'UPDATE `account` SET `active_realm_id` = ' . $targetRealmId . ' WHERE `id` = @target_account_id LIMIT 1;';
+                $realmdLines[] = 'UPDATE `account` SET `active_realm_id` = ' . $targetRealmId . ' WHERE `id` = @target_account_id LIMIT 1;';
             }
         }
-        $lines[] = '';
-
-        $targetRealmcharactersColumns = spp_admin_backup_target_columns($targetRealmdPdo, 'realmcharacters');
-        $realmcharactersRow = array();
-        foreach ($targetRealmcharactersColumns as $column) {
-            if ($column === 'acctid') {
-                $realmcharactersRow[$column] = '@target_account_id';
-            } elseif ($column === 'realmid') {
-                $realmcharactersRow[$column] = $targetRealmId;
-            } elseif ($column === 'numchars') {
-                $realmcharactersRow[$column] = count($transferCharacterRows);
-            }
-        }
-        if (!empty($realmcharactersRow)) {
-            $lines[] = 'DELETE FROM `realmcharacters` WHERE `acctid` = @target_account_id AND `realmid` = ' . $targetRealmId . ';';
-            $lines[] = spp_admin_backup_insert_sql_raw('realmcharacters', $realmcharactersRow, array('acctid' => true));
-            $lines[] = '';
-        }
+        $realmdLines[] = '';
     }
 
-    if ($targetIsVmangos) {
-        $filename = spp_admin_backup_build_filename('xfer', 'account', (string)($accountRow['username'] ?? ('account_' . $accountId)));
-        $writeResult = spp_admin_backup_write_output($filename, $lines);
-        if (empty($writeResult['ok'])) {
-            return $writeResult;
-        }
+    $realmdLines = array_merge($realmdLines, spp_admin_backup_realmcharacters_sync_lines($targetRealmdPdo, $targetRealmId, '@target_account_id', $targetCharsDbName));
 
-        return array(
-            'ok' => true,
-            'message' => 'vMaNGOS account xfer package created. Character transfer remains a separate step.',
-            'path' => $writeResult['path'],
+    if ($targetIsVmangos) {
+        $charsLines[] = spp_admin_backup_comment('vMaNGOS keeps character transfer separate from account xfer.');
+        $charsLines[] = spp_admin_backup_comment('Use the character xfer action to generate the companion chars SQL package.');
+        $charsLines[] = '';
+        $charsLines[] = 'SELECT 1;';
+        $charsLines[] = '';
+        return spp_admin_backup_result_with_files(
+            'vMaNGOS account xfer package created. Character transfer remains a separate step.',
+            spp_admin_backup_write_output_set(
+                'xfer',
+                'account',
+                (string)($accountRow['username'] ?? ('account_' . $accountId)),
+                array(
+                    'realmd' => $realmdLines,
+                    'chars' => $charsLines,
+                )
+            )
         );
     }
 
@@ -725,17 +864,22 @@ function spp_admin_backup_xfer_account(array $view): array
             continue;
         }
 
-        $lines[] = spp_admin_backup_comment('Character: ' . (string)$characterRow['name']);
-        $lines = array_merge($lines, spp_admin_backup_character_bundle_xfer_lines($bundle, $targetCharsPdo, '@target_account_id', ''));
+        $charsLines[] = spp_admin_backup_comment('Character: ' . (string)$characterRow['name']);
+        $charsLines = array_merge($charsLines, spp_admin_backup_character_bundle_xfer_lines($bundle, $targetCharsPdo, '@target_account_id', ''));
     }
 
-    $filename = spp_admin_backup_build_filename('xfer', 'account', (string)($accountRow['username'] ?? ('account_' . $accountId)));
-    $writeResult = spp_admin_backup_write_output($filename, $lines);
-    if (empty($writeResult['ok'])) {
-        return $writeResult;
-    }
-
-    return array('ok' => true, 'message' => 'Account xfer package created.', 'path' => $writeResult['path']);
+    return spp_admin_backup_result_with_files(
+        'Account xfer package created.',
+        spp_admin_backup_write_output_set(
+            'xfer',
+            'account',
+            (string)($accountRow['username'] ?? ('account_' . $accountId)),
+            array(
+                'realmd' => $realmdLines,
+                'chars' => $charsLines,
+            )
+        )
+    );
 }
 
 function spp_admin_backup_xfer_guild(array $view): array
@@ -758,7 +902,17 @@ function spp_admin_backup_xfer_guild(array $view): array
     $leaderStmt->execute(array((int)$guildRow['leaderguid']));
     $leaderName = (string)$leaderStmt->fetchColumn();
 
-    $lines = array(
+    $realmdLines = spp_admin_backup_realmd_companion_lines(
+        'Guild xfer package (realmd companion)',
+        array(
+            'Source realm: ' . (string)$view['source_realm_name'],
+            'Target realm: ' . (string)$view['target_realm_name'],
+            'Guild: ' . (string)($guildRow['name'] ?? ('ID ' . $guildId)),
+        ),
+        'Guild xfer operates on the characters database. No realmd updates are required for this package.'
+    );
+
+    $charsLines = array(
         spp_admin_backup_comment('Guild xfer package'),
         spp_admin_backup_comment('Source realm: ' . (string)$view['source_realm_name']),
         spp_admin_backup_comment('Target realm: ' . (string)$view['target_realm_name']),
@@ -767,10 +921,10 @@ function spp_admin_backup_xfer_guild(array $view): array
         '',
     );
 
-    $lines[] = 'SET @target_guild_id := (SELECT COALESCE(MAX(`guildid`), 0) + 1 FROM `guild`);';
-    $lines[] = '';
+    $charsLines[] = 'SET @target_guild_id := (SELECT COALESCE(MAX(`guildid`), 0) + 1 FROM `guild`);';
+    $charsLines[] = '';
     if ($leaderName !== '') {
-        $lines[] = 'INSERT INTO `guild` (`guildid`, `name`, `leaderguid`, `EmblemStyle`, `EmblemColor`, `BorderStyle`, `BorderColor`, `BackgroundColor`, `info`, `motd`, `createdate`, `BankMoney`) '
+        $charsLines[] = 'INSERT INTO `guild` (`guildid`, `name`, `leaderguid`, `EmblemStyle`, `EmblemColor`, `BorderStyle`, `BorderColor`, `BackgroundColor`, `info`, `motd`, `createdate`, `BankMoney`) '
             . 'SELECT '
             . '@target_guild_id, '
             . spp_admin_backup_sql_literal((string)$guildRow['name']) . ', '
@@ -786,9 +940,9 @@ function spp_admin_backup_xfer_guild(array $view): array
             . spp_admin_backup_sql_literal($guildRow['BankMoney'] ?? 0)
             . ' FROM `characters` c WHERE c.name = ' . spp_admin_backup_sql_literal($leaderName) . ' LIMIT 1;';
     } else {
-        $lines[] = spp_admin_backup_comment('Leader character name could not be resolved. Adjust guild insert manually if needed.');
+        $charsLines[] = spp_admin_backup_comment('Leader character name could not be resolved. Adjust guild insert manually if needed.');
     }
-    $lines[] = '';
+    $charsLines[] = '';
 
     $rankStmt = $sourceCharsPdo->prepare("SELECT * FROM guild_rank WHERE guildid=? ORDER BY rid ASC");
     $rankStmt->execute(array($guildId));
@@ -796,10 +950,10 @@ function spp_admin_backup_xfer_guild(array $view): array
         $rankRow['guildid'] = '@target_guild_id';
         $filtered = spp_admin_backup_filter_row_to_target_columns($rankRow, spp_admin_backup_target_columns($targetCharsPdo, 'guild_rank'));
         if (!empty($filtered)) {
-            $lines[] = spp_admin_backup_insert_sql_raw('guild_rank', $filtered, array('guildid' => true));
+            $charsLines[] = spp_admin_backup_insert_sql_raw('guild_rank', $filtered, array('guildid' => true));
         }
     }
-    $lines[] = '';
+    $charsLines[] = '';
 
     $memberStmt = $sourceCharsPdo->prepare("
         SELECT gm.*, c.name AS member_name
@@ -814,7 +968,7 @@ function spp_admin_backup_xfer_guild(array $view): array
         if ($memberName === '') {
             continue;
         }
-        $lines[] = 'INSERT INTO `guild_member` (`guildid`, `guid`, `rank`, `pnote`, `offnote`) '
+        $charsLines[] = 'INSERT INTO `guild_member` (`guildid`, `guid`, `rank`, `pnote`, `offnote`) '
             . 'SELECT '
             . '@target_guild_id, '
             . 'c.guid, '
@@ -824,18 +978,28 @@ function spp_admin_backup_xfer_guild(array $view): array
             . ' FROM `characters` c WHERE c.name = ' . spp_admin_backup_sql_literal($memberName) . ' LIMIT 1;';
     }
 
-    $filename = spp_admin_backup_build_filename('xfer', 'guild', (string)($guildRow['name'] ?? ('guild_' . $guildId)));
-    $writeResult = spp_admin_backup_write_output($filename, $lines);
-    if (empty($writeResult['ok'])) {
-        return $writeResult;
-    }
-
-    return array('ok' => true, 'message' => 'Guild xfer package created.', 'path' => $writeResult['path']);
+    return spp_admin_backup_result_with_files(
+        'Guild xfer package created.',
+        spp_admin_backup_write_output_set(
+            'xfer',
+            'guild',
+            (string)($guildRow['name'] ?? ('guild_' . $guildId)),
+            array(
+                'realmd' => $realmdLines,
+                'chars' => $charsLines,
+            )
+        )
+    );
 }
 
 function spp_admin_backup_create_xfer_package(array $view): array
 {
     $entityType = (string)($view['xfer_entity_type'] ?? 'character');
+    $selectedRoute = (array)($view['selected_xfer_route'] ?? array());
+    $supportedEntities = array_values((array)($selectedRoute['supported_entities'] ?? array()));
+    if (!empty($supportedEntities) && !in_array($entityType, $supportedEntities, true)) {
+        return array('ok' => false, 'message' => 'That transfer type is not enabled for the selected realm route.');
+    }
     if ($entityType === 'account') {
         return spp_admin_backup_xfer_account($view);
     }
@@ -865,10 +1029,14 @@ function spp_admin_backup_handle_action(array $view): array
     }
 
     if (!empty($result['ok'])) {
-        $filename = !empty($result['path']) ? spp_admin_backup_basename((string)$result['path']) : '';
-        $state['notice'] = (string)$result['message'] . ($filename !== '' ? ' File: ' . $filename : '');
+        $files = array_values((array)($result['files'] ?? array()));
+        $filename = !empty($result['path'])
+            ? spp_admin_backup_basename((string)$result['path'])
+            : (!empty($files[0]['filename']) ? (string)$files[0]['filename'] : '');
+        $state['notice'] = (string)$result['message'];
         $state['filename'] = $filename;
         $state['download_url'] = $filename !== '' ? spp_admin_backup_download_url($filename) : '';
+        $state['downloads'] = $files;
     } else {
         $state['error'] = (string)($result['message'] ?? 'The requested package could not be created.');
     }

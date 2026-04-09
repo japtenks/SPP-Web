@@ -24,7 +24,13 @@
   <?php if (!empty($backupActionState['notice'])): ?>
     <div class="backup-admin__msg success">
       <?php echo htmlspecialchars((string)$backupActionState['notice']); ?>
-      <?php if (!empty($backupActionState['download_url'])): ?>
+      <?php if (!empty($backupActionState['downloads'])): ?>
+        <?php foreach ((array)$backupActionState['downloads'] as $download): ?>
+          <a href="<?php echo htmlspecialchars((string)($download['download_url'] ?? '')); ?>">
+            <?php echo 'Download ' . htmlspecialchars(strtoupper((string)($download['lane'] ?? 'sql'))); ?>
+          </a>
+        <?php endforeach; ?>
+      <?php elseif (!empty($backupActionState['download_url'])): ?>
         <a href="<?php echo htmlspecialchars((string)$backupActionState['download_url']); ?>">Download SQL</a>
       <?php endif; ?>
     </div>
@@ -136,6 +142,9 @@
     <p class="backup-admin__eyebrow">Realm Xfer</p>
     <h2 class="backup-admin__title">Create Xfer SQL</h2>
     <p class="backup-admin__note">Xfer packages are target-ready SQL bundles for `Classic -> TBC -> WotLK` style promotion. Characters are remapped to new GUID ranges on the target realm, accounts reuse an existing username when possible, and guild packages assume the member characters have already been transferred with the same names. vMaNGOS account SQL stays separate from character SQL, and vMaNGOS character xfer now requires a live schema validation pass before a package is trusted.</p>
+    <?php if (!empty($backupView['xfer_route_help'])): ?>
+      <p class="backup-admin__note" id="xfer_route_help"><?php echo htmlspecialchars((string)$backupView['xfer_route_help']); ?></p>
+    <?php endif; ?>
 
     <form method="post" action="<?php echo htmlspecialchars((string)$backup_action_url, ENT_QUOTES, 'UTF-8'); ?>">
       <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)$admin_backup_csrf_token); ?>">
@@ -144,7 +153,7 @@
         <div class="backup-admin__pair xfer-field" data-entities="character,account,guild">
           <label for="xfer_entity_type">Type</label>
           <select id="xfer_entity_type" name="xfer_entity_type">
-            <?php foreach ((array)$backupView['entity_options'] as $entityKey => $entityLabel): ?>
+            <?php foreach ((array)$backupView['xfer_entity_options'] as $entityKey => $entityLabel): ?>
               <option value="<?php echo htmlspecialchars((string)$entityKey); ?>"<?php if ((string)$entityKey === (string)$backupView['xfer_entity_type']) echo ' selected'; ?>>
                 <?php echo htmlspecialchars((string)$entityLabel); ?>
               </option>

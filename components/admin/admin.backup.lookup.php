@@ -33,6 +33,7 @@ $view = spp_admin_backup_build_view($realmDbMap, $request);
 echo json_encode(array(
     'realm_options' => array_values((array)$view['realm_options']),
     'xfer_route_options' => array_values((array)$view['xfer_route_options']),
+    'xfer_entity_options' => (array)($view['xfer_entity_options'] ?? array()),
     'source_account_options' => array_values((array)$view['source_account_options']),
     'source_character_options' => array_values((array)$view['source_character_options']),
     'source_guild_options' => array_values((array)$view['source_guild_options']),
@@ -44,4 +45,5 @@ echo json_encode(array(
     'selected_xfer_route_id' => (string)$view['selected_xfer_route_id'],
     'target_realm_id' => (int)$view['target_realm_id'],
     'source_realm_id' => (int)$view['source_realm_id'],
+    'xfer_route_help' => (string)($view['xfer_route_help'] ?? ''),
 ));
