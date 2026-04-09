@@ -183,7 +183,7 @@
   <section class="backup-admin__panel">
     <p class="backup-admin__eyebrow">Realm Xfer</p>
     <h2 class="backup-admin__title">Create Xfer SQL</h2>
-    <p class="backup-admin__note">Xfer builds target-ready SQL artifacts. Standard CMaNGOS routes still package manual cross-realm SQL, while `CMaNGOS -> vMaNGOS` builds transformed export files for manual inspection and apply. vMaNGOS keeps `realmd.sql` and `chars.sql` separate, adds a manifest, supports account/bot/guild scopes, does not live-apply anything, and still requires schema validation before character-side export is trusted.</p>
+    <p class="backup-admin__note">Xfer builds target-ready SQL artifacts. Standard CMaNGOS routes still package manual cross-realm SQL, while `CMaNGOS -> vMaNGOS` builds transformed export files for manual inspection and apply. That route keeps `realmd.sql` and `chars.sql` separate, adds a manifest, exposes only account and guild scopes, does not live-apply anything, and validates the explicit source-to-target mapping before character-side export is trusted.</p>
     <?php if (!empty($backupView['xfer_route_help'])): ?>
       <p class="backup-admin__note" id="xfer_route_help"><?php echo htmlspecialchars((string)$backupView['xfer_route_help']); ?></p>
     <?php endif; ?>

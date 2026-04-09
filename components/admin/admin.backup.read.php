@@ -89,7 +89,7 @@ function spp_admin_backup_build_view(array $realmDbMap, ?array $request = null):
         $backupEntityType = 'character';
     }
     if (!isset($xferEntityOptions[$xferEntityType])) {
-        $xferEntityType = 'character';
+        $xferEntityType = spp_admin_backup_first_array_key($xferEntityOptions, 'character');
     }
 
     $sourceRealmdPdo = spp_admin_backup_safe_pdo('realmd', $sourceRealmId, $viewWarnings);

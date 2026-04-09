@@ -177,6 +177,15 @@ function spp_admin_backup_entity_label(string $entityType): string
     return $options[$entityType] ?? ucfirst($entityType);
 }
 
+function spp_admin_backup_first_array_key(array $items, string $fallback = ''): string
+{
+    foreach ($items as $key => $_value) {
+        return (string)$key;
+    }
+
+    return $fallback;
+}
+
 function spp_admin_backup_is_random_bot_account_name(?string $username): bool
 {
     $username = strtolower(trim((string)$username));
@@ -270,7 +279,7 @@ function spp_admin_backup_vmangos_target_account_row(array $sourceAccountRow, in
                 $row[$column] = $sourceAccountRow['joindate'] ?? date('Y-m-d H:i:s');
                 break;
             case 'last_ip':
-                $row[$column] = (string)($sourceAccountRow['last_ip'] ?? '');
+                $row[$column] = (string)($sourceAccountRow['last_ip'] ?? ($sourceAccountRow['lockedIp'] ?? ''));
                 break;
             case 'failed_logins':
                 $row[$column] = (int)($sourceAccountRow['failed_logins'] ?? 0);
@@ -296,6 +305,9 @@ function spp_admin_backup_vmangos_target_account_row(array $sourceAccountRow, in
                 break;
             case 'os':
                 $row[$column] = (string)($sourceAccountRow['os'] ?? '');
+                break;
+            case 'token_key':
+                $row[$column] = (string)($sourceAccountRow['token_key'] ?? ($sourceAccountRow['token'] ?? ''));
                 break;
             case 'recruiter':
                 $row[$column] = (int)($sourceAccountRow['recruiter'] ?? 0);
@@ -415,6 +427,434 @@ function spp_admin_backup_fetch_accounts(PDO $realmdPdo, string $mode = 'human',
     }
 
     return $filtered;
+}
+
+function spp_admin_backup_vmangos_character_flags(array $sourceRow): int
+{
+    $playerFlags = (int)($sourceRow['playerFlags'] ?? 0);
+    $atLoginFlags = (int)($sourceRow['at_login'] ?? 0);
+    $characterFlags = 0;
+
+    if (($playerFlags & 0x00000008) !== 0) {
+        $characterFlags |= 0x00020000;
+    }
+    if (($playerFlags & 0x00000010) !== 0) {
+        $characterFlags |= 0x00002000;
+    }
+    if (($playerFlags & 0x00000020) !== 0) {
+        $characterFlags |= 0x00000002;
+    }
+    if (($playerFlags & 0x00000200) !== 0) {
+        $characterFlags |= 0x00010000;
+    }
+    if (($playerFlags & 0x00000400) !== 0) {
+        $characterFlags |= 0x00000400;
+    }
+    if (($playerFlags & 0x00000800) !== 0) {
+        $characterFlags |= 0x00000800;
+    }
+    if (($atLoginFlags & 0x01) !== 0) {
+        $characterFlags |= 0x00004000;
+    }
+    if (($atLoginFlags & 0x04) !== 0) {
+        $characterFlags |= 0x00000100;
+    }
+
+    return $characterFlags;
+}
+
+function spp_admin_backup_vmangos_character_appearance(array $sourceRow): array
+{
+    $playerBytes = (int)($sourceRow['playerBytes'] ?? 0);
+    $playerBytes2 = (int)($sourceRow['playerBytes2'] ?? 0);
+
+    return array(
+        'skin' => ($playerBytes & 0xFF),
+        'face' => (($playerBytes >> 8) & 0xFF),
+        'hair_style' => (($playerBytes >> 16) & 0xFF),
+        'hair_color' => (($playerBytes >> 24) & 0xFF),
+        'facial_hair' => ($playerBytes2 & 0xFF),
+    );
+}
+
+function spp_admin_backup_vmangos_table_mappings(): array
+{
+    return array(
+        'account' => array(
+            'database' => 'realmd',
+            'source_required' => array('id', 'username', 'lockedIp', 'token'),
+            'target_required' => array('id', 'username', 'last_ip', 'token_key', 'current_realm'),
+        ),
+        'account_access' => array(
+            'database' => 'realmd',
+            'optional_source' => true,
+            'source_required' => array('id', 'gmlevel'),
+            'target_required' => array('id', 'gmlevel'),
+        ),
+        'account_banned' => array(
+            'database' => 'realmd',
+            'optional_source' => true,
+            'optional_target' => true,
+            'rename' => array(
+                'account_id' => 'id',
+                'banned_at' => 'bandate',
+                'expires_at' => 'unbandate',
+                'banned_by' => 'bannedby',
+                'reason' => 'banreason',
+            ),
+            'source_required' => array('account_id', 'banned_at', 'expires_at', 'banned_by', 'reason', 'active'),
+            'target_required' => array('id', 'bandate', 'unbandate', 'bannedby', 'banreason', 'active'),
+        ),
+        'realmcharacters' => array(
+            'database' => 'realmd',
+            'source_required' => array('realmid', 'acctid', 'numchars'),
+            'target_required' => array('realmid', 'acctid', 'numchars'),
+        ),
+        'guild' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'guildid' => 'guild_id',
+                'leaderguid' => 'leader_guid',
+                'EmblemStyle' => 'emblem_style',
+                'EmblemColor' => 'emblem_color',
+                'BorderStyle' => 'border_style',
+                'BorderColor' => 'border_color',
+                'BackgroundColor' => 'background_color',
+                'createdate' => 'create_date',
+            ),
+            'source_required' => array('guildid', 'name', 'leaderguid', 'EmblemStyle', 'EmblemColor', 'BorderStyle', 'BorderColor', 'BackgroundColor', 'info', 'motd', 'createdate'),
+            'target_required' => array('guild_id', 'name', 'leader_guid', 'emblem_style', 'emblem_color', 'border_style', 'border_color', 'background_color', 'info', 'motd', 'create_date'),
+        ),
+        'guild_rank' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'guildid' => 'guild_id',
+                'rid' => 'id',
+                'rname' => 'name',
+            ),
+            'source_required' => array('guildid', 'rid', 'rname', 'rights'),
+            'target_required' => array('guild_id', 'id', 'name', 'rights'),
+        ),
+        'guild_member' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'guildid' => 'guild_id',
+                'pnote' => 'player_note',
+                'offnote' => 'officer_note',
+            ),
+            'source_required' => array('guildid', 'guid', 'rank', 'pnote', 'offnote'),
+            'target_required' => array('guild_id', 'guid', 'rank', 'player_note', 'officer_note'),
+        ),
+        'guild_eventlog' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'guildid' => 'guild_id',
+                'LogGuid' => 'log_guid',
+                'EventType' => 'event_type',
+                'PlayerGuid1' => 'player_guid1',
+                'PlayerGuid2' => 'player_guid2',
+                'NewRank' => 'new_rank',
+                'TimeStamp' => 'timestamp',
+            ),
+            'source_required' => array('guildid', 'LogGuid', 'EventType', 'PlayerGuid1', 'PlayerGuid2', 'NewRank', 'TimeStamp'),
+            'target_required' => array('guild_id', 'log_guid', 'event_type', 'player_guid1', 'player_guid2', 'new_rank', 'timestamp'),
+        ),
+        'characters' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'playerFlags' => 'character_flags',
+                'taximask' => 'known_taxi_mask',
+                'taxi_path' => 'current_taxi_path',
+                'totaltime' => 'played_time_total',
+                'leveltime' => 'played_time_level',
+                'watchedFaction' => 'watched_faction',
+                'exploredZones' => 'explored_zones',
+                'equipmentCache' => 'equipment_cache',
+                'ammoId' => 'ammo_id',
+                'actionBars' => 'action_bars',
+                'deleteInfos_Account' => 'deleted_account',
+                'deleteInfos_Name' => 'deleted_name',
+                'deleteDate' => 'deleted_time',
+                'transguid' => 'transport_guid',
+                'trans_x' => 'transport_x',
+                'trans_y' => 'transport_y',
+                'trans_z' => 'transport_z',
+                'trans_o' => 'transport_o',
+                'resettalents_cost' => 'reset_talents_multiplier',
+                'resettalents_time' => 'reset_talents_time',
+                'stored_honor_rating' => 'honor_rank_points',
+                'stored_honorable_kills' => 'honor_stored_hk',
+                'stored_dishonorable_kills' => 'honor_stored_dk',
+            ),
+            'source_required' => array(
+                'guid', 'account', 'name', 'playerFlags', 'at_login', 'taximask', 'taxi_path', 'totaltime', 'leveltime',
+                'watchedFaction', 'exploredZones', 'equipmentCache', 'ammoId', 'actionBars', 'deleteInfos_Account',
+                'deleteInfos_Name', 'deleteDate', 'transguid', 'trans_x', 'trans_y', 'trans_z', 'trans_o',
+                'resettalents_cost', 'resettalents_time', 'stored_honor_rating', 'stored_honorable_kills',
+                'stored_dishonorable_kills', 'playerBytes', 'playerBytes2'
+            ),
+            'target_required' => array(
+                'guid', 'account', 'name', 'character_flags', 'known_taxi_mask', 'current_taxi_path', 'played_time_total',
+                'played_time_level', 'watched_faction', 'explored_zones', 'equipment_cache', 'ammo_id', 'action_bars',
+                'deleted_account', 'deleted_name', 'deleted_time', 'transport_guid', 'transport_x', 'transport_y',
+                'transport_z', 'transport_o', 'reset_talents_multiplier', 'reset_talents_time', 'honor_rank_points',
+                'honor_stored_hk', 'honor_stored_dk', 'skin', 'face', 'hair_style', 'hair_color', 'facial_hair'
+            ),
+        ),
+        'character_inventory' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'item' => 'item_guid',
+                'item_template' => 'item_id',
+            ),
+            'source_required' => array('guid', 'bag', 'slot', 'item', 'item_template'),
+            'target_required' => array('guid', 'bag', 'slot', 'item_guid', 'item_id'),
+        ),
+        'mail' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'messageType' => 'message_type',
+                'mailTemplateId' => 'mail_template_id',
+                'sender' => 'sender_guid',
+                'receiver' => 'receiver_guid',
+                'itemTextId' => 'item_text_id',
+            ),
+            'source_required' => array('id', 'messageType', 'mailTemplateId', 'sender', 'receiver', 'itemTextId'),
+            'target_required' => array('id', 'message_type', 'mail_template_id', 'sender_guid', 'receiver_guid', 'item_text_id'),
+        ),
+        'mail_items' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'item_template' => 'item_id',
+                'receiver' => 'receiver_guid',
+            ),
+            'source_required' => array('mail_id', 'item_guid', 'item_template', 'receiver'),
+            'target_required' => array('mail_id', 'item_guid', 'item_id', 'receiver_guid'),
+        ),
+        'item_instance' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'itemEntry' => 'item_id',
+                'creatorGuid' => 'creator_guid',
+                'giftCreatorGuid' => 'gift_creator_guid',
+                'randomPropertyId' => 'random_property_id',
+                'itemTextId' => 'text',
+            ),
+            'source_required' => array('guid', 'itemEntry', 'creatorGuid', 'giftCreatorGuid', 'randomPropertyId', 'itemTextId'),
+            'target_required' => array('guid', 'item_id', 'creator_guid', 'gift_creator_guid', 'random_property_id', 'text'),
+        ),
+        'item_loot' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'itemid' => 'item_id',
+            ),
+            'source_required' => array('guid', 'owner_guid', 'itemid', 'amount', 'property'),
+            'target_required' => array('guid', 'owner_guid', 'item_id', 'amount', 'property'),
+        ),
+        'character_pet' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'owner' => 'owner_guid',
+                'modelid' => 'display_id',
+                'CreatedBySpell' => 'created_by_spell',
+                'PetType' => 'pet_type',
+                'Reactstate' => 'react_state',
+                'loyaltypoints' => 'loyalty_points',
+                'trainpoint' => 'training_points',
+                'curhealth' => 'current_health',
+                'curmana' => 'current_mana',
+                'curhappiness' => 'current_happiness',
+                'savetime' => 'save_time',
+                'resettalents_cost' => 'reset_talents_cost',
+                'resettalents_time' => 'reset_talents_time',
+                'abdata' => 'action_bar_data',
+                'teachspelldata' => 'teach_spell_data',
+            ),
+            'source_required' => array(
+                'id', 'entry', 'owner', 'modelid', 'CreatedBySpell', 'PetType', 'Reactstate', 'loyaltypoints',
+                'trainpoint', 'curhealth', 'curmana', 'curhappiness', 'savetime', 'resettalents_cost',
+                'resettalents_time', 'abdata', 'teachspelldata'
+            ),
+            'target_required' => array(
+                'id', 'entry', 'owner_guid', 'display_id', 'created_by_spell', 'pet_type', 'react_state',
+                'loyalty_points', 'training_points', 'current_health', 'current_mana', 'current_happiness',
+                'save_time', 'reset_talents_cost', 'reset_talents_time', 'action_bar_data', 'teach_spell_data'
+            ),
+        ),
+        'character_aura' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'stackcount' => 'stacks',
+                'remaincharges' => 'charges',
+                'basepoints0' => 'base_points0',
+                'basepoints1' => 'base_points1',
+                'basepoints2' => 'base_points2',
+                'periodictime0' => 'periodic_time0',
+                'periodictime1' => 'periodic_time1',
+                'periodictime2' => 'periodic_time2',
+                'maxduration' => 'max_duration',
+                'remaintime' => 'duration',
+                'effIndexMask' => 'effect_index_mask',
+            ),
+            'source_required' => array('guid', 'stackcount', 'remaincharges', 'basepoints0', 'basepoints1', 'basepoints2', 'periodictime0', 'periodictime1', 'periodictime2', 'maxduration', 'remaintime', 'effIndexMask'),
+            'target_required' => array('guid', 'stacks', 'charges', 'base_points0', 'base_points1', 'base_points2', 'periodic_time0', 'periodic_time1', 'periodic_time2', 'max_duration', 'duration', 'effect_index_mask'),
+        ),
+        'pet_aura' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'stackcount' => 'stacks',
+                'remaincharges' => 'charges',
+                'basepoints0' => 'base_points0',
+                'basepoints1' => 'base_points1',
+                'basepoints2' => 'base_points2',
+                'periodictime0' => 'periodic_time0',
+                'periodictime1' => 'periodic_time1',
+                'periodictime2' => 'periodic_time2',
+                'maxduration' => 'max_duration',
+                'remaintime' => 'duration',
+                'effIndexMask' => 'effect_index_mask',
+            ),
+            'source_required' => array('guid', 'stackcount', 'remaincharges', 'basepoints0', 'basepoints1', 'basepoints2', 'periodictime0', 'periodictime1', 'periodictime2', 'maxduration', 'remaintime', 'effIndexMask'),
+            'target_required' => array('guid', 'stacks', 'charges', 'base_points0', 'base_points1', 'base_points2', 'periodic_time0', 'periodic_time1', 'periodic_time2', 'max_duration', 'duration', 'effect_index_mask'),
+        ),
+        'character_queststatus' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'mobcount1' => 'mob_count1',
+                'mobcount2' => 'mob_count2',
+                'mobcount3' => 'mob_count3',
+                'mobcount4' => 'mob_count4',
+                'itemcount1' => 'item_count1',
+                'itemcount2' => 'item_count2',
+                'itemcount3' => 'item_count3',
+                'itemcount4' => 'item_count4',
+            ),
+            'source_required' => array('guid', 'quest', 'mobcount1', 'mobcount2', 'mobcount3', 'mobcount4', 'itemcount1', 'itemcount2', 'itemcount3', 'itemcount4'),
+            'target_required' => array('guid', 'quest', 'mob_count1', 'mob_count2', 'mob_count3', 'mob_count4', 'item_count1', 'item_count2', 'item_count3', 'item_count4'),
+        ),
+        'character_spell_cooldown' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'SpellId' => 'spell',
+                'SpellExpireTime' => 'spell_expire_time',
+                'Category' => 'category',
+                'CategoryExpireTime' => 'category_expire_time',
+                'ItemId' => 'item_id',
+            ),
+            'source_required' => array('guid', 'SpellId', 'SpellExpireTime', 'Category', 'CategoryExpireTime', 'ItemId'),
+            'target_required' => array('guid', 'spell', 'spell_expire_time', 'category', 'category_expire_time', 'item_id'),
+        ),
+        'character_gifts' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'entry' => 'item_id',
+            ),
+            'source_required' => array('guid', 'item_guid', 'entry', 'flags'),
+            'target_required' => array('guid', 'item_guid', 'item_id', 'flags'),
+        ),
+        'character_honor_cp' => array(
+            'database' => 'chars',
+            'rename' => array(
+                'victim' => 'victim_id',
+                'honor' => 'cp',
+            ),
+            'source_required' => array('guid', 'victim_type', 'victim', 'honor', 'date', 'type'),
+            'target_required' => array('guid', 'victim_type', 'victim_id', 'cp', 'date', 'type'),
+        ),
+    );
+}
+
+function spp_admin_backup_vmangos_map_row(string $table, array $sourceRow): array
+{
+    $definitions = spp_admin_backup_vmangos_table_mappings();
+    $definition = (array)($definitions[$table] ?? array());
+    $rename = (array)($definition['rename'] ?? array());
+    $mapped = array();
+
+    foreach ($sourceRow as $column => $value) {
+        $targetColumn = isset($rename[$column]) ? (string)$rename[$column] : (string)$column;
+        $mapped[$targetColumn] = $value;
+    }
+
+    if ($table === 'characters') {
+        $mapped['character_flags'] = spp_admin_backup_vmangos_character_flags($sourceRow);
+        foreach (spp_admin_backup_vmangos_character_appearance($sourceRow) as $column => $value) {
+            $mapped[$column] = $value;
+        }
+    }
+
+    return $mapped;
+}
+
+function spp_admin_backup_vmangos_transform_validation(PDO $sourceRealmdPdo, PDO $sourceCharsPdo, PDO $targetRealmdPdo, PDO $targetCharsPdo, array $schemaNames = array()): array
+{
+    $definitions = spp_admin_backup_vmangos_table_mappings();
+    $defaultSchemas = array(
+        'source_realmd' => 'source_realmd',
+        'source_chars' => 'source_chars',
+        'target_realmd' => 'target_realmd',
+        'target_chars' => 'target_chars',
+    );
+    $schemaNames = array_merge($defaultSchemas, $schemaNames);
+    $requiredCharsTables = array_merge(array('characters'), array_keys(spp_admin_backup_character_tables()), array('guild', 'guild_rank', 'guild_member', 'guild_eventlog'));
+    $requiredCharsTables = array_values(array_unique(array_map('strval', $requiredCharsTables)));
+    foreach ($requiredCharsTables as $table) {
+        if (!function_exists('spp_db_table_exists') || !spp_db_table_exists($sourceCharsPdo, $table)) {
+            return array('ok' => false, 'message' => 'Missing source table ' . $schemaNames['source_chars'] . '.' . $table);
+        }
+        if (!function_exists('spp_db_table_exists') || !spp_db_table_exists($targetCharsPdo, $table)) {
+            return array('ok' => false, 'message' => 'Missing target table ' . $schemaNames['target_chars'] . '.' . $table);
+        }
+    }
+
+    foreach (array('account', 'realmcharacters') as $table) {
+        if (!function_exists('spp_db_table_exists') || !spp_db_table_exists($sourceRealmdPdo, $table)) {
+            return array('ok' => false, 'message' => 'Missing source table ' . $schemaNames['source_realmd'] . '.' . $table);
+        }
+        if (!function_exists('spp_db_table_exists') || !spp_db_table_exists($targetRealmdPdo, $table)) {
+            return array('ok' => false, 'message' => 'Missing target table ' . $schemaNames['target_realmd'] . '.' . $table);
+        }
+    }
+
+    foreach ($definitions as $table => $definition) {
+        $database = (string)($definition['database'] ?? 'chars');
+        $sourcePdo = $database === 'realmd' ? $sourceRealmdPdo : $sourceCharsPdo;
+        $targetPdo = $database === 'realmd' ? $targetRealmdPdo : $targetCharsPdo;
+        $sourceSchema = $database === 'realmd' ? (string)$schemaNames['source_realmd'] : (string)$schemaNames['source_chars'];
+        $targetSchema = $database === 'realmd' ? (string)$schemaNames['target_realmd'] : (string)$schemaNames['target_chars'];
+        $sourceTable = (string)($definition['source_table'] ?? $table);
+        $targetTable = (string)($definition['target_table'] ?? $table);
+        $optionalSource = !empty($definition['optional_source']);
+        $optionalTarget = !empty($definition['optional_target']);
+
+        $sourceExists = function_exists('spp_db_table_exists') ? spp_db_table_exists($sourcePdo, $sourceTable) : false;
+        $targetExists = function_exists('spp_db_table_exists') ? spp_db_table_exists($targetPdo, $targetTable) : false;
+
+        if (!$optionalSource && !$sourceExists) {
+            return array('ok' => false, 'message' => 'Missing source table ' . $sourceSchema . '.' . $sourceTable);
+        }
+        if (!$optionalTarget && !$targetExists) {
+            return array('ok' => false, 'message' => 'Missing target table ' . $targetSchema . '.' . $targetTable);
+        }
+
+        if ($sourceExists) {
+            foreach ((array)($definition['source_required'] ?? array()) as $column) {
+                if (!function_exists('spp_db_column_exists') || !spp_db_column_exists($sourcePdo, $sourceTable, (string)$column)) {
+                    return array('ok' => false, 'message' => 'Missing source column ' . $sourceSchema . '.' . $sourceTable . '.' . $column);
+                }
+            }
+        }
+
+        if ($targetExists) {
+            foreach ((array)($definition['target_required'] ?? array()) as $column) {
+                if (!function_exists('spp_db_column_exists') || !spp_db_column_exists($targetPdo, $targetTable, (string)$column)) {
+                    return array('ok' => false, 'message' => 'Missing target column ' . $targetSchema . '.' . $targetTable . '.' . $column);
+                }
+            }
+        }
+    }
+
+    return array('ok' => true, 'message' => '');
 }
 
 function spp_admin_backup_fetch_characters(PDO $charsPdo, int $accountId): array

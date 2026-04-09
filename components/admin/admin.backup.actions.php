@@ -256,6 +256,19 @@ function spp_admin_backup_xfer_insert_line(string $table, array $row, array $raw
     return spp_admin_backup_insert_sql_raw($table, $filteredRow, $filteredRaw);
 }
 
+function spp_admin_backup_vmangos_insert_line(string $table, array $sourceRow, array $overrides, array $rawColumns, array $targetColumns): string
+{
+    $mappedRow = function_exists('spp_admin_backup_vmangos_map_row')
+        ? spp_admin_backup_vmangos_map_row($table, $sourceRow)
+        : $sourceRow;
+
+    foreach ($overrides as $column => $value) {
+        $mappedRow[(string)$column] = $value;
+    }
+
+    return spp_admin_backup_xfer_insert_line($table, $mappedRow, $rawColumns, $targetColumns);
+}
+
 function spp_admin_backup_character_bundle_xfer_lines(array $bundle, PDO $targetCharsPdo, string $targetAccountExpr, string $newName = ''): array
 {
     $characterRow = $bundle['character'] ?? array();
@@ -320,17 +333,21 @@ function spp_admin_backup_character_bundle_xfer_lines(array $bundle, PDO $target
 
     $lines[] = '';
 
-    $characterRow['guid'] = '@target_character_guid';
-    $characterRow['account'] = $targetAccountExpr;
-    $characterRow['online'] = 0;
-    $characterRow['xp'] = 0;
+    $characterOverrides = array(
+        'guid' => '@target_character_guid',
+        'account' => $targetAccountExpr,
+        'online' => 0,
+        'xp' => 0,
+    );
+    $characterRawColumns = array('guid' => true, 'account' => true);
     if ($newName !== '') {
-        $characterRow['name'] = $newName;
+        $characterOverrides['name'] = $newName;
     }
-    $line = spp_admin_backup_xfer_insert_line(
+    $line = spp_admin_backup_vmangos_insert_line(
         'characters',
         $characterRow,
-        array('guid' => true, 'account' => true),
+        $characterOverrides,
+        $characterRawColumns,
         spp_admin_backup_target_columns($targetCharsPdo, 'characters')
     );
     if ($line !== '') {
@@ -347,115 +364,137 @@ function spp_admin_backup_character_bundle_xfer_lines(array $bundle, PDO $target
 
         $targetColumns = spp_admin_backup_target_columns($targetCharsPdo, $table);
         foreach ($rows as $row) {
+            $overrides = array();
             $rawColumns = array();
             switch ($meta['mode']) {
                 case 'guid':
                 case 'owner':
                 case 'receiver':
                     if (isset($row[$meta['key']])) {
-                        $row[$meta['key']] = '@target_character_guid';
-                        $rawColumns[$meta['key']] = true;
+                        $mappedKey = $table === 'character_pet' && $meta['key'] === 'owner'
+                            ? 'owner_guid'
+                            : ($table === 'mail' && $meta['key'] === 'receiver' ? 'receiver_guid' : $meta['key']);
+                        $overrides[$mappedKey] = '@target_character_guid';
+                        $rawColumns[$mappedKey] = true;
                     }
                     if (isset($row['friend']) && (int)$row['friend'] === $sourceCharacterGuid) {
-                        $row['friend'] = '@target_character_guid';
+                        $overrides['friend'] = '@target_character_guid';
                         $rawColumns['friend'] = true;
                     }
                     if (isset($row['sender']) && (int)$row['sender'] === $sourceCharacterGuid) {
-                        $row['sender'] = '@target_character_guid';
-                        $rawColumns['sender'] = true;
+                        $mappedSender = $table === 'mail' ? 'sender_guid' : 'sender';
+                        $overrides[$mappedSender] = '@target_character_guid';
+                        $rawColumns[$mappedSender] = true;
                     }
                     break;
                 case 'mail':
                     if (isset($row['id']) && $minMailId > 0) {
-                        $row['id'] = spp_admin_backup_xfer_expression('mail_id', (int)$row['id'], false);
+                        $overrides['id'] = spp_admin_backup_xfer_expression('mail_id', (int)$row['id'], false);
                         $rawColumns['id'] = true;
                     }
                     if (isset($row['receiver'])) {
-                        $row['receiver'] = '@target_character_guid';
-                        $rawColumns['receiver'] = true;
+                        $overrides['receiver_guid'] = '@target_character_guid';
+                        $rawColumns['receiver_guid'] = true;
                     }
                     if (isset($row['sender']) && (int)$row['sender'] === $sourceCharacterGuid) {
-                        $row['sender'] = '@target_character_guid';
-                        $rawColumns['sender'] = true;
+                        $overrides['sender_guid'] = '@target_character_guid';
+                        $rawColumns['sender_guid'] = true;
                     }
                     if (isset($row['itemTextId']) && $minTextId > 0 && (int)$row['itemTextId'] > 0) {
-                        $row['itemTextId'] = spp_admin_backup_xfer_expression('text_id', (int)$row['itemTextId'], false);
-                        $rawColumns['itemTextId'] = true;
+                        $overrides['item_text_id'] = spp_admin_backup_xfer_expression('text_id', (int)$row['itemTextId'], false);
+                        $rawColumns['item_text_id'] = true;
                     }
                     break;
                 case 'pet':
                     if (isset($row['guid']) && $minPetId > 0) {
-                        $row['guid'] = spp_admin_backup_xfer_expression('pet_id', (int)$row['guid'], false);
+                        $overrides['guid'] = spp_admin_backup_xfer_expression('pet_id', (int)$row['guid'], false);
                         $rawColumns['guid'] = true;
                     }
                     break;
                 case 'item':
                     if (isset($row['guid']) && $minItemGuid > 0) {
-                        $row['guid'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['guid'], false);
+                        $overrides['guid'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['guid'], false);
                         $rawColumns['guid'] = true;
                     }
                     if (isset($row['owner_guid'])) {
-                        $row['owner_guid'] = '@target_character_guid';
+                        $overrides['owner_guid'] = '@target_character_guid';
                         $rawColumns['owner_guid'] = true;
                     }
                     if (isset($row['itemTextId']) && $minTextId > 0 && (int)$row['itemTextId'] > 0) {
-                        $row['itemTextId'] = spp_admin_backup_xfer_expression('text_id', (int)$row['itemTextId'], false);
-                        $rawColumns['itemTextId'] = true;
+                        $overrides['text'] = spp_admin_backup_xfer_expression('text_id', (int)$row['itemTextId'], false);
+                        $rawColumns['text'] = true;
                     }
                     break;
                 case 'item_text':
                     if (isset($row['id']) && $minTextId > 0) {
-                        $row['id'] = spp_admin_backup_xfer_expression('text_id', (int)$row['id'], false);
+                        $overrides['id'] = spp_admin_backup_xfer_expression('text_id', (int)$row['id'], false);
                         $rawColumns['id'] = true;
                     }
                     break;
             }
 
             if ($table === 'character_inventory') {
-                $row['guid'] = '@target_character_guid';
+                $overrides['guid'] = '@target_character_guid';
                 $rawColumns['guid'] = true;
                 if (isset($row['item']) && $minItemGuid > 0 && (int)$row['item'] > 0) {
-                    $row['item'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['item'], false);
-                    $rawColumns['item'] = true;
+                    $overrides['item_guid'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['item'], false);
+                    $rawColumns['item_guid'] = true;
                 }
                 if (!empty($row['bag']) && $minItemGuid > 0) {
-                    $row['bag'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['bag'], false);
+                    $overrides['bag'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['bag'], false);
                     $rawColumns['bag'] = true;
+                }
+            } elseif ($table === 'mail') {
+                if (isset($row['id']) && $minMailId > 0) {
+                    $overrides['id'] = spp_admin_backup_xfer_expression('mail_id', (int)$row['id'], false);
+                    $rawColumns['id'] = true;
+                }
+                if (isset($row['receiver'])) {
+                    $overrides['receiver_guid'] = '@target_character_guid';
+                    $rawColumns['receiver_guid'] = true;
+                }
+                if (isset($row['sender']) && (int)$row['sender'] === $sourceCharacterGuid) {
+                    $overrides['sender_guid'] = '@target_character_guid';
+                    $rawColumns['sender_guid'] = true;
+                }
+                if (isset($row['itemTextId']) && $minTextId > 0 && (int)$row['itemTextId'] > 0) {
+                    $overrides['item_text_id'] = spp_admin_backup_xfer_expression('text_id', (int)$row['itemTextId'], false);
+                    $rawColumns['item_text_id'] = true;
                 }
             } elseif ($table === 'mail_items') {
                 if (isset($row['mail_id']) && $minMailId > 0) {
-                    $row['mail_id'] = spp_admin_backup_xfer_expression('mail_id', (int)$row['mail_id'], false);
+                    $overrides['mail_id'] = spp_admin_backup_xfer_expression('mail_id', (int)$row['mail_id'], false);
                     $rawColumns['mail_id'] = true;
                 }
                 if (isset($row['item_guid']) && $minItemGuid > 0) {
-                    $row['item_guid'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['item_guid'], false);
+                    $overrides['item_guid'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['item_guid'], false);
                     $rawColumns['item_guid'] = true;
                 }
                 if (isset($row['receiver'])) {
-                    $row['receiver'] = '@target_character_guid';
-                    $rawColumns['receiver'] = true;
+                    $overrides['receiver_guid'] = '@target_character_guid';
+                    $rawColumns['receiver_guid'] = true;
                 }
             } elseif ($table === 'character_gifts') {
                 if (isset($row['guid'])) {
-                    $row['guid'] = '@target_character_guid';
+                    $overrides['guid'] = '@target_character_guid';
                     $rawColumns['guid'] = true;
                 }
                 if (isset($row['item_guid']) && $minItemGuid > 0) {
-                    $row['item_guid'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['item_guid'], false);
+                    $overrides['item_guid'] = spp_admin_backup_xfer_expression('item_guid', (int)$row['item_guid'], false);
                     $rawColumns['item_guid'] = true;
                 }
             } elseif ($table === 'character_pet') {
                 if (isset($row['owner'])) {
-                    $row['owner'] = '@target_character_guid';
-                    $rawColumns['owner'] = true;
+                    $overrides['owner_guid'] = '@target_character_guid';
+                    $rawColumns['owner_guid'] = true;
                 }
                 if (isset($row['id']) && $minPetId > 0) {
-                    $row['id'] = spp_admin_backup_xfer_expression('pet_id', (int)$row['id'], false);
+                    $overrides['id'] = spp_admin_backup_xfer_expression('pet_id', (int)$row['id'], false);
                     $rawColumns['id'] = true;
                 }
             }
 
-            $line = spp_admin_backup_xfer_insert_line($table, $row, $rawColumns, $targetColumns);
+            $line = spp_admin_backup_vmangos_insert_line($table, $row, $overrides, $rawColumns, $targetColumns);
             if ($line !== '') {
                 $lines[] = $line;
             }
@@ -727,10 +766,11 @@ function spp_admin_backup_vmangos_guild_lines(PDO $sourceCharsPdo, PDO $targetCh
     $targetGuildColumns = spp_admin_backup_target_columns($targetCharsPdo, 'guild');
     $targetGuildRankColumns = spp_admin_backup_target_columns($targetCharsPdo, 'guild_rank');
     $targetGuildMemberColumns = spp_admin_backup_target_columns($targetCharsPdo, 'guild_member');
+    $targetGuildEventLogColumns = spp_admin_backup_target_columns($targetCharsPdo, 'guild_eventlog');
 
     $lines = array(
         spp_admin_backup_comment('Guild package'),
-        'SET @target_guild_id := (SELECT COALESCE(MAX(`guildid`), 0) + 1 FROM `guild`);',
+        'SET @target_guild_id := (SELECT COALESCE(MAX(`guild_id`), 0) + 1 FROM `guild`);',
         '',
     );
 
@@ -740,28 +780,34 @@ function spp_admin_backup_vmangos_guild_lines(PDO $sourceCharsPdo, PDO $targetCh
         $lines[] = spp_admin_backup_comment('Guild leader was not part of the resolved character scope. Adjust leaderguid manually if needed.');
     }
 
-    $guildInsertRow = $guildRow;
-    $guildInsertRow['guildid'] = '@target_guild_id';
+    $guildOverrides = array(
+        'guild_id' => '@target_guild_id',
+    );
+    $guildRawColumns = array(
+        'guild_id' => true,
+    );
     if ($leaderVar !== '') {
-        $guildInsertRow['leaderguid'] = $leaderVar;
+        $guildOverrides['leader_guid'] = $leaderVar;
+        $guildRawColumns['leader_guid'] = true;
     }
-    $guildInsertRow = spp_admin_backup_filter_row_to_target_columns($guildInsertRow, $targetGuildColumns);
-    if (!empty($guildInsertRow)) {
-        $rawColumns = array('guildid' => true);
-        if ($leaderVar !== '') {
-            $rawColumns['leaderguid'] = true;
-        }
-        $lines[] = spp_admin_backup_insert_sql_raw('guild', $guildInsertRow, $rawColumns);
+    $guildLine = spp_admin_backup_vmangos_insert_line('guild', $guildRow, $guildOverrides, $guildRawColumns, $targetGuildColumns);
+    if ($guildLine !== '') {
+        $lines[] = $guildLine;
         $lines[] = '';
     }
 
     $rankStmt = $sourceCharsPdo->prepare("SELECT * FROM guild_rank WHERE guildid=? ORDER BY rid ASC");
     $rankStmt->execute(array((int)($guildRow['guildid'] ?? 0)));
     foreach ($rankStmt->fetchAll(PDO::FETCH_ASSOC) as $rankRow) {
-        $rankRow['guildid'] = '@target_guild_id';
-        $rankRow = spp_admin_backup_filter_row_to_target_columns($rankRow, $targetGuildRankColumns);
-        if (!empty($rankRow)) {
-            $lines[] = spp_admin_backup_insert_sql_raw('guild_rank', $rankRow, array('guildid' => true));
+        $rankLine = spp_admin_backup_vmangos_insert_line(
+            'guild_rank',
+            $rankRow,
+            array('guild_id' => '@target_guild_id'),
+            array('guild_id' => true),
+            $targetGuildRankColumns
+        );
+        if ($rankLine !== '') {
+            $lines[] = $rankLine;
         }
     }
     $lines[] = '';
@@ -774,11 +820,49 @@ function spp_admin_backup_vmangos_guild_lines(PDO $sourceCharsPdo, PDO $targetCh
         }
 
         $memberInsertRow = $memberRow;
-        $memberInsertRow['guildid'] = '@target_guild_id';
-        $memberInsertRow['guid'] = $characterVar;
-        $memberInsertRow = spp_admin_backup_filter_row_to_target_columns($memberInsertRow, $targetGuildMemberColumns);
-        if (!empty($memberInsertRow)) {
-            $lines[] = spp_admin_backup_insert_sql_raw('guild_member', $memberInsertRow, array('guildid' => true, 'guid' => true));
+        $memberLine = spp_admin_backup_vmangos_insert_line(
+            'guild_member',
+            $memberInsertRow,
+            array(
+                'guild_id' => '@target_guild_id',
+                'guid' => $characterVar,
+            ),
+            array(
+                'guild_id' => true,
+                'guid' => true,
+            ),
+            $targetGuildMemberColumns
+        );
+        if ($memberLine !== '') {
+            $lines[] = $memberLine;
+        }
+    }
+    $lines[] = '';
+
+    $eventStmt = $sourceCharsPdo->prepare("SELECT * FROM guild_eventlog WHERE guildid=? ORDER BY LogGuid ASC");
+    $eventStmt->execute(array((int)($guildRow['guildid'] ?? 0)));
+    foreach ($eventStmt->fetchAll(PDO::FETCH_ASSOC) as $eventRow) {
+        $eventOverrides = array(
+            'guild_id' => '@target_guild_id',
+        );
+        $eventRawColumns = array(
+            'guild_id' => true,
+        );
+
+        $playerGuid1 = (int)($eventRow['PlayerGuid1'] ?? 0);
+        $playerGuid2 = (int)($eventRow['PlayerGuid2'] ?? 0);
+        if ($playerGuid1 > 0 && !empty($characterVarMap[$playerGuid1])) {
+            $eventOverrides['player_guid1'] = $characterVarMap[$playerGuid1];
+            $eventRawColumns['player_guid1'] = true;
+        }
+        if ($playerGuid2 > 0 && !empty($characterVarMap[$playerGuid2])) {
+            $eventOverrides['player_guid2'] = $characterVarMap[$playerGuid2];
+            $eventRawColumns['player_guid2'] = true;
+        }
+
+        $eventLine = spp_admin_backup_vmangos_insert_line('guild_eventlog', $eventRow, $eventOverrides, $eventRawColumns, $targetGuildEventLogColumns);
+        if ($eventLine !== '') {
+            $lines[] = $eventLine;
         }
     }
     $lines[] = '';
@@ -799,7 +883,19 @@ function spp_admin_backup_xfer_vmangos_package(array $view): array
     $targetRealmdPdo = spp_get_pdo('realmd', $targetRealmId);
     $targetCharsPdo = spp_get_pdo('chars', $targetRealmId);
 
-    $validation = spp_admin_backup_vmangos_character_validation($sourceCharsPdo, $targetCharsPdo);
+    $realmDbMap = (array)($GLOBALS['realmDbMap'] ?? array());
+    $validation = spp_admin_backup_vmangos_transform_validation(
+        $sourceRealmdPdo,
+        $sourceCharsPdo,
+        $targetRealmdPdo,
+        $targetCharsPdo,
+        array(
+            'source_realmd' => (string)($realmDbMap[$sourceRealmId]['realmd'] ?? 'source_realmd'),
+            'source_chars' => (string)($realmDbMap[$sourceRealmId]['chars'] ?? 'source_chars'),
+            'target_realmd' => (string)($realmDbMap[$targetRealmId]['realmd'] ?? 'target_realmd'),
+            'target_chars' => (string)($realmDbMap[$targetRealmId]['chars'] ?? 'target_chars'),
+        )
+    );
     if (empty($validation['ok'])) {
         return $validation;
     }
@@ -881,15 +977,27 @@ function spp_admin_backup_xfer_vmangos_package(array $view): array
 
             $targetColumns = spp_admin_backup_target_columns($targetRealmdPdo, $table);
             foreach ($rows as $row) {
-                if (isset($row['id'])) {
-                    $row['id'] = $accountVar;
+                $overrides = array();
+                $rawColumns = array();
+                if ($table === 'account_access') {
+                    $overrides['id'] = $accountVar;
+                    $rawColumns['id'] = true;
+                } elseif ($table === 'account_banned') {
+                    $overrides['id'] = $accountVar;
+                    $rawColumns['id'] = true;
+                } elseif ($table === 'realmcharacters') {
+                    $overrides['acctid'] = $accountVar;
+                    $rawColumns['acctid'] = true;
                 }
-                if (isset($row['acctid'])) {
-                    $row['acctid'] = $accountVar;
+                $filtered = function_exists('spp_admin_backup_vmangos_map_row')
+                    ? spp_admin_backup_vmangos_map_row($table, $row)
+                    : $row;
+                foreach ($overrides as $column => $value) {
+                    $filtered[$column] = $value;
                 }
-                $filtered = spp_admin_backup_filter_row_to_target_columns($row, $targetColumns);
+                $filtered = spp_admin_backup_filter_row_to_target_columns($filtered, $targetColumns);
                 if (!empty($filtered)) {
-                    $realmdLines[] = spp_admin_backup_insert_sql_raw($table, $filtered, array('id' => true, 'acctid' => true));
+                    $realmdLines[] = spp_admin_backup_insert_sql_raw($table, $filtered, $rawColumns);
                 }
             }
             if (!empty($rows)) {
