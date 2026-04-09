@@ -52,6 +52,7 @@ if (!function_exists('spp_realm_to_expansion_key')) {
             1 => 'classic',
             2 => 'tbc',
             3 => 'wotlk',
+            4 => 'vmangos',
         );
 
         return (string)($map[$realmId] ?? '');

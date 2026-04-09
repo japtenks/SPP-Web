@@ -573,6 +573,7 @@ function spp_admin_backup_xfer_account(array $view): array
     $sourceRealmId = (int)($view['source_realm_id'] ?? 0);
     $targetRealmId = (int)($view['target_realm_id'] ?? 0);
     $accountId = (int)($view['selected_account_id'] ?? 0);
+    $realmOptions = (array)($view['realm_options'] ?? array());
     if ($sourceRealmId <= 0 || $targetRealmId <= 0 || $sourceRealmId === $targetRealmId) {
         return array('ok' => false, 'message' => 'Choose a valid source and target realm.');
     }
@@ -591,6 +592,12 @@ function spp_admin_backup_xfer_account(array $view): array
     $existingTargetStmt->execute(array((string)($accountRow['username'] ?? '')));
     $targetAccountId = (int)$existingTargetStmt->fetchColumn();
     $creatingAccount = $targetAccountId <= 0;
+    $targetIsVmangos = function_exists('spp_admin_backup_is_vmangos_realm')
+        ? spp_admin_backup_is_vmangos_realm($realmOptions, $targetRealmId)
+        : false;
+    $targetAccountColumns = spp_admin_backup_target_columns($targetRealmdPdo, 'account');
+    $characterRows = spp_admin_backup_fetch_characters($sourceCharsPdo, $accountId);
+    $transferCharacterRows = $targetIsVmangos ? array() : $characterRows;
 
     $lines = array(
         spp_admin_backup_comment('Account xfer package'),
@@ -604,17 +611,41 @@ function spp_admin_backup_xfer_account(array $view): array
     if ($creatingAccount) {
         $lines[] = 'SET @target_account_id := (SELECT COALESCE(MAX(`id`), 0) + 1 FROM `account`);';
         $lines[] = '';
-        $targetAccountRow = $accountRow;
-        $targetAccountRow['id'] = '@target_account_id';
-        $targetAccountRow['online'] = 0;
+        $targetAccountRow = $targetIsVmangos
+            ? spp_admin_backup_vmangos_target_account_row($accountRow, $targetRealmId, $targetAccountColumns)
+            : $accountRow;
+        if (!$targetIsVmangos) {
+            $targetAccountRow['id'] = '@target_account_id';
+            $targetAccountRow['online'] = 0;
+        }
         $lines[] = spp_admin_backup_insert_sql_raw(
             'account',
-            spp_admin_backup_filter_row_to_target_columns($targetAccountRow, spp_admin_backup_target_columns($targetRealmdPdo, 'account')),
+            spp_admin_backup_filter_row_to_target_columns($targetAccountRow, $targetAccountColumns),
             array('id' => true)
         );
 
         foreach (spp_admin_backup_fetch_account_related_rows($sourceRealmdPdo, $accountId) as $table => $rows) {
             $targetColumns = spp_admin_backup_target_columns($targetRealmdPdo, $table);
+            if ($table === 'realmcharacters') {
+                $realmcharactersRow = array();
+                foreach ($targetColumns as $column) {
+                    if ($column === 'acctid') {
+                        $realmcharactersRow[$column] = '@target_account_id';
+                    } elseif ($column === 'realmid') {
+                        $realmcharactersRow[$column] = $targetRealmId;
+                    } elseif ($column === 'numchars') {
+                        $realmcharactersRow[$column] = count($transferCharacterRows);
+                    }
+                }
+
+                if (!empty($realmcharactersRow)) {
+                    $lines[] = 'DELETE FROM `realmcharacters` WHERE `acctid` = @target_account_id AND `realmid` = ' . $targetRealmId . ';';
+                    $lines[] = spp_admin_backup_insert_sql_raw($table, $realmcharactersRow, array('acctid' => true));
+                    $lines[] = '';
+                }
+                continue;
+            }
+
             foreach ($rows as $row) {
                 if (isset($row['id'])) {
                     $row['id'] = '@target_account_id';
@@ -634,10 +665,47 @@ function spp_admin_backup_xfer_account(array $view): array
     } else {
         $lines[] = 'SET @target_account_id := ' . $targetAccountId . ';';
         $lines[] = spp_admin_backup_comment('Target realm already has username "' . (string)$accountRow['username'] . '". Reusing account id ' . $targetAccountId . '.');
+        if ($targetIsVmangos) {
+            if (in_array('current_realm', $targetAccountColumns, true)) {
+                $lines[] = 'UPDATE `account` SET `current_realm` = ' . $targetRealmId . ' WHERE `id` = @target_account_id LIMIT 1;';
+            } elseif (in_array('active_realm_id', $targetAccountColumns, true)) {
+                $lines[] = 'UPDATE `account` SET `active_realm_id` = ' . $targetRealmId . ' WHERE `id` = @target_account_id LIMIT 1;';
+            }
+        }
         $lines[] = '';
+
+        $targetRealmcharactersColumns = spp_admin_backup_target_columns($targetRealmdPdo, 'realmcharacters');
+        $realmcharactersRow = array();
+        foreach ($targetRealmcharactersColumns as $column) {
+            if ($column === 'acctid') {
+                $realmcharactersRow[$column] = '@target_account_id';
+            } elseif ($column === 'realmid') {
+                $realmcharactersRow[$column] = $targetRealmId;
+            } elseif ($column === 'numchars') {
+                $realmcharactersRow[$column] = count($transferCharacterRows);
+            }
+        }
+        if (!empty($realmcharactersRow)) {
+            $lines[] = 'DELETE FROM `realmcharacters` WHERE `acctid` = @target_account_id AND `realmid` = ' . $targetRealmId . ';';
+            $lines[] = spp_admin_backup_insert_sql_raw('realmcharacters', $realmcharactersRow, array('acctid' => true));
+            $lines[] = '';
+        }
     }
 
-    $characterRows = spp_admin_backup_fetch_characters($sourceCharsPdo, $accountId);
+    if ($targetIsVmangos) {
+        $filename = spp_admin_backup_build_filename('xfer', 'account', (string)($accountRow['username'] ?? ('account_' . $accountId)));
+        $writeResult = spp_admin_backup_write_output($filename, $lines);
+        if (empty($writeResult['ok'])) {
+            return $writeResult;
+        }
+
+        return array(
+            'ok' => true,
+            'message' => 'vMaNGOS account xfer package created. Character transfer remains a separate step.',
+            'path' => $writeResult['path'],
+        );
+    }
+
     foreach ($characterRows as $characterRow) {
         $bundle = spp_admin_backup_fetch_character_bundle($sourceCharsPdo, (int)$characterRow['guid'], $accountId);
         if (empty($bundle)) {

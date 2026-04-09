@@ -77,9 +77,13 @@ function spp_admin_backup_realm_options(array $realmDbMap): array
         $resolvedName = function_exists('spp_get_armory_realm_name')
             ? (spp_get_armory_realm_name((int)$realmId) ?? '')
             : '';
+        $expansionKey = function_exists('spp_realm_to_expansion_key')
+            ? spp_realm_to_expansion_key((int)$realmId)
+            : '';
         $options[] = array(
             'id' => (int)$realmId,
             'name' => (string)($resolvedName !== '' ? $resolvedName : ($realmInfo['name'] ?? ('Realm ' . $realmId))),
+            'expansion_key' => (string)$expansionKey,
         );
     }
     usort($options, function ($a, $b) {
@@ -99,18 +103,117 @@ function spp_admin_backup_xfer_route_options(array $realmOptions): array
 {
     $routes = array();
     $count = count($realmOptions);
-    for ($i = 0; $i < ($count - 1); $i++) {
-        $source = $realmOptions[$i];
-        $target = $realmOptions[$i + 1];
-        $routes[] = array(
-            'id' => (int)$source['id'] . ':' . (int)$target['id'],
-            'source_realm_id' => (int)$source['id'],
-            'target_realm_id' => (int)$target['id'],
-            'label' => (string)$source['name'] . ' -> ' . (string)$target['name'],
-        );
+    for ($i = 0; $i < $count; $i++) {
+        for ($j = 0; $j < $count; $j++) {
+            if ($i === $j) {
+                continue;
+            }
+
+            $source = $realmOptions[$i];
+            $target = $realmOptions[$j];
+            $routes[] = array(
+                'id' => (int)$source['id'] . ':' . (int)$target['id'],
+                'source_realm_id' => (int)$source['id'],
+                'target_realm_id' => (int)$target['id'],
+                'label' => (string)$source['name'] . ' -> ' . (string)$target['name'],
+            );
+        }
     }
 
     return $routes;
+}
+
+function spp_admin_backup_is_vmangos_realm(array $realmOptions, int $realmId): bool
+{
+    foreach ($realmOptions as $realmOption) {
+        if ((int)($realmOption['id'] ?? 0) !== $realmId) {
+            continue;
+        }
+
+        return (string)($realmOption['expansion_key'] ?? '') === 'vmangos';
+    }
+
+    return false;
+}
+
+function spp_admin_backup_vmangos_target_account_row(array $sourceAccountRow, int $targetRealmId, array $targetColumns): array
+{
+    $row = array();
+    foreach ($targetColumns as $column) {
+        switch ($column) {
+            case 'id':
+                $row[$column] = '@target_account_id';
+                break;
+            case 'username':
+                $row[$column] = (string)($sourceAccountRow['username'] ?? '');
+                break;
+            case 'sha_pass_hash':
+                $row[$column] = (string)($sourceAccountRow['sha_pass_hash'] ?? '');
+                break;
+            case 'gmlevel':
+                $row[$column] = (int)($sourceAccountRow['gmlevel'] ?? 0);
+                break;
+            case 'sessionkey':
+                $row[$column] = (string)($sourceAccountRow['sessionkey'] ?? '');
+                break;
+            case 'v':
+                $row[$column] = (string)($sourceAccountRow['v'] ?? '');
+                break;
+            case 's':
+                $row[$column] = (string)($sourceAccountRow['s'] ?? '');
+                break;
+            case 'email':
+                $row[$column] = (string)($sourceAccountRow['email'] ?? '');
+                break;
+            case 'joindate':
+                $row[$column] = $sourceAccountRow['joindate'] ?? date('Y-m-d H:i:s');
+                break;
+            case 'last_ip':
+                $row[$column] = (string)($sourceAccountRow['last_ip'] ?? '');
+                break;
+            case 'failed_logins':
+                $row[$column] = (int)($sourceAccountRow['failed_logins'] ?? 0);
+                break;
+            case 'locked':
+                $row[$column] = (int)($sourceAccountRow['locked'] ?? 0);
+                break;
+            case 'last_login':
+                $row[$column] = $sourceAccountRow['last_login'] ?? null;
+                break;
+            case 'current_realm':
+            case 'active_realm_id':
+                $row[$column] = $targetRealmId;
+                break;
+            case 'expansion':
+                $row[$column] = (int)($sourceAccountRow['expansion'] ?? 0);
+                break;
+            case 'mutetime':
+                $row[$column] = (int)($sourceAccountRow['mutetime'] ?? 0);
+                break;
+            case 'locale':
+                $row[$column] = (int)($sourceAccountRow['locale'] ?? 0);
+                break;
+            case 'os':
+                $row[$column] = (string)($sourceAccountRow['os'] ?? '');
+                break;
+            case 'recruiter':
+                $row[$column] = (int)($sourceAccountRow['recruiter'] ?? 0);
+                break;
+            case 'totaltime':
+                $row[$column] = (int)($sourceAccountRow['totaltime'] ?? 0);
+                break;
+            case 'online':
+                $row[$column] = 0;
+                break;
+            default:
+                if (array_key_exists($column, $sourceAccountRow)) {
+                    $row[$column] = $sourceAccountRow[$column];
+                }
+                break;
+        }
+    }
+
+    return $row;
 }
 
 function spp_admin_backup_target_columns(PDO $pdo, string $table): array
@@ -262,6 +365,10 @@ function spp_admin_backup_fetch_account_related_rows(PDO $realmdPdo, int $accoun
     }
 
     foreach (array('account_access' => 'id', 'account_banned' => 'id', 'realmcharacters' => 'acctid') as $table => $column) {
+        if (function_exists('spp_db_table_exists') && !spp_db_table_exists($realmdPdo, $table)) {
+            $rows[$table] = array();
+            continue;
+        }
         $stmt = $realmdPdo->prepare("SELECT * FROM `$table` WHERE `$column`=?");
         $stmt->execute(array($accountId));
         $rows[$table] = $stmt->fetchAll(PDO::FETCH_ASSOC);
