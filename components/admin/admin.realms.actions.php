@@ -376,6 +376,23 @@ function spp_admin_realms_handle_action(PDO $realmsPdo, array $realmDbMap = arra
         exit;
     }
 
+    if ($action === 'sync-slot' && $realmId > 0) {
+        spp_require_csrf('admin_realms');
+        $existingDefinition = (array)($runtimeOptions[$realmId] ?? $existingDefinitions[$realmId] ?? array());
+        if (empty($existingDefinition)) {
+            $state['slot_errors'] = array('That runtime slot could not be found.');
+            return $state;
+        }
+
+        if (!spp_admin_realms_upsert_realmlist_row($existingDefinition)) {
+            $state['slot_errors'] = array('The matching realmlist row could not be created or updated for this slot.');
+            return $state;
+        }
+
+        redirect('index.php?n=admin&sub=realms', 1);
+        exit;
+    }
+
     if ($action === 'update-slot' && $realmId > 0) {
         spp_require_csrf('admin_realms');
         $existingDefinition = (array)($runtimeOptions[$realmId] ?? $existingDefinitions[$realmId] ?? array('id' => $realmId));

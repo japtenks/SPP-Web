@@ -181,7 +181,15 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
                 echo htmlspecialchars(implode(' | ', $statusBits));
               ?>
             </td>
-            <td><a class="realm-admin__button realm-admin__button--secondary" href="index.php?n=admin&amp;sub=realms&amp;action=edit&amp;id=<?php echo (int)$item['id']; ?>">Manage</a></td>
+            <td>
+              <a class="realm-admin__button realm-admin__button--secondary" href="index.php?n=admin&amp;sub=realms&amp;action=edit&amp;id=<?php echo (int)$item['id']; ?>">Manage</a>
+              <?php if (empty($item['has_realmlist_row'])) { ?>
+                <form action="index.php?n=admin&amp;sub=realms&amp;action=sync-slot&amp;id=<?php echo (int)$item['id']; ?>" method="post" style="display:inline-block; margin-top:6px;">
+                  <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($admin_realms_csrf_token ?? spp_csrf_token('admin_realms')); ?>">
+                  <button class="realm-admin__button realm-admin__button--secondary" type="submit">Sync realmlist row</button>
+                </form>
+              <?php } ?>
+            </td>
           </tr>
         <?php } ?>
         </tbody>
@@ -191,12 +199,13 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
 
   <div class="realm-admin__card feature-panel">
     <h3>Realmlist Directory</h3>
-    <p>These are the live <code>realmlist</code> rows currently present in the selected website realmd database.</p>
+    <p>These are the live <code>realmlist</code> rows found across the runtime slots&apos; own <code>realmd</code> databases.</p>
     <div class="realm-admin__table-wrap">
       <table class="realm-admin__table">
         <thead>
           <tr>
             <th>#</th>
+            <th>Realmd DB</th>
             <th>Name</th>
             <th>Address</th>
             <th>Port</th>
@@ -212,6 +221,7 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
         <?php foreach ((array)($realmlist_items ?? array()) as $realmlistItem) { ?>
           <tr>
             <td><?php echo (int)$realmlistItem['id']; ?></td>
+            <td><?php echo htmlspecialchars((string)($realmlistItem['source_realmd'] ?? '')); ?></td>
             <td><?php echo htmlspecialchars((string)$realmlistItem['name']); ?></td>
             <td><?php echo htmlspecialchars((string)$realmlistItem['address']); ?></td>
             <td><?php echo (int)$realmlistItem['port']; ?></td>
@@ -221,6 +231,11 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
             <td><?php echo (int)($realmlistItem['allowedSecurityLevel'] ?? 0); ?></td>
             <td><?php echo htmlspecialchars((string)($realmlistItem['population'] ?? '0')); ?></td>
             <td><?php echo htmlspecialchars((string)($realmlistItem['realmbuilds'] ?? '')); ?></td>
+          </tr>
+        <?php } ?>
+        <?php if (empty($realmlist_items)) { ?>
+          <tr>
+            <td colspan="11">No live realmlist rows were found for the current runtime slots.</td>
           </tr>
         <?php } ?>
         </tbody>

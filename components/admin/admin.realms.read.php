@@ -490,11 +490,61 @@ if (!function_exists('spp_admin_realms_schema_scan_view')) {
     }
 }
 
+if (!function_exists('spp_admin_realms_runtime_realmlist_directory')) {
+    function spp_admin_realms_runtime_realmlist_directory(array $runtimeItems): array
+    {
+        $rows = array();
+        $seen = array();
+
+        foreach ($runtimeItems as $runtimeItem) {
+            $realmId = (int)($runtimeItem['id'] ?? 0);
+            $realmdDb = trim((string)($runtimeItem['realmd'] ?? ''));
+            if ($realmId <= 0 || $realmdDb === '') {
+                continue;
+            }
+
+            try {
+                $pdo = spp_admin_realms_realmlist_connection($realmdDb);
+                if (!$pdo instanceof PDO || !spp_db_table_exists($pdo, 'realmlist')) {
+                    continue;
+                }
+
+                $stmt = $pdo->prepare("SELECT * FROM `realmlist` WHERE `id` = ? LIMIT 1");
+                $stmt->execute(array($realmId));
+                $row = $stmt->fetch(PDO::FETCH_ASSOC);
+                if (!$row) {
+                    continue;
+                }
+
+                $key = $realmdDb . ':' . $realmId;
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $row['source_realmd'] = $realmdDb;
+                $rows[] = $row;
+            } catch (Throwable $e) {
+                continue;
+            }
+        }
+
+        usort($rows, function ($a, $b) {
+            $dbCompare = strcmp((string)($a['source_realmd'] ?? ''), (string)($b['source_realmd'] ?? ''));
+            if ($dbCompare !== 0) {
+                return $dbCompare;
+            }
+            return ((int)($a['id'] ?? 0)) <=> ((int)($b['id'] ?? 0));
+        });
+
+        return $rows;
+    }
+}
+
 function spp_admin_realms_build_view(PDO $realmsPdo, array $realmDbMap = array())
 {
     $configuredRealmDbMap = (array)($GLOBALS['allConfiguredRealmDbMap'] ?? $realmDbMap);
     $runtimeItems = array_values(spp_admin_realms_runtime_realm_options($realmsPdo, $configuredRealmDbMap));
-    $realmlistItems = spp_admin_realms_runtime_realmlist_rows($realmsPdo);
+    $realmlistItems = spp_admin_realms_runtime_realmlist_directory($runtimeItems);
     $view = array(
         'view_mode' => 'list',
         'pathway_info' => array(
