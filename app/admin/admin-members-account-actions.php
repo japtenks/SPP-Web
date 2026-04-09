@@ -16,13 +16,15 @@ if (!function_exists('spp_admin_members_handle_account_action')) {
             return false;
         }
 
+        $realmQuery = $selectedRealmId > 0 ? '&character_realm_id=' . $selectedRealmId : '';
+
         if ($action === 'changepass') {
             spp_require_csrf('admin_members');
             $newpass = trim((string)($_POST['new_pass'] ?? ''));
             $confirmPass = trim((string)($_POST['confirm_new_pass'] ?? ''));
             if (strlen($newpass) > 3) {
                 if ($confirmPass === '' || $newpass !== $confirmPass) {
-                    redirect('index.php?n=admin&sub=members&id=' . $accountId . '&pwreset=mismatch', 1);
+                    redirect('index.php?n=admin&sub=members&id=' . $accountId . $realmQuery . '&pwreset=mismatch', 1);
                     exit;
                 }
 
@@ -30,7 +32,7 @@ if (!function_exists('spp_admin_members_handle_account_action')) {
                 $stmt->execute([$accountId]);
                 $username = $stmt->fetchColumn();
                 if (!$username) {
-                    redirect('index.php?n=admin&sub=members&id=' . $accountId . '&pwreset=missing', 1);
+                    redirect('index.php?n=admin&sub=members&id=' . $accountId . $realmQuery . '&pwreset=missing', 1);
                     exit;
                 }
 
@@ -44,15 +46,15 @@ if (!function_exists('spp_admin_members_handle_account_action')) {
                 $stmt->execute([$accountId]);
                 $updatedAccount = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (empty($updatedAccount['s']) || empty($updatedAccount['v'])) {
-                    redirect('index.php?n=admin&sub=members&id=' . $accountId . '&pwreset=failed', 1);
+                    redirect('index.php?n=admin&sub=members&id=' . $accountId . $realmQuery . '&pwreset=failed', 1);
                     exit;
                 }
 
-                redirect('index.php?n=admin&sub=members&id=' . $accountId . '&pwreset=1', 1);
+                redirect('index.php?n=admin&sub=members&id=' . $accountId . $realmQuery . '&pwreset=1', 1);
                 exit;
             }
 
-            output_message('alert', '<b>Your new password must be at least 4 characters long.</b><meta http-equiv=refresh content="2;url=index.php?n=admin&sub=members&id=' . $accountId . '">');
+            output_message('alert', '<b>Your new password must be at least 4 characters long.</b><meta http-equiv=refresh content="2;url=index.php?n=admin&sub=members&id=' . $accountId . $realmQuery . '">');
             return true;
         }
 
@@ -67,7 +69,7 @@ if (!function_exists('spp_admin_members_handle_account_action')) {
             $stmt->execute([$lastIp]);
             $stmt = $membersPdo->prepare("UPDATE website_accounts SET g_id=5 WHERE account_id=?");
             $stmt->execute([$accountId]);
-            redirect('index.php?n=admin&sub=members&id=' . $accountId, 1);
+            redirect('index.php?n=admin&sub=members&id=' . $accountId . $realmQuery, 1);
             exit;
         }
 
@@ -82,7 +84,7 @@ if (!function_exists('spp_admin_members_handle_account_action')) {
             $stmt->execute([$lastIp]);
             $stmt = $membersPdo->prepare("UPDATE website_accounts SET g_id=2 WHERE account_id=?");
             $stmt->execute([$accountId]);
-            redirect('index.php?n=admin&sub=members&id=' . $accountId, 1);
+            redirect('index.php?n=admin&sub=members&id=' . $accountId . $realmQuery, 1);
             exit;
         }
 
@@ -92,15 +94,9 @@ if (!function_exists('spp_admin_members_handle_account_action')) {
             $allowedFields = spp_admin_members_account_fields((int)($user['gmlevel'] ?? 0) === 3);
             $profile = spp_filter_allowed_fields($profile, $allowedFields);
             if (!empty($profile)) {
-                $setClause = implode(',', array_map(function ($k) {
-                    return '`' . preg_replace('/[^a-zA-Z0-9_]/', '', $k) . '`=?';
-                }, array_keys($profile)));
-                $values = array_values($profile);
-                $values[] = $accountId;
-                $stmt = $membersPdo->prepare("UPDATE account SET $setClause WHERE id=? LIMIT 1");
-                $stmt->execute($values);
+                spp_admin_members_apply_game_account_updates($membersPdo, $accountId, $selectedRealmId, $profile);
             }
-            redirect('index.php?n=admin&sub=members&id=' . $accountId, 1);
+            redirect('index.php?n=admin&sub=members&id=' . $accountId . $realmQuery, 1);
             exit;
         }
 
@@ -158,7 +154,7 @@ if (!function_exists('spp_admin_members_handle_account_action')) {
                 $stmt = $membersPdo->prepare("UPDATE website_accounts SET $setClause WHERE account_id=? LIMIT 1");
                 $stmt->execute($values);
             }
-            redirect('index.php?n=admin&sub=members&id=' . $accountId, 1);
+            redirect('index.php?n=admin&sub=members&id=' . $accountId . $realmQuery, 1);
             exit;
         }
 

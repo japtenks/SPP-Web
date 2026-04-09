@@ -3,7 +3,7 @@
 if (!function_exists('spp_admin_members_build_detail_view')) {
     function spp_admin_members_build_detail_view(PDO $membersPdo, PDO $membersCharsPdo, $auth, $comLinks, array $realmDbMap, int $accountId, int $selectedToolRealmId = 0)
     {
-        $profile = $auth->getprofile($accountId);
+        $profile = spp_admin_members_account_profile($membersPdo, $accountId);
         if (!is_array($profile) || empty($profile)) {
             return array(
                 'profile' => null,
@@ -38,7 +38,7 @@ if (!function_exists('spp_admin_members_build_detail_view')) {
         $stmt->execute(array($accountId));
         $userchars = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $activeRealmId = (int)($GLOBALS['activeRealmId'] ?? spp_resolve_realm_id($realmDbMap));
+        $activeRealmId = spp_admin_members_resolve_realm_id($realmDbMap, (int)($GLOBALS['activeRealmId'] ?? 0));
         $allUserChars = array();
         $charactersByRealm = array();
         $onlineCharacterCount = 0;
@@ -144,6 +144,7 @@ if (!function_exists('spp_admin_members_build_detail_view')) {
             'selected_transfer_character' => $selectedTransferCharacter,
             'onlineCharacterCount' => $onlineCharacterCount,
             'activeRealmId' => $activeRealmId,
+            'authRealmName' => spp_admin_members_realm_name($activeRealmId),
             'eligibleTransferAccounts' => $eligibleTransferAccounts,
             'txt' => $txt,
             'pathway_info' => array(

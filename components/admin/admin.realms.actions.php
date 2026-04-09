@@ -84,7 +84,7 @@ if (!function_exists('spp_admin_realms_validate_slot_form')) {
         if ((int)($form['port'] ?? 0) <= 0) {
             $errors[] = 'Realm port must be a positive number.';
         }
-        foreach (array('realmd', 'world', 'chars', 'armory', 'bots') as $dbField) {
+        foreach (array('realmd', 'world', 'chars') as $dbField) {
             if (trim((string)($form[$dbField] ?? '')) === '') {
                 $errors[] = strtoupper($dbField) . ' database name is required.';
             }
@@ -94,6 +94,23 @@ if (!function_exists('spp_admin_realms_validate_slot_form')) {
             'valid' => empty($errors),
             'errors' => $errors,
         );
+    }
+}
+
+if (!function_exists('spp_admin_realms_preferred_slot_form')) {
+    function spp_admin_realms_preferred_slot_form(array $runtimeOptions = array(), array $catalog = array()): array
+    {
+        foreach ($runtimeOptions as $option) {
+            if (!empty($option['is_config_only'])) {
+                return spp_admin_realms_runtime_slot_form(array(), (array)$option);
+            }
+        }
+
+        foreach ((array)($catalog['config_only_definitions'] ?? array()) as $definition) {
+            return spp_admin_realms_runtime_slot_form(array(), (array)$definition);
+        }
+
+        return spp_admin_realms_runtime_definition_defaults();
     }
 }
 

@@ -83,6 +83,20 @@ return [
             'armory' => 'tbcarmory',
             'bots' => 'tbcplayerbots',
         ],
+        3 => [
+            'realmd' => 'classicrealmd',
+            'world' => 'wotlkmangos',
+            'chars' => 'wotlkcharacters',
+            'armory' => 'wotlkarmory',
+            'bots' => 'wotlkplayerbots',
+        ],
+        4 => [
+            'realmd' => 'vmangosrealmd',
+            'world' => 'vmangos',
+            'chars' => 'vmangoscharacters',
+            'armory' => 'vmangosarmory',
+            'bots' => 'vmangosplayerbots',
+        ],
     ],
 ];
 

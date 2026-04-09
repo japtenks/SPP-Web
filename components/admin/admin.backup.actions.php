@@ -541,6 +541,19 @@ function spp_admin_backup_xfer_character(array $view): array
     }
 
     $sourceCharsPdo = spp_get_pdo('chars', $sourceRealmId);
+    $targetCharsPdo = spp_get_pdo('chars', $targetRealmId);
+    $sourceIsVmangos = function_exists('spp_admin_backup_is_vmangos_realm')
+        ? spp_admin_backup_is_vmangos_realm((array)($view['realm_options'] ?? array()), $sourceRealmId)
+        : false;
+    $targetIsVmangos = function_exists('spp_admin_backup_is_vmangos_realm')
+        ? spp_admin_backup_is_vmangos_realm((array)($view['realm_options'] ?? array()), $targetRealmId)
+        : false;
+    if ($sourceIsVmangos || $targetIsVmangos) {
+        $validation = spp_admin_backup_vmangos_character_validation($sourceCharsPdo, $targetCharsPdo);
+        if (empty($validation['ok'])) {
+            return $validation;
+        }
+    }
     $bundle = spp_admin_backup_fetch_character_bundle($sourceCharsPdo, $characterGuid, $accountId);
     if (empty($bundle)) {
         return array('ok' => false, 'message' => 'That character could not be packaged.');
@@ -557,7 +570,7 @@ function spp_admin_backup_xfer_character(array $view): array
         'SET @target_account_id := ' . $targetAccountId . ';',
         '',
     );
-    $lines = array_merge($lines, spp_admin_backup_character_bundle_xfer_lines($bundle, spp_get_pdo('chars', $targetRealmId), '@target_account_id', $newName));
+    $lines = array_merge($lines, spp_admin_backup_character_bundle_xfer_lines($bundle, $targetCharsPdo, '@target_account_id', $newName));
 
     $filename = spp_admin_backup_build_filename('xfer', 'character', $characterLabel);
     $writeResult = spp_admin_backup_write_output($filename, $lines);

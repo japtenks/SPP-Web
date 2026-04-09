@@ -9,6 +9,26 @@ if (!function_exists('spp_admin_members_action_url')) {
     }
 }
 
+if (!function_exists('spp_admin_members_resolve_realm_id')) {
+    function spp_admin_members_resolve_realm_id(array $realmDbMap, int $preferredRealmId = 0): int
+    {
+        if ($preferredRealmId > 0 && isset($realmDbMap[$preferredRealmId])) {
+            return $preferredRealmId;
+        }
+
+        $candidate = (int)($_POST['character_realm_id'] ?? ($_GET['character_realm_id'] ?? 0));
+        if ($candidate > 0 && isset($realmDbMap[$candidate])) {
+            return $candidate;
+        }
+
+        if (!empty($GLOBALS['activeRealmId']) && isset($realmDbMap[(int)$GLOBALS['activeRealmId']])) {
+            return (int)$GLOBALS['activeRealmId'];
+        }
+
+        return (int)spp_resolve_realm_id($realmDbMap);
+    }
+}
+
 if (!function_exists('spp_ensure_website_account_row')) {
     function spp_ensure_website_account_row(PDO $pdo, $accountId)
     {
@@ -25,6 +45,89 @@ if (!function_exists('spp_ensure_website_account_row')) {
             )
         ");
         $stmtEnsure->execute(array($accountId, $accountId));
+    }
+}
+
+if (!function_exists('spp_admin_members_account_profile')) {
+    function spp_admin_members_account_profile(PDO $pdo, int $accountId): ?array
+    {
+        if ($accountId <= 0) {
+            return null;
+        }
+
+        $stmt = $pdo->prepare("
+            SELECT *
+            FROM account
+            LEFT JOIN website_accounts ON account.id = website_accounts.account_id
+            LEFT JOIN website_account_groups ON website_accounts.g_id = website_account_groups.g_id
+            WHERE account.id = ?
+            LIMIT 1
+        ");
+        $stmt->execute(array($accountId));
+        $profile = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        return $profile ?: null;
+    }
+}
+
+if (!function_exists('spp_admin_members_realm_name')) {
+    function spp_admin_members_realm_name(int $realmId): string
+    {
+        $name = function_exists('spp_get_armory_realm_name')
+            ? (string)(spp_get_armory_realm_name($realmId) ?? '')
+            : '';
+
+        return $name !== '' ? $name : ('Realm ' . $realmId);
+    }
+}
+
+if (!function_exists('spp_admin_members_sync_account_access')) {
+    function spp_admin_members_sync_account_access(PDO $pdo, int $accountId, int $gmLevel, int $realmId): void
+    {
+        if ($accountId <= 0 || $realmId <= 0 || !spp_db_table_exists($pdo, 'account_access')) {
+            return;
+        }
+
+        $stmtDelete = $pdo->prepare("DELETE FROM account_access WHERE id = ? AND RealmID = ?");
+        $stmtDelete->execute(array($accountId, $realmId));
+
+        if ($gmLevel <= 0) {
+            return;
+        }
+
+        $stmtInsert = $pdo->prepare("INSERT INTO account_access (id, gmlevel, RealmID) VALUES (?, ?, ?)");
+        $stmtInsert->execute(array($accountId, $gmLevel, $realmId));
+    }
+}
+
+if (!function_exists('spp_admin_members_apply_game_account_updates')) {
+    function spp_admin_members_apply_game_account_updates(PDO $pdo, int $accountId, int $realmId, array $profile): void
+    {
+        if ($accountId <= 0 || empty($profile)) {
+            return;
+        }
+
+        $currentGmLevel = null;
+        if (array_key_exists('gmlevel', $profile)) {
+            $currentGmLevel = (int)$profile['gmlevel'];
+        }
+
+        if (spp_db_column_exists($pdo, 'account', 'current_realm') && !array_key_exists('current_realm', $profile) && $realmId > 0) {
+            $profile['current_realm'] = $realmId;
+        }
+
+        $setClause = implode(',', array_map(function ($k) {
+            return '`' . preg_replace('/[^a-zA-Z0-9_]/', '', $k) . '`=?';
+        }, array_keys($profile)));
+        $values = array_values($profile);
+        $values[] = $accountId;
+
+        $stmt = $pdo->prepare("UPDATE account SET $setClause WHERE id=? LIMIT 1");
+        $stmt->execute($values);
+
+        if ($currentGmLevel !== null) {
+            spp_admin_members_sync_account_access($pdo, $accountId, $currentGmLevel, $realmId);
+        }
     }
 }
 

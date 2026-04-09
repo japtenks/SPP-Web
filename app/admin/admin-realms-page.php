@@ -52,7 +52,10 @@ if (!function_exists('spp_admin_realms_load_page_state')) {
             'runtime_errors' => (array)($actionState['runtime_errors'] ?? array()),
             'runtime_catalog' => (array)($runtimeView['runtime_catalog'] ?? array()),
             'runtime_warnings' => (array)($runtimeView['runtime_warnings'] ?? array()),
-            'slot_form' => (array)($actionState['slot_form'] ?? array()),
+            'slot_form' => (array)(
+                $actionState['slot_form']
+                ?? spp_admin_realms_preferred_slot_form($runtimeRealmOptions, (array)($runtimeView['runtime_catalog'] ?? array()))
+            ),
             'slot_errors' => (array)($actionState['slot_errors'] ?? array()),
         ));
     }

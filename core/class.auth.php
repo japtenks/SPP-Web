@@ -345,6 +345,10 @@ function load_characters_for_user() {
     function register($params, $account_extend = false)
     {
         $success = 1;
+        $realmDbMap = $GLOBALS['realmDbMap'] ?? array();
+        $activeRealmId = function_exists('spp_current_realm_id')
+            ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
+            : 1;
         if(empty($params)) return false;
         if(empty($params['username'])){
             output_message('alert','You did not provide your username');
@@ -370,6 +374,9 @@ function load_characters_for_user() {
         unset($params['sha_pass_hash']);
         $params['s'] = $salt;
         $params['v'] = $verifier;
+        if (function_exists('spp_db_column_exists') && spp_db_column_exists($this->DB, 'account', 'current_realm')) {
+            $params['current_realm'] = max(0, (int)$activeRealmId);
+        }
 
         if ($params['expansion'] == '32')
             $params['expansion'] = '2';
@@ -399,7 +406,7 @@ function load_characters_for_user() {
                     $stmt->execute([$acc_id, $params['username'], $password, $params['email']]);
                 }
                 if (function_exists('spp_ensure_account_identity')) {
-                    spp_ensure_account_identity(1, $acc_id, $params['username']);
+                    spp_ensure_account_identity(max(1, (int)$activeRealmId), $acc_id, $params['username']);
                 }
                 return true;
             } else {

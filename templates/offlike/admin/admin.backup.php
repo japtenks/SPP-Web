@@ -135,7 +135,7 @@
   <section class="backup-admin__panel">
     <p class="backup-admin__eyebrow">Realm Xfer</p>
     <h2 class="backup-admin__title">Create Xfer SQL</h2>
-    <p class="backup-admin__note">Xfer packages are target-ready SQL bundles for `Classic -> TBC -> WotLK` style promotion. Characters are remapped to new GUID ranges on the target realm, accounts reuse an existing username when possible, and guild packages assume the member characters have already been transferred with the same names.</p>
+    <p class="backup-admin__note">Xfer packages are target-ready SQL bundles for `Classic -> TBC -> WotLK` style promotion. Characters are remapped to new GUID ranges on the target realm, accounts reuse an existing username when possible, and guild packages assume the member characters have already been transferred with the same names. vMaNGOS account SQL stays separate from character SQL, and vMaNGOS character xfer now requires a live schema validation pass before a package is trusted.</p>
 
     <form method="post" action="<?php echo htmlspecialchars((string)$backup_action_url, ENT_QUOTES, 'UTF-8'); ?>">
       <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)$admin_backup_csrf_token); ?>">

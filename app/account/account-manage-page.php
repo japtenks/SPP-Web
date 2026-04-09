@@ -37,9 +37,6 @@ if (!function_exists('spp_account_manage_load_page_state')) {
             return $state;
         }
 
-        $managePdo = spp_get_pdo('realmd', 1);
-        spp_ensure_website_account_row($managePdo, $user['id']);
-
         $currentRealmId = function_exists('spp_current_realm_id')
             ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
             : (int)($_COOKIE['cur_selected_realmd'] ?? $_COOKIE['cur_selected_realm'] ?? spp_resolve_realm_id($realmDbMap));
@@ -48,6 +45,8 @@ if (!function_exists('spp_account_manage_load_page_state')) {
                 ? spp_current_realm_id(is_array($realmDbMap) ? $realmDbMap : array())
                 : spp_resolve_realm_id($realmDbMap);
         }
+        $managePdo = spp_get_pdo('realmd', $currentRealmId);
+        spp_ensure_website_account_row($managePdo, $user['id']);
         $manageCharPdo = spp_get_pdo('chars', $currentRealmId);
 
         $manageRealmName = 'Realm ' . $currentRealmId;

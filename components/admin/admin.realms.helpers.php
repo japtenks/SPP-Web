@@ -294,18 +294,7 @@ if (!function_exists('spp_admin_realms_runtime_state')) {
             $runtimeState['selection_mode'] = 'manual';
         }
 
-        $visibleOptions = array();
-        foreach ($options as $realmId => $option) {
-            $realmId = (int)$realmId;
-            $isConfigOnly = !empty($option['is_config_only']);
-            $isEnabled = in_array($realmId, (array)$runtimeState['enabled_realm_ids'], true);
-
-            if ($isConfigOnly && !$isEnabled) {
-                continue;
-            }
-
-            $visibleOptions[$realmId] = $option;
-        }
+        $visibleOptions = $options;
 
         return array(
             'runtime_settings' => $runtimeState,

@@ -593,3 +593,39 @@ function spp_admin_backup_comment(string $text): string
 {
     return '-- ' . str_replace(array("\r", "\n"), ' ', $text);
 }
+
+function spp_admin_backup_vmangos_character_validation(PDO $sourceCharsPdo, PDO $targetCharsPdo): array
+{
+    $requiredTables = array_merge(array('characters'), array_keys(spp_admin_backup_character_tables()));
+    $requiredColumns = array(
+        'characters' => array('guid', 'account', 'name'),
+        'character_inventory' => array('guid'),
+        'mail' => array('id'),
+        'item_instance' => array('guid'),
+        'guild' => array('guildid'),
+    );
+
+    foreach ($requiredTables as $table) {
+        if (!function_exists('spp_db_table_exists') || !spp_db_table_exists($sourceCharsPdo, $table) || !spp_db_table_exists($targetCharsPdo, $table)) {
+            return array(
+                'ok' => false,
+                'message' => 'vMaNGOS character transfer requires matching live schemas. Missing table validation failed for `' . $table . '`.',
+            );
+        }
+    }
+
+    foreach ($requiredColumns as $table => $columns) {
+        foreach ($columns as $column) {
+            if (!function_exists('spp_db_column_exists')
+                || !spp_db_column_exists($sourceCharsPdo, $table, $column)
+                || !spp_db_column_exists($targetCharsPdo, $table, $column)) {
+                return array(
+                    'ok' => false,
+                    'message' => 'vMaNGOS character transfer requires matching live schemas. Missing column validation failed for `' . $table . '.' . $column . '`.',
+                );
+            }
+        }
+    }
+
+    return array('ok' => true, 'message' => '');
+}

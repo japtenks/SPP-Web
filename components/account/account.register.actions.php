@@ -6,10 +6,19 @@ if (!function_exists('spp_account_register_build_state')) {
         $realmId = !empty($realmMap)
             ? (int)(function_exists('spp_current_realm_id') ? spp_current_realm_id($realmMap) : spp_resolve_realm_id($realmMap))
             : 1;
+        $expansionKey = function_exists('spp_realm_to_expansion_key')
+            ? (string)spp_realm_to_expansion_key($realmId)
+            : '';
+        $expansion = 0;
+        if ($expansionKey === 'tbc') {
+            $expansion = 1;
+        } elseif ($expansionKey === 'wotlk') {
+            $expansion = 2;
+        }
 
         return array(
             'realm_id' => $realmId > 0 ? $realmId : 1,
-            'expansion' => 2,
+            'expansion' => $expansion,
             'realmlist_host' => spp_account_register_resolve_realmlist_host($realmId),
             'message_html' => '',
             'message_type' => '',

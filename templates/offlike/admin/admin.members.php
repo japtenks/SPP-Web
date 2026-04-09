@@ -41,6 +41,9 @@ $memberIsSuperAdmin = !empty($isSuperAdmin);
         echo htmlspecialchars($expansionNames[(int)$profile['expansion']] ?? 'Classic');
         ?>
       </div>
+
+      <div class="admin-meta-label">Auth Realm</div>
+      <div class="admin-meta-value"><?php echo htmlspecialchars((string)($authRealmName ?? ('Realm ' . (int)($activeRealmId ?? 0)))); ?></div>
     </div>
 
     <div class="admin-actions">
@@ -147,6 +150,7 @@ $memberIsSuperAdmin = !empty($isSuperAdmin);
         <h3 class="admin-members__heading admin-members__heading--compact">Change Password</h3>
         <form method="post" action="<?php echo htmlspecialchars(spp_admin_members_action_url(array('n' => 'admin', 'sub' => 'members', 'id' => $memberAccountId, 'action' => 'changepass'))); ?>" class="admin-form-stack">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)($admin_members_csrf_token ?? spp_csrf_token('admin_members'))); ?>">
+          <input type="hidden" name="character_realm_id" value="<?php echo $selectedToolRealmId; ?>">
           <div class="admin-form-grid">
             <label for="member_new_pass">New Password</label>
             <input type="password" id="member_new_pass" name="new_pass" />
@@ -289,6 +293,7 @@ $memberIsSuperAdmin = !empty($isSuperAdmin);
         <h3 class="admin-members__heading admin-members__heading--compact">Game Account</h3>
         <form method="post" action="<?php echo htmlspecialchars(spp_admin_members_action_url(array('n' => 'admin', 'sub' => 'members', 'id' => $memberAccountId, 'action' => 'change'))); ?>" class="admin-form-stack">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)($admin_members_csrf_token ?? spp_csrf_token('admin_members'))); ?>">
+          <input type="hidden" name="character_realm_id" value="<?php echo $selectedToolRealmId; ?>">
           <div class="admin-form-grid">
             <?php if ($memberIsSuperAdmin) { ?>
               <label for="profile_gmlevel">GM Level</label>
@@ -315,6 +320,7 @@ $memberIsSuperAdmin = !empty($isSuperAdmin);
         <h3 class="admin-members__heading admin-members__heading--compact">Change Password</h3>
         <form method="post" action="<?php echo htmlspecialchars(spp_admin_members_action_url(array('n' => 'admin', 'sub' => 'members', 'id' => $memberAccountId, 'action' => 'changepass'))); ?>" class="admin-form-stack">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars((string)($admin_members_csrf_token ?? spp_csrf_token('admin_members'))); ?>">
+          <input type="hidden" name="character_realm_id" value="<?php echo $selectedToolRealmId; ?>">
           <div class="admin-form-grid">
             <label for="member_new_pass_bot">New Password</label>
             <input type="password" id="member_new_pass_bot" name="new_pass" />
