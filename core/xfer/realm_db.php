@@ -15,7 +15,6 @@ $realmId = spp_resolve_realm_id($realmMap);
 $db['chars']  = $realmMap[$realmId]['chars'];
 $db['world']  = $realmMap[$realmId]['world'];
 $db['armory'] = $realmMap[$realmId]['armory'];
-$db['bots']   = $realmMap[$realmId]['bots'];
 $realmName    = function_exists('spp_get_armory_realm_name')
     ? (spp_get_armory_realm_name($realmId) ?? '')
     : '';

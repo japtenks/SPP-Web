@@ -937,7 +937,6 @@ if (!function_exists('spp_realm_runtime_definition_from_realm_map')) {
             'world' => trim((string)($realmInfo['world'] ?? '')),
             'chars' => trim((string)($realmInfo['chars'] ?? '')),
             'armory' => trim((string)($realmInfo['armory'] ?? '')),
-            'bots' => trim((string)($realmInfo['bots'] ?? '')),
             'icon' => (int)($realmInfo['icon'] ?? 0),
             'realmflags' => (int)($realmInfo['realmflags'] ?? 0),
             'timezone' => (int)($realmInfo['timezone'] ?? 0),

@@ -27,7 +27,6 @@ return [
             'world' => 'tbcmangos',
             'chars' => 'tbccharacters',
             'armory' => 'tbcarmory',
-            'bots' => 'tbcplayerbots',
         ],
     ],
 ];

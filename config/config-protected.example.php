@@ -74,28 +74,24 @@ return [
             'world' => 'classicmangos',
             'chars' => 'classiccharacters',
             'armory' => 'classicarmory',
-            'bots' => 'classicplayerbots',
         ],
         2 => [
             'realmd' => 'classicrealmd',
             'world' => 'tbcmangos',
             'chars' => 'tbccharacters',
             'armory' => 'tbcarmory',
-            'bots' => 'tbcplayerbots',
         ],
         3 => [
             'realmd' => 'classicrealmd',
             'world' => 'wotlkmangos',
             'chars' => 'wotlkcharacters',
             'armory' => 'wotlkarmory',
-            'bots' => 'wotlkplayerbots',
         ],
         4 => [
             'realmd' => 'vmangosrealmd',
             'world' => 'vmangos',
             'chars' => 'vmangoscharacters',
             'armory' => 'vmangosarmory',
-            'bots' => 'vmangosplayerbots',
         ],
     ],
 ];

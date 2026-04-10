@@ -698,7 +698,6 @@ function get_realm_info()
                 'id'   => 1,
                 'db'   => 'classiccharacters',
                 'world'=> 'classicmangos',
-                'bots' => 'classicplayerbots',
                 'logs' => 'classiclogs',
                 'name' => $resolveRealmName(1),
                 'exp'  => 0
@@ -708,7 +707,6 @@ function get_realm_info()
                 'id'   => 2,
                 'db'   => 'tbccharacters',
                 'world'=> 'tbcmangos',
-                'bots' => 'tbcplayerbots',
                 'logs' => 'tbclogs',
                 'name' => $resolveRealmName(2),
                 'exp'  => 1
@@ -718,7 +716,6 @@ function get_realm_info()
                 'id'   => 3,
                 'db'   => 'wotlkcharacters',
                 'world'=> 'wotlkmangos',
-                'bots' => 'wotlkplayerbots',
                 'logs' => 'wotlklogs',
                 'name' => $resolveRealmName(3),
                 'exp'  => 2
@@ -728,7 +725,6 @@ function get_realm_info()
                 'id'   => 1,
                 'db'   => 'classiccharacters',
                 'world'=> 'classicmangos',
-                'bots' => 'classicplayerbots',
                 'logs' => 'classiclogs',
                 'name' => $resolveRealmName(1),
                 'exp'  => 0

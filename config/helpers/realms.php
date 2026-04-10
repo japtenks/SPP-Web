@@ -147,7 +147,6 @@ if (!function_exists('spp_realm_display_name_from_derived')) {
             (string)($realmInfo['armory'] ?? ''),
             (string)($realmInfo['realmd'] ?? ''),
             (string)($realmInfo['chars'] ?? ''),
-            (string)($realmInfo['bots'] ?? ''),
             $expansionKey,
         )))));
 

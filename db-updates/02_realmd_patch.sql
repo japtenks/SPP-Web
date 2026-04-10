@@ -1,15 +1,29 @@
 -- =============================================================
--- realmd_migrations.sql
--- Run against: every realm's realmd database
---   USE classicrealmd;  (then tbcrealmd, wotlkrealmd)
+-- realmd_patch.sql
+-- Run against: the website-owned realmd database
+--   USE your realmd DB;  (for example classicrealmd, tbcrealmd, vmangosrealmd)
 --
--- Exception: sections marked [classicrealmd ONLY] should be run
--- against the master DB only (classicrealmd).
+-- Exception: sections marked [website-owned realmd ONLY] should be run
+-- against the realmd DB your website uses for shared website tables.
 --
 -- Run order matters. Execute top to bottom in a single session.
 -- IDEMPOTENT where noted; one-shot ALTERs will error if re-run
 -- against a DB where they already applied (expected behaviour).
 -- =============================================================
+
+
+-- -------------------------------------------------------------
+-- [57] website_settings table
+-- [website-owned realmd ONLY] — IDEMPOTENT.
+-- Stores runtime overrides that should survive config-file changes.
+-- -------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `website_settings` (
+  `setting_key`   VARCHAR(191) NOT NULL,
+  `setting_value` LONGTEXT      DEFAULT NULL,
+  `updated_at`    TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `updated_by`    VARCHAR(64)   DEFAULT NULL,
+  PRIMARY KEY (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
 -- -------------------------------------------------------------
@@ -80,7 +94,7 @@ DEALLOCATE PREPARE stmt;
 
 -- -------------------------------------------------------------
 -- [59b] website_identities table
--- [classicrealmd ONLY] — run tools/backfill_identities.php after.
+-- [website-owned realmd ONLY] — run tools/backfill_identities.php after.
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `website_identities` (
   `identity_id`        INT UNSIGNED     NOT NULL AUTO_INCREMENT,
@@ -255,11 +269,11 @@ ALTER TABLE `f_topics`
 
 -- -------------------------------------------------------------
 -- [63] Bot events
--- PART 1: website_bot_events table — [classicrealmd ONLY]
+-- PART 1: website_bot_events table — [website-owned realmd ONLY]
 -- PART 2: content_source column — run against every realm DB.
 -- -------------------------------------------------------------
 
--- PART 1 [classicrealmd ONLY]
+-- PART 1 [website-owned realmd ONLY]
 CREATE TABLE IF NOT EXISTS `website_bot_events` (
   `event_id`        INT UNSIGNED    NOT NULL AUTO_INCREMENT,
   `event_type`      ENUM(
@@ -305,7 +319,7 @@ ALTER TABLE `f_topics`
 
 -- -------------------------------------------------------------
 -- [66] website_identity_profiles table
--- [classicrealmd ONLY] — IDEMPOTENT.
+-- [website-owned realmd ONLY] — IDEMPOTENT.
 -- -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `website_identity_profiles` (
   `identity_id` INT(11) UNSIGNED NOT NULL,

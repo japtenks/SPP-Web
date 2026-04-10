@@ -230,7 +230,6 @@ if (!function_exists('spp_admin_realms_definition_from_row')) {
             'world' => trim((string)($definition['world'] ?? '')),
             'chars' => trim((string)($definition['chars'] ?? '')),
             'armory' => trim((string)($definition['armory'] ?? '')),
-            'bots' => trim((string)($definition['bots'] ?? '')),
             'icon' => (int)($definition['icon'] ?? $realmlistRow['icon'] ?? 0),
             'realmflags' => (int)($definition['realmflags'] ?? $realmlistRow['realmflags'] ?? 0),
             'timezone' => (int)($definition['timezone'] ?? $realmlistRow['timezone'] ?? 0),

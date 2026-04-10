@@ -18,7 +18,6 @@ if (!function_exists('spp_admin_realms_runtime_definition_defaults')) {
             'world' => '',
             'chars' => '',
             'armory' => '',
-            'bots' => '',
             'icon' => 0,
             'realmflags' => 0,
             'timezone' => 1,
@@ -54,7 +53,6 @@ if (!function_exists('spp_admin_realms_runtime_slot_form')) {
         $form['world'] = trim((string)($form['world'] ?? ''));
         $form['chars'] = trim((string)($form['chars'] ?? ''));
         $form['armory'] = trim((string)($form['armory'] ?? ''));
-        $form['bots'] = trim((string)($form['bots'] ?? ''));
         $form['icon'] = (int)($form['icon'] ?? 0);
         $form['realmflags'] = (int)($form['realmflags'] ?? 0);
         $form['timezone'] = (int)($form['timezone'] ?? 0);
@@ -141,7 +139,6 @@ if (!function_exists('spp_admin_realms_definition_storage_map')) {
                 'world' => trim((string)($definition['world'] ?? '')),
                 'chars' => trim((string)($definition['chars'] ?? '')),
                 'armory' => trim((string)($definition['armory'] ?? '')),
-                'bots' => trim((string)($definition['bots'] ?? '')),
                 'icon' => (int)($definition['icon'] ?? 0),
                 'realmflags' => (int)($definition['realmflags'] ?? 0),
                 'timezone' => (int)($definition['timezone'] ?? 0),

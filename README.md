@@ -15,13 +15,19 @@ You can install this site by cloning the repository or by downloading the releas
 2. Back up the current site folder if needed.
    Example: rename `Server\website` to `website-bkup`.
 3. Extract or clone this repo into the `website` folder.
-4. If you are using the default SPP settings, the site should work with little or no config change.
-5. If your environment is not SPP-Classic, update the protected local config file to match your setup.
-   Check `config/config-protected.local.php.example` and the example file in the same folder.
-     
-   Uncomment and adjust to your setup.
-   0=Classic, 1=TBC, 2=WOTLK
-   realm ID must match realmd.conf/realmlist entry
+4. Review your runtime config before first launch.
+   Default config values are Classic-first. If your install is TBC or WotLK, create and update `config/config-protected.local.php` to match your setup.
+
+   Start from `config/config-protected.local.php.example`.
+
+   Update these values to match your install:
+   - Expansion: `0=Classic`, `1=TBC`, `2=WOTLK`
+   - `default_realm_id`
+   - Database names for `realmd`, `world`, `chars`, and `armory`
+   - Database host/port if your MySQL service is not using the default SPP values
+   - SOAP port/credentials if you plan to use SOAP-backed admin features
+
+   `default_realm_id` must match the realm/realmlist entry your site should use.
    
 ```
     'genericRuntime' => [
@@ -38,7 +44,7 @@ You can install this site by cloning the repository or by downloading the releas
             'armory' => 'tbcarmory',
 ```
    
-6. In `mangos.conf`, update these values near the end of the file:
+5. In `mangos.conf`, update these values near the end of the file:
 
 ```ini
 Console.Enable = 1
@@ -46,8 +52,18 @@ Ra.Enable = 1
 SOAP.Enabled = 1
 ```
 
-7. Make sure the database server is running and reachable from the website.
-8. From the `website` folder, run the sql file classicrealmd and seeds:
+6. Make sure the database server is running and reachable from the website.
+7. From the `website` folder, run the SQL updates:
+   - Apply the armory/world-side patch files in `db-updates/01_armory_world_patch` in this order:
+     - `10_dbc_spellicon_delta.sql`
+     - `20_dbc_spellitemenchantment_tooltip.sql`
+     - `30_dbc_talent_tooltip.sql`
+     - `40_dbc_talenttab_tooltip.sql`
+     - `50_armory_itemset_notes.sql`
+   - Apply those armory/world-side patch files to every armory/world install you want the website to support
+   - Apply `db-updates/02_realmd_patch.sql` to the website-owned `realmd` database
+   - `db-updates/03_seeds.sql`
+   - `db-updates/04_populationdirector.sql` if you want the population director features
 
 After the patches are applied, the website should be available for guest access.
 
@@ -86,6 +102,14 @@ For admin tasks:
 
 After the site is up, visit [http://127.0.0.1/index.php?n=admin&sub=identities](http://127.0.0.1/index.php?n=admin&sub=identities) and run the identity backfill.
 
+## First Launch Checklist
+
+- Confirm Apache is pointing at the SPP-Web folder as the active `DocumentRoot`
+- Confirm `config/config-protected.local.php` matches your expansion, realm ID, and DB names
+- Confirm the armory/world patch files and `02_realmd_patch.sql` were applied
+- Confirm the site opens and guest pages load
+- Run the identity backfill from the admin identities page
+
 ## Runtime And Tooling Notes
 
 `admin/botevents` is supported only when PHP CLI is available in the target environment, such as a Windows SPP install with portable PHP on `PATH`.
@@ -96,6 +120,26 @@ Useful scripts in `tools/` include:
 
 - `process_bot_events.php` to process bot event data
 - `scan_bot_events.php` to scan and inspect bot event inputs
+
+## Windows SPP Notes And Troubleshooting
+
+- If the site loads but shows the wrong realm, missing characters, or empty armory data, check `expansion`, `default_realm_id`, database names, and MySQL port first.
+- If guest pages work but admin actions do not, verify SOAP is enabled and the configured SOAP port and credentials are correct.
+- If pages render strangely after replacing the site, stop the launcher and clear generated cache/log files before trying again.
+- If you replaced `Server\website` while the launcher or bundled web server was still running, restart the stack and re-check the copied files.
+- `admin/botevents` requires PHP CLI support in the Windows environment; without it, that admin surface is not available.
+- If you are using only a TBC install, you should expect to use a local config override rather than relying on the Classic defaults.
+
+## Windows Multi-Realm Notes
+
+- If your Windows setup includes more than one world, such as Classic and TBC, add each realm to `realmDbMap` in `config/config-protected.local.php`.
+- Give each realm the correct `realmd`, `world`, `chars`, and `armory` database names, and make sure each entry uses the correct realm ID from `realmlist`.
+- In SPP-Win naming, that usually means mapping each realm entry to its matching `*.world`, `*.armory`, `*.characters`, and `*realmd` databases.
+- Set `realmRuntime.multirealm` to `1` if you want the website to expose more than one configured realm.
+- Each `realmDbMap` entry is resolved independently, so the website will use the `realmd`, `world`, `chars`, and `armory` names defined for that specific realm ID rather than forcing every realm through one shared world or armory database.
+- The site can still list a configured realm even when that world is offline, as long as the realm is present in your runtime config and enabled in the runtime realm settings.
+- For shared website tables and runtime settings, apply `02_realmd_patch.sql` to the realmd database you want the website to treat as its website-owned authority DB.
+- If only one realm appears, check the configured realm IDs, the runtime enabled realm list, and whether the matching `realmlist` rows exist in the website-owned `realmd` database.
 
 ## Showcase
 <!-- SHOWCASE_GALLERY_START -->

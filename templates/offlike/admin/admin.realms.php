@@ -17,7 +17,6 @@ $slotFormState = !empty($slot_form) ? (array)$slot_form : array(
   'world' => '',
   'chars' => '',
   'armory' => '',
-  'bots' => '',
   'icon' => 0,
   'realmflags' => 0,
   'timezone' => 1,
@@ -341,7 +340,6 @@ $slotBuildSelection = function_exists('spp_admin_realms_build_selection')
         <div class="realm-admin__field"><label>World DB</label><input type="text" name="world" value="<?php echo htmlspecialchars((string)($slotFormState['world'] ?? '')); ?>"></div>
         <div class="realm-admin__field"><label>Chars DB</label><input type="text" name="chars" value="<?php echo htmlspecialchars((string)($slotFormState['chars'] ?? '')); ?>"></div>
         <div class="realm-admin__field"><label>Armory DB</label><input type="text" name="armory" value="<?php echo htmlspecialchars((string)($slotFormState['armory'] ?? '')); ?>"></div>
-        <div class="realm-admin__field"><label>Bots DB</label><input type="text" name="bots" value="<?php echo htmlspecialchars((string)($slotFormState['bots'] ?? '')); ?>"></div>
         <div class="realm-admin__field"><label>Type</label><select name="icon"><?php foreach ($realm_type_def as $tmp_id => $tmp_name) { ?><option value="<?php echo (int)$tmp_id; ?>"<?php echo ((int)($slotFormState['icon'] ?? 0) === (int)$tmp_id) ? ' selected' : ''; ?>><?php echo htmlspecialchars($tmp_name); ?></option><?php } ?></select></div>
         <div class="realm-admin__field"><label>Realm Flags</label><input type="text" name="realmflags" value="<?php echo htmlspecialchars((string)($slotFormState['realmflags'] ?? 0)); ?>"></div>
         <div class="realm-admin__field"><label>Timezone</label><select name="timezone"><?php foreach ($realm_timezone_def as $tmp_id => $tmp_name) { ?><option value="<?php echo (int)$tmp_id; ?>"<?php echo ((int)($slotFormState['timezone'] ?? 1) === (int)$tmp_id) ? ' selected' : ''; ?>><?php echo htmlspecialchars($tmp_name); ?></option><?php } ?></select></div>
@@ -384,7 +382,6 @@ $slotBuildSelection = function_exists('spp_admin_realms_build_selection')
         <div class="realm-admin__field"><label>World DB</label><input type="text" name="world" value="<?php echo htmlspecialchars((string)($item['world'] ?? '')); ?>"></div>
         <div class="realm-admin__field"><label>Chars DB</label><input type="text" name="chars" value="<?php echo htmlspecialchars((string)($item['chars'] ?? '')); ?>"></div>
         <div class="realm-admin__field"><label>Armory DB</label><input type="text" name="armory" value="<?php echo htmlspecialchars((string)($item['armory'] ?? '')); ?>"></div>
-        <div class="realm-admin__field"><label>Bots DB</label><input type="text" name="bots" value="<?php echo htmlspecialchars((string)($item['bots'] ?? '')); ?>"></div>
         <div class="realm-admin__field"><label>Type</label><select name="icon"><?php foreach ($realm_type_def as $tmp_id => $tmp_name) { ?><option value="<?php echo (int)$tmp_id; ?>"<?php echo ((int)($item['icon'] ?? 0) === (int)$tmp_id) ? ' selected' : ''; ?>><?php echo htmlspecialchars($tmp_name); ?></option><?php } ?></select></div>
         <div class="realm-admin__field"><label>Realm Flags</label><input type="text" name="realmflags" value="<?php echo htmlspecialchars((string)($item['realmflags'] ?? 0)); ?>"></div>
         <div class="realm-admin__field"><label>Timezone</label><select name="timezone"><?php foreach ($realm_timezone_def as $tmp_id => $tmp_name) { ?><option value="<?php echo (int)$tmp_id; ?>"<?php echo ((int)($item['timezone'] ?? 1) === (int)$tmp_id) ? ' selected' : ''; ?>><?php echo htmlspecialchars($tmp_name); ?></option><?php } ?></select></div>

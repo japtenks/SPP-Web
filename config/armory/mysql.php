@@ -23,7 +23,6 @@ $realmd_DB     = [];
 $characters_DB = [];
 $mangosd_DB    = [];
 $armory_DB     = [];
-$playerbot_DB  = [];
 $realms        = [];
 $defaultRealm  = null;
 
@@ -32,8 +31,6 @@ foreach ($runtimeRealmDbMap as $id => $dbs) {
     $characters_DB[$id] = [$hostport, $runtimeDb['user'], $runtimeDb['pass'], $dbs['chars']];
     $mangosd_DB[$id]    = [$hostport, $runtimeDb['user'], $runtimeDb['pass'], $dbs['world']];
     $armory_DB[$id]     = [$hostport, $runtimeDb['user'], $runtimeDb['pass'], $dbs['armory']];
-    $playerbot_DB[$id]  = [$hostport, $runtimeDb['user'], $runtimeDb['pass'], $dbs['bots']];
-
     $realmName = null;
     if (function_exists('spp_get_armory_realm_name')) {
         $realmName = spp_get_armory_realm_name((int)$id);
@@ -91,7 +88,6 @@ function execute_query($db_name, $query, $method = 0, $error = ""){
         'char'  => 'chars',
         'world' => 'world',
         'armory'=> 'armory',
-        'bots'  => 'bots',
     ];
     $target = $target_map[$db_name] ?? null;
     if (!$target) die($error . "Database not chosen");

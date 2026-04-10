@@ -230,7 +230,6 @@ if (!function_exists('spp_marketplace_detect_expansion')) {
             (string)($realmInfo['world'] ?? ''),
             (string)($realmInfo['chars'] ?? ''),
             (string)($realmInfo['armory'] ?? ''),
-            (string)($realmInfo['bots'] ?? ''),
         ]))));
 
         if (strpos($haystack, 'wotlk') !== false) {

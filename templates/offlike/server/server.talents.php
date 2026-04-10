@@ -145,9 +145,6 @@ $DB = server_talents_init_db(array($hostport, $runtimeDb['user'], $runtimeDb['pa
 $WSDB = server_talents_init_db(array($hostport, $runtimeDb['user'], $runtimeDb['pass'], $realmConfig['world']));
 $CHDB = spp_get_pdo('chars', $realmId);
 $ARDB = server_talents_init_db(array($hostport, $runtimeDb['user'], $runtimeDb['pass'], $realmConfig['armory']));
-if (!empty($realmConfig['bots'])) {
-    $PBDB = server_talents_init_db(array($hostport, $runtimeDb['user'], $runtimeDb['pass'], $realmConfig['bots']));
-}
 
 if (!defined('REALM_NAME')) {
     define('REALM_NAME', $armoryRealmName);
