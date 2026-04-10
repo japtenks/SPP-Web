@@ -585,7 +585,12 @@ if (!function_exists('spp_public_realm_choices')) {
             $rowId = (int)($row['id'] ?? 0);
             $configuredClientHost = trim((string)($GLOBALS['clientConnectionHost'] ?? ''));
             $rowHost = trim((string)($row['address'] ?? ''));
-            $host = $configuredClientHost !== '' ? $configuredClientHost : $rowHost;
+            $host = $rowHost;
+            if ($metadataSource !== 'source-realmd-fallback' && $configuredClientHost !== '') {
+                $host = $configuredClientHost;
+            } elseif ($host === '' && $configuredClientHost !== '') {
+                $host = $configuredClientHost;
+            }
             $port = (int)($row['port'] ?? 0);
             $missingReasons = array();
 
