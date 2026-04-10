@@ -2,6 +2,21 @@
 
 Beta release of the redesigned and modernized website for SPP-based installs.
 
+## Local Network Use Notice
+
+This project is intended for local/LAN use.
+
+If you plan to host it outside your local network, it is your responsibility to review and secure your setup properly. The default environment is based on HTTP and older Apache-style local hosting assumptions, so it should not be treated as hardened for public internet exposure out of the box.
+
+The project does include security-focused cleanup and modernization work compared to the older site code, including:
+
+- centralized CSRF protection on mutating actions
+- safer form field filtering and request guards
+- improved forum posting validation and repeat-post protection
+- more secure attachment and avatar file handling
+- PDO/prepared-statement migration across major database access paths
+- SRP-based account password flow updates in supported account paths
+
 Supported targets:
 
 - Windows SPP release: [celguar/spp-classics-cmangos](https://github.com/celguar/spp-classics-cmangos)
