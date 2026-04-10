@@ -29,30 +29,6 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   let pollInFlight = false;
-  let lastSuccessfulPolledAt = '';
-
-  function updateLegend(polledAt) {
-    const legend = document.querySelector('[data-realmstatus-polled-at]');
-    if (!legend || !polledAt) {
-      return;
-    }
-
-    const realmIds = Array.isArray(config.targetRealmIds) ? config.targetRealmIds.join(', ') : '';
-    lastSuccessfulPolledAt = polledAt;
-    legend.textContent = 'Polling realms: ' + realmIds + ', updated ' + polledAt;
-  }
-
-  function markLegendFailure() {
-    const legend = document.querySelector('[data-realmstatus-polled-at]');
-    if (!legend) {
-      return;
-    }
-
-    const realmIds = Array.isArray(config.targetRealmIds) ? config.targetRealmIds.join(', ') : '';
-    legend.textContent = lastSuccessfulPolledAt
-      ? 'Polling realms: ' + realmIds + ', last refresh ' + lastSuccessfulPolledAt + ' (retrying)'
-      : 'Polling realms: ' + realmIds + ', refresh failed (retrying)';
-  }
 
   function pollRealmStatus() {
     if (pollInFlight) {
@@ -70,11 +46,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
         list.innerHTML = payload.html;
         bindCollapseToggles(list);
-        updateLegend(payload.polledAt || '');
       })
-      .catch(function () {
-        markLegendFailure();
-      })
+      .catch(function () {})
       .finally(function () {
         pollInFlight = false;
       });

@@ -411,6 +411,7 @@ if (!function_exists('spp_guilds_load_page_state')) {
             'result_end' => $resultEnd,
             'base_url' => $baseUrl,
             'pagination_route_url' => $paginationRouteUrl,
+            'sort_urls' => spp_guilds_build_sort_urls($realmId, $itemsPerPage, $search, $sortBy, $sortDir, $showGmGuilds, $factionFilter),
             'realmId' => $realmId,
             'realmCapabilities' => $realmCapabilities,
             'realmWorldDb' => $realmWorldDB,

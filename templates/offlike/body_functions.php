@@ -563,6 +563,13 @@ function builddiv_start($type = 0, $title = "No title set", $realm = 0, $forumna
     // === Optional Realm Selector ===
     if ($realm == 1) {
         $realmMap = $GLOBALS['allEnabledRealmDbMap'] ?? $GLOBALS['realmDbMap'] ?? array();
+        if (function_exists('spp_request_scoped_realm_map')) {
+            $realmMap = spp_request_scoped_realm_map(
+                is_array($realmMap) ? $realmMap : array(),
+                (string)($GLOBALS['n_main'] ?? ($_GET['n'] ?? '')),
+                (string)($_GET['sub'] ?? '')
+            );
+        }
         $realmId = is_array($realmMap) && !empty($realmMap) ? spp_resolve_realm_id($realmMap) : (int)($_GET['realm'] ?? 1);
         $availableRealms = array();
 

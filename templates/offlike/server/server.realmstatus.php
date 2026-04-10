@@ -25,10 +25,6 @@
         <span class="realmstatus-legend-dot">&#128308;</span>
         <span class="uncleared">Uncleared</span>
       </div>
-      <div class="realmstatus-legend-item">
-        <span class="realmstatus-legend-dot">Realm DB</span>
-        <span class="cleared" data-realmstatus-polled-at>Polling realms: <?php echo htmlspecialchars(implode(', ', array_map('strval', (array)($realmstatusTargetRealmIds ?? array())))); ?><?php if (!empty($realmstatusPolledAtLabel)): ?>, updated <?php echo htmlspecialchars((string)$realmstatusPolledAtLabel); ?><?php endif; ?></span>
-      </div>
     </aside>
 
     <div class="realm-list" data-realmstatus-list>
