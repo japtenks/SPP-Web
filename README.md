@@ -74,12 +74,13 @@ SOAP.Enabled = 1
    - `Console.Enable = 1` if your environment depends on console access or console-driven controls
 
 6. Make sure the database server is running and reachable from the website.
-   For this install, MySQL/MariaDB connections should be made with SSL disabled. Older SPP-style MySQL setups on this stack may fail or hang during connection attempts unless SSL is explicitly disabled on the client side.
-   Current live DB reference for this install:
-   - Host: `192.168.1.47`
-   - Port: `3306`
-   - User: `mangos`
-   - Password: `mangos`
+   Current live DB reference for the standard install:
+   - Host: `127.0.0.1`
+   - Port: `3310`
+   - User: `root`
+   - Password: `123456`
+
+   It is recommended to update these values from the standard default setup.
 7. From the `website` folder, run the SQL updates:
    - Apply the armory/world-side patch files in `db-updates/01_armory_world_patch` in this order:
      - `10_dbc_spellicon_delta.sql`
@@ -130,10 +131,9 @@ cd spp-cmangos-prox/
 ```bash
 ./Launcher.sh
 ```
-3.0 If an update is required.
-3.1 Open the service menu.
-3.2 Choose `3` for `website`.
-3.3 Choose `2` for `update`.
+3. If an update is required, open the service menu.
+4. Choose `3` for `website`.
+5. Choose `2` for `update`.
 
 ## Accounts And Admin Access
 
@@ -169,8 +169,6 @@ Useful scripts in `tools/` include:
 ## Windows SPP Notes And Troubleshooting
 
 - If the site loads but shows the wrong realm, missing characters, or empty armory data, check `expansion`, `default_realm_id`, database names, and MySQL port first.
-- If database connection attempts only work after retrying with SSL disabled, keep SSL disabled for MySQL clients on this install. This is expected for this older SPP/MySQL environment.
-- Current live DB reference on this install is `192.168.1.47:3306` with `mangos/mangos`.
 - If guest pages work but admin actions do not, verify SOAP is enabled and the configured SOAP port and credentials are correct.
 - If pages render strangely after replacing the site, stop the launcher and clear generated cache/log files before trying again.
 - If you replaced `Server\website` while the launcher or bundled web server was still running, restart the stack and re-check the copied files.
