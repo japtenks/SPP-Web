@@ -1,8 +1,13 @@
-# spp-web
+# SPP-Web
 
 Beta release of the redesigned and modernized website for SPP-based installs.
 
-## Local Network Use Notice
+Supported targets:
+
+- Windows SPP release: [celguar/spp-classics-cmangos](https://github.com/celguar/spp-classics-cmangos)
+- Proxmox shell-port build: [japtenks/spp-cmangos-prox](https://github.com/japtenks/spp-cmangos-prox)
+
+## **Local Network Use Notice**
 
 This project is intended for local/LAN use.
 
@@ -17,10 +22,6 @@ The project does include security-focused cleanup and modernization work compare
 - PDO/prepared-statement migration across major database access paths
 - SRP-based account password flow updates in supported account paths
 
-Supported targets:
-
-- Windows SPP release: [celguar/spp-classics-cmangos](https://github.com/celguar/spp-classics-cmangos)
-- Proxmox shell-port build: [japtenks/spp-cmangos-prox](https://github.com/japtenks/spp-cmangos-prox)
 
 ## Installation
 
@@ -59,13 +60,16 @@ You can install this site by cloning the repository or by downloading the releas
             'armory' => 'tbcarmory',
 ```
    
-5. In `mangos.conf`, update these values near the end of the file:
+5. In `mangos.conf`, make sure SOAP is enabled:
 
 ```ini
-Console.Enable = 1
-Ra.Enable = 1
 SOAP.Enabled = 1
 ```
+
+   Optional depending on your setup:
+
+   - `Ra.Enable = 1` if you use RA-backed features or tooling
+   - `Console.Enable = 1` if your environment depends on console access or console-driven controls
 
 6. Make sure the database server is running and reachable from the website.
 7. From the `website` folder, run the SQL updates:
@@ -92,15 +96,15 @@ For the Proxmox shell-port workflow:
 cd spp-cmangos-prox/
 ```
 
-2. Update the repo if needed:
+2. Start the launcher:
 
 ```bash
-git pull
+./Launcher.sh
 ```
-
-3. Open the service menu.
-4. Choose `3` for `website`.
-5. Choose `2` for `update`.
+3.0 If an update is required.
+3.1 Open the service menu.
+3.2 Choose `3` for `website`.
+3.3 Choose `2` for `update`.
 
 ## Accounts And Admin Access
 
@@ -115,11 +119,8 @@ For admin tasks:
   [japtenks/mangos-classic commit `bd5c6c1`](https://github.com/japtenks/mangos-classic/commit/bd5c6c10d2a308c2666a9e9a4f196151c7097abf)
 - A pull request has been issued for that work.
 
-After the site is up, visit [http://127.0.0.1/index.php?n=admin&sub=identities](http://127.0.0.1/index.php?n=admin&sub=identities) and run the identity backfill.
-
 ## First Launch Checklist
 
-- Confirm Apache is pointing at the SPP-Web folder as the active `DocumentRoot`
 - Confirm `config/config-protected.local.php` matches your expansion, realm ID, and DB names
 - Confirm the armory/world patch files and `02_realmd_patch.sql` were applied
 - Confirm the site opens and guest pages load
