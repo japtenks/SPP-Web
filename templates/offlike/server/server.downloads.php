@@ -9,12 +9,22 @@ builddiv_start(1, 'Downloads', 0);
     <div class="feature-actions">
       <?php if (!empty($downloadsRealmlistOptions) && count((array)$downloadsRealmlistOptions) > 1): ?>
         <?php foreach ((array)$downloadsRealmlistOptions as $realmlistOption): ?>
-          <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
-            Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
-          </a>
+          <?php if (!empty($realmlistOption['is_download_available'])): ?>
+            <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
+              Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
+            </a>
+          <?php else: ?>
+            <span class="feature-button is-disabled" aria-disabled="true">
+              <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist unavailable
+            </span>
+          <?php endif; ?>
         <?php endforeach; ?>
       <?php else: ?>
-        <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
+        <?php if (!empty($downloadsRealmlistDownloadAvailable)): ?>
+          <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
+        <?php else: ?>
+          <span class="feature-button is-disabled" aria-disabled="true">Realmlist download unavailable</span>
+        <?php endif; ?>
       <?php endif; ?>
     </div>
   </section>
@@ -29,12 +39,22 @@ builddiv_start(1, 'Downloads', 0);
           <div class="feature-actions">
             <?php if (!empty($downloadsRealmlistOptions) && count((array)$downloadsRealmlistOptions) > 1): ?>
               <?php foreach ((array)$downloadsRealmlistOptions as $realmlistOption): ?>
-                <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
-                  Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
-                </a>
+                <?php if (!empty($realmlistOption['is_download_available'])): ?>
+                  <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
+                    Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
+                  </a>
+                <?php else: ?>
+                  <span class="feature-button is-disabled" aria-disabled="true">
+                    <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist unavailable
+                  </span>
+                <?php endif; ?>
               <?php endforeach; ?>
             <?php else: ?>
-              <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
+              <?php if (!empty($downloadsRealmlistDownloadAvailable)): ?>
+                <a class="feature-button" href="<?php echo htmlspecialchars($downloadsRealmlistHref); ?>">Download realmlist.wtf</a>
+              <?php else: ?>
+                <span class="feature-button is-disabled" aria-disabled="true">Realmlist download unavailable</span>
+              <?php endif; ?>
             <?php endif; ?>
           </div>
         <?php endif; ?>

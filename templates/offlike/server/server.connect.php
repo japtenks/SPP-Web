@@ -22,12 +22,22 @@ builddiv_start(1, 'How to Play');
       <?php } ?>
       <?php if (!empty($downloadRealmlistOptions) && count((array)$downloadRealmlistOptions) > 1): ?>
         <?php foreach ((array)$downloadRealmlistOptions as $realmlistOption): ?>
-          <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
-            Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
-          </a>
+          <?php if (!empty($realmlistOption['is_download_available'])): ?>
+            <a class="feature-button<?php echo !empty($realmlistOption['is_selected']) ? ' is-primary' : ''; ?>" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">
+              Download <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist.wtf
+            </a>
+          <?php else: ?>
+            <span class="feature-button is-disabled" aria-disabled="true">
+              <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> realmlist unavailable
+            </span>
+          <?php endif; ?>
         <?php endforeach; ?>
       <?php else: ?>
-        <a class="feature-button" href="<?php echo htmlspecialchars($downloadRealmlistUrl); ?>">Download realmlist.wtf</a>
+        <?php if (!empty($connectRealmlistDownloadAvailable)): ?>
+          <a class="feature-button" href="<?php echo htmlspecialchars($downloadRealmlistUrl); ?>">Download realmlist.wtf</a>
+        <?php else: ?>
+          <span class="feature-button is-disabled" aria-disabled="true">Realmlist download unavailable</span>
+        <?php endif; ?>
       <?php endif; ?>
     </div>
   </section>
@@ -96,16 +106,26 @@ builddiv_start(1, 'How to Play');
             <ul class="feature-step-list">
               <?php foreach ((array)$downloadRealmlistOptions as $realmlistOption): ?>
                 <li>
-                  <a class="feature-link" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">realmlist.wtf for <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?></a>
+                  <?php if (!empty($realmlistOption['is_download_available'])): ?>
+                    <a class="feature-link" href="<?php echo htmlspecialchars((string)$realmlistOption['href']); ?>">realmlist.wtf for <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?></a>
+                  <?php else: ?>
+                    <span class="feature-link">realmlist.wtf for <?php echo htmlspecialchars((string)$realmlistOption['realm_name']); ?> unavailable</span>
+                  <?php endif; ?>
                   <?php if (!empty($realmlistOption['host'])): ?>
                     <span class="feature-code">set realmlist <?php echo htmlspecialchars((string)$realmlistOption['host']); ?></span>
+                  <?php else: ?>
+                    <span class="feature-note">Authority host metadata is missing for this public realm.</span>
                   <?php endif; ?>
                 </li>
               <?php endforeach; ?>
             </ul>
           <?php else: ?>
-            Download the file directly here:
-            <a class="feature-link" href="<?php echo htmlspecialchars($downloadRealmlistUrl); ?>">realmlist.wtf for <?php echo htmlspecialchars($connectRealmName); ?></a>
+            <?php if (!empty($connectRealmlistDownloadAvailable)): ?>
+              Download the file directly here:
+              <a class="feature-link" href="<?php echo htmlspecialchars($downloadRealmlistUrl); ?>">realmlist.wtf for <?php echo htmlspecialchars($connectRealmName); ?></a>
+            <?php else: ?>
+              Authority metadata for <?php echo htmlspecialchars($connectRealmName); ?> is incomplete, so the direct download is disabled until a host is available.
+            <?php endif; ?>
           <?php endif; ?>
         </div>
         <div class="feature-step">
@@ -113,8 +133,12 @@ builddiv_start(1, 'How to Play');
           <?php if (!empty($downloadRealmlistOptions) && count((array)$downloadRealmlistOptions) > 1): ?>
             If you need to edit the file by hand, use the host shown next to the matching realm download above.
           <?php else: ?>
-            If you need to edit it by hand, your file should contain:
-            <span class="feature-code">set realmlist <?php echo htmlspecialchars($connectRealmlistHost); ?></span>
+            <?php if (!empty($connectRealmlistHost)): ?>
+              If you need to edit it by hand, your file should contain:
+              <span class="feature-code">set realmlist <?php echo htmlspecialchars($connectRealmlistHost); ?></span>
+            <?php else: ?>
+              Manual instructions are unavailable right now because the authority realmlist host is missing.
+            <?php endif; ?>
           <?php endif; ?>
         </div>
       </div>

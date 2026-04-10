@@ -16,8 +16,29 @@ You can install this site by cloning the repository or by downloading the releas
    Example: rename `Server\website` to `website-bkup`.
 3. Extract or clone this repo into the `website` folder.
 4. If you are using the default SPP settings, the site should work with little or no config change.
-5. If your environment is customized, update the protected local config file to match your setup.
-   Check `config/config-protected.local.php` and the example file in the same folder.
+5. If your environment is not SPP-Classic, update the protected local config file to match your setup.
+   Check `config/config-protected.local.php.example` and the example file in the same folder.
+     
+   Uncomment and adjust to your setup.
+   0=Classic, 1=TBC, 2=WOTLK
+   realm ID must match realmd.conf/realmlist entry
+   ```
+   	//remove the comments if your setup is for TBC
+    // 'genericRuntime' => [
+        // 'expansion' => 1, 
+    // ],
+    // 'realmRuntime' => [
+        // 'default_realm_id' => 1,
+    // ],
+    // 'realmDbMap' => [
+        // 1 => [
+            // 'realmd' => 'tbcrealmd',
+            // 'world' => 'tbcmangos',
+            // 'chars' => 'tbccharacters',
+            // 'armory' => 'tbcarmory',
+   ```
+   
+   
 6. In `mangos.conf`, update these values near the end of the file:
 
 ```ini

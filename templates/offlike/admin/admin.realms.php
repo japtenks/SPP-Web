@@ -203,13 +203,16 @@ $slotBuildSelection = function_exists('spp_admin_realms_build_selection')
 
   <div class="realm-admin__card feature-panel">
     <h3>Realmlist Directory</h3>
-    <p>These are the live <code>realmlist</code> rows found across the runtime slots&apos; own <code>realmd</code> databases.</p>
+    <p>These rows represent the public world choices derived from enabled active worlds, then matched against the shared authority <code>realmd</code> metadata when available.</p>
     <div class="realm-admin__table-wrap">
       <table class="realm-admin__table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Realmd DB</th>
+            <th>Public Choice</th>
+            <th>World</th>
+            <th>Chars</th>
+            <th>Authority Realmd</th>
+            <th>Realmlist Row</th>
             <th>Name</th>
             <th>Address</th>
             <th>Port</th>
@@ -219,27 +222,51 @@ $slotBuildSelection = function_exists('spp_admin_realms_build_selection')
             <th>Allowed Security</th>
             <th>Population</th>
             <th>Builds</th>
+            <th>Status</th>
           </tr>
         </thead>
         <tbody>
         <?php foreach ((array)($realmlist_items ?? array()) as $realmlistItem) { ?>
           <tr>
-            <td><?php echo (int)$realmlistItem['id']; ?></td>
-            <td><?php echo htmlspecialchars((string)($realmlistItem['source_realmd'] ?? '')); ?></td>
-            <td><?php echo htmlspecialchars((string)$realmlistItem['name']); ?></td>
-            <td><?php echo htmlspecialchars((string)$realmlistItem['address']); ?></td>
-            <td><?php echo (int)$realmlistItem['port']; ?></td>
+            <td>
+              #<?php echo (int)($realmlistItem['public_choice_id'] ?? 0); ?><br>
+              <span class="realm-admin__muted"><?php echo htmlspecialchars(implode(', ', array_map('intval', (array)($realmlistItem['source_slot_ids'] ?? array())))); ?></span>
+            </td>
+            <td><?php echo htmlspecialchars((string)($realmlistItem['world_db'] ?? '')); ?></td>
+            <td><?php echo htmlspecialchars((string)($realmlistItem['chars_db'] ?? '')); ?></td>
+            <td><?php echo htmlspecialchars((string)($realmlistItem['authority_realmd_db'] ?? '')); ?></td>
+            <td>
+              <?php if ($realmlistItem['matched_realmlist_row_id'] !== null) { ?>
+                <?php echo (int)$realmlistItem['matched_realmlist_row_id']; ?>
+              <?php } else { ?>
+                <span class="realm-admin__muted">None</span>
+              <?php } ?>
+            </td>
+            <td><?php echo htmlspecialchars((string)($realmlistItem['label'] ?? '')); ?></td>
+            <td><?php echo htmlspecialchars((string)($realmlistItem['address'] ?? '')); ?></td>
+            <td><?php echo (int)($realmlistItem['port'] ?? 0); ?></td>
             <td><?php echo htmlspecialchars($realm_type_def[$realmlistItem['icon']] ?? 'Unknown'); ?></td>
             <td><?php echo (int)($realmlistItem['realmflags'] ?? 0); ?></td>
             <td><?php echo htmlspecialchars($realm_timezone_def[$realmlistItem['timezone']] ?? 'Unknown'); ?></td>
             <td><?php echo (int)($realmlistItem['allowedSecurityLevel'] ?? 0); ?></td>
             <td><?php echo htmlspecialchars((string)($realmlistItem['population'] ?? '0')); ?></td>
             <td><?php echo htmlspecialchars((string)($realmlistItem['realmbuilds'] ?? '')); ?></td>
+            <td>
+              <?php if (($realmlistItem['metadata_state'] ?? 'incomplete') === 'complete') { ?>
+                Complete
+              <?php } else { ?>
+                Incomplete
+                <?php if (!empty($realmlistItem['missing_reasons'])) { ?>
+                  <br>
+                  <span class="realm-admin__muted"><?php echo htmlspecialchars(implode(', ', (array)$realmlistItem['missing_reasons'])); ?></span>
+                <?php } ?>
+              <?php } ?>
+            </td>
           </tr>
         <?php } ?>
         <?php if (empty($realmlist_items)) { ?>
           <tr>
-            <td colspan="11">No live realmlist rows were found for the current runtime slots.</td>
+            <td colspan="14">No public realm choices were resolved from the enabled runtime worlds.</td>
           </tr>
         <?php } ?>
         </tbody>

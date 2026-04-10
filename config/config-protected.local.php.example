@@ -17,4 +17,19 @@ return [
             'pass' => '',
         ],
     ],
+	//remove the comments if your setup is for TBC
+    // 'genericRuntime' => [
+        // 'expansion' => 1,
+    // ],
+    // 'realmRuntime' => [
+        // 'default_realm_id' => 1,
+    // ],
+    // 'realmDbMap' => [
+        // 1 => [
+            // 'realmd' => 'tbcrealmd',
+            // 'world' => 'tbcmangos',
+            // 'chars' => 'tbccharacters',
+            // 'armory' => 'tbcarmory',
+        ],
+    ],
 ];

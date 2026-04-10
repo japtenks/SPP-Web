@@ -2,102 +2,72 @@
 
 require_once __DIR__ . '/realm-capabilities.php';
 
-if (!function_exists('spp_server_realmlist_lookup_host')) {
-    function spp_server_realmlist_lookup_host(int $realmId): string
+if (!function_exists('spp_server_realmlist_public_choices')) {
+    function spp_server_realmlist_public_choices(array $realmMap): array
     {
-        $host = '';
+        $resolved = function_exists('spp_public_realm_choices')
+            ? (array)spp_public_realm_choices($realmMap)
+            : array();
 
-        if (function_exists('spp_get_pdo')) {
-            try {
-                $pdo = spp_get_pdo('realmd', $realmId);
-                $stmt = $pdo->prepare('SELECT `address` FROM `realmlist` WHERE `id` = ? LIMIT 1');
-                $stmt->execute(array($realmId));
-                $row = $stmt->fetch(PDO::FETCH_ASSOC);
-                if (!empty($row['address'])) {
-                    $host = trim((string)$row['address']);
-                }
-            } catch (Throwable $e) {
-                $host = '';
-            }
-        }
-
-        return $host;
+        return (array)($resolved['choices'] ?? array());
     }
 }
 
-if (!function_exists('spp_server_realmlist_lookup_name')) {
-    function spp_server_realmlist_lookup_name(array $realmMap, int $realmId): string
+if (!function_exists('spp_server_realmlist_choice')) {
+    function spp_server_realmlist_choice(array $realmMap, int $requestedChoiceId = 0): ?array
     {
-        return spp_realm_display_name($realmId, $realmMap, 'Realm #%d');
+        if (function_exists('spp_public_realm_choice')) {
+            return spp_public_realm_choice($realmMap, $requestedChoiceId);
+        }
+
+        $choices = spp_server_realmlist_public_choices($realmMap);
+        if ($requestedChoiceId > 0 && isset($choices[$requestedChoiceId])) {
+            return $choices[$requestedChoiceId];
+        }
+
+        $firstChoice = reset($choices);
+        return is_array($firstChoice) ? $firstChoice : null;
     }
 }
 
 if (!function_exists('spp_server_realmlist_enabled_realm_map')) {
     function spp_server_realmlist_enabled_realm_map(array $realmMap): array
     {
-        $configuredRealmMap = (array)($GLOBALS['allConfiguredRealmDbMap'] ?? $GLOBALS['fallbackConfiguredRealmDbMap'] ?? array());
-        if (empty($configuredRealmMap)) {
-            $configuredRealmMap = $realmMap;
+        if (function_exists('spp_public_realm_enabled_runtime_map')) {
+            return spp_public_realm_enabled_runtime_map($realmMap);
         }
 
-        $dbBackedRealmMap = (array)($GLOBALS['dbBackedRealmDbMap'] ?? array());
-        if (empty($dbBackedRealmMap) && function_exists('spp_realm_runtime_catalog') && !empty($configuredRealmMap)) {
-            $runtimeCatalog = (array)spp_realm_runtime_catalog($configuredRealmMap);
-            $dbBackedRealmMap = (array)($runtimeCatalog['realm_db_map'] ?? array());
-        }
-        if (empty($dbBackedRealmMap)) {
-            $dbBackedRealmMap = $realmMap;
-        }
-
-        $enabledRealmIds = array();
-        if (function_exists('spp_realm_runtime_state') && !empty($dbBackedRealmMap)) {
-            $runtimeState = (array)spp_realm_runtime_state($dbBackedRealmMap);
-            $enabledRealmIds = array_values(array_map('intval', (array)($runtimeState['enabled_realm_ids'] ?? array())));
-        }
-
-        $enabledRealmMap = array();
-        if (!empty($enabledRealmIds)) {
-            foreach ($enabledRealmIds as $realmId) {
-                if (isset($dbBackedRealmMap[$realmId])) {
-                    $enabledRealmMap[$realmId] = $dbBackedRealmMap[$realmId];
-                }
-            }
-        }
-
-        if (empty($enabledRealmMap)) {
-            $enabledRealmMap = (array)($GLOBALS['allEnabledRealmDbMap'] ?? array());
-        }
-
-        if (empty($enabledRealmMap)) {
-            $enabledRealmMap = $dbBackedRealmMap;
-        }
-
-        return $enabledRealmMap;
+        return $realmMap;
     }
 }
 
 if (!function_exists('spp_server_realmlist_download_options')) {
-    function spp_server_realmlist_download_options(array $realmMap, ?int $selectedRealmId = null): array
+    function spp_server_realmlist_download_options(array $realmMap, ?int $selectedChoiceId = null): array
     {
         $options = array();
-        $realmMap = spp_server_realmlist_enabled_realm_map($realmMap);
-        $realmIds = array_keys($realmMap);
-        sort($realmIds, SORT_NUMERIC);
+        $choices = spp_server_realmlist_public_choices($realmMap);
+        $choiceIds = array_keys($choices);
+        sort($choiceIds, SORT_NUMERIC);
 
-        foreach ($realmIds as $realmId) {
-            $realmId = (int)$realmId;
-            if ($realmId <= 0) {
+        foreach ($choiceIds as $choiceId) {
+            $choiceId = (int)$choiceId;
+            $choice = (array)($choices[$choiceId] ?? array());
+            if ($choiceId <= 0 || empty($choice)) {
                 continue;
             }
 
-            $host = spp_server_realmlist_lookup_host($realmId);
+            $filenameId = max(1, $choiceId);
             $options[] = array(
-                'realm_id' => $realmId,
-                'realm_name' => spp_server_realmlist_lookup_name($realmMap, $realmId),
-                'host' => $host,
-                'href' => 'index.php?n=server&sub=realmlist&nobody=1&realm=' . $realmId,
-                'filename' => $realmId === 1 ? 'realmlist.wtf' : ('realmlist-' . $realmId . '.wtf'),
-                'is_selected' => $selectedRealmId !== null && $realmId === $selectedRealmId,
+                'realm_id' => $choiceId,
+                'public_choice_id' => $choiceId,
+                'realm_name' => (string)($choice['label'] ?? ('Realm ' . $choiceId)),
+                'host' => (string)($choice['host'] ?? ''),
+                'href' => 'index.php?n=server&sub=realmlist&nobody=1&realm=' . $choiceId,
+                'filename' => $filenameId === 1 ? 'realmlist.wtf' : ('realmlist-' . $filenameId . '.wtf'),
+                'is_selected' => $selectedChoiceId !== null && $choiceId === $selectedChoiceId,
+                'is_download_available' => !empty($choice['is_download_available']),
+                'metadata_state' => (string)($choice['metadata_state'] ?? 'incomplete'),
+                'missing_reasons' => (array)($choice['missing_reasons'] ?? array()),
             );
         }
 
@@ -109,54 +79,31 @@ if (!function_exists('spp_server_realmlist_endpoint_state')) {
     function spp_server_realmlist_endpoint_state(array $args = array()): array
     {
         $query = is_array($args['query'] ?? null) ? $args['query'] : $_GET;
-        $server = is_array($args['server'] ?? null) ? $args['server'] : $_SERVER;
         $realmMap = spp_server_realmlist_enabled_realm_map((array)($GLOBALS['realmDbMap'] ?? array()));
-        $realmId = isset($query['realm']) ? (int)$query['realm'] : 1;
-        if ($realmId <= 0 || !isset($realmMap[$realmId])) {
-            $realmId = !empty($realmMap) ? (int)spp_resolve_realm_id($realmMap) : 1;
-        }
-        $host = '';
-        $clientConnectionHost = '';
-        $realmCapabilities = spp_realm_capabilities($realmMap, $realmId);
-
-        if (!empty($args['client_connection_host'])) {
-            $clientConnectionHost = trim((string)$args['client_connection_host']);
-        } elseif (!empty($GLOBALS['clientConnectionHost'])) {
-            $clientConnectionHost = trim((string)$GLOBALS['clientConnectionHost']);
-        } else {
-            $configProtected = dirname(__DIR__, 2) . '/config/config-protected.php';
-            if (!empty($_SERVER['DOCUMENT_ROOT']) && is_file($configProtected)) {
-                require_once $configProtected;
-            }
-
-            if (isset($clientConnectionHost) && is_string($clientConnectionHost)) {
-                $clientConnectionHost = trim($clientConnectionHost);
-            }
-        }
-
-        $host = spp_server_realmlist_lookup_host($realmId);
-
-        if ($host === '' && $clientConnectionHost !== '') {
-            $host = $clientConnectionHost;
-        }
-
-        if ($host === '' && !empty($server['HTTP_HOST'])) {
-            $host = preg_replace('/:\d+$/', '', (string)$server['HTTP_HOST']);
-        }
-
-        if ($host === '') {
-            $host = (string)($server['SERVER_ADDR'] ?? '127.0.0.1');
-        }
-
-        $safeRealmId = max(1, $realmId);
-        $filename = ($safeRealmId === 1) ? 'realmlist.wtf' : ('realmlist-' . $safeRealmId . '.wtf');
+        $requestedChoiceId = isset($query['realm']) ? (int)$query['realm'] : 0;
+        $choice = spp_server_realmlist_choice($realmMap, $requestedChoiceId);
+        $choiceId = (int)($choice['public_choice_id'] ?? 0);
+        $realmCapabilities = !empty($choice['source_slot_id'])
+            ? spp_realm_capabilities($realmMap, (int)$choice['source_slot_id'])
+            : array();
+        $filenameId = max(1, $choiceId > 0 ? $choiceId : 1);
+        $filename = ($filenameId === 1) ? 'realmlist.wtf' : ('realmlist-' . $filenameId . '.wtf');
+        $host = trim((string)($choice['host'] ?? ''));
+        $isDownloadAvailable = $host !== '';
+        $statusCode = $isDownloadAvailable ? 200 : 409;
+        $body = $isDownloadAvailable
+            ? '# autogenerated by website' . "\r\n" . 'set realmlist ' . $host . "\r\n"
+            : '# autogenerated by website' . "\r\n" . '# realmlist download unavailable: missing authority host' . "\r\n";
 
         return array(
-            'realmId' => $realmId,
+            'realmId' => $choiceId,
+            'publicChoice' => $choice,
             'filename' => $filename,
             'contentType' => 'text/plain; charset=UTF-8',
             'contentDisposition' => 'attachment; filename="' . $filename . '"',
-            'body' => '# autogenerated by website' . "\r\n" . 'set realmlist ' . $host . "\r\n",
+            'body' => $body,
+            'statusCode' => $statusCode,
+            'isDownloadAvailable' => $isDownloadAvailable,
             'realmCapabilities' => $realmCapabilities,
         );
     }
@@ -167,6 +114,7 @@ if (!function_exists('spp_server_emit_realmlist_endpoint')) {
     {
         $state = spp_server_realmlist_endpoint_state($args);
 
+        http_response_code((int)($state['statusCode'] ?? 200));
         header('Content-Type: ' . $state['contentType']);
         header('Content-Disposition: ' . $state['contentDisposition']);
 

@@ -197,6 +197,492 @@ if (!function_exists('spp_realm_display_name')) {
     }
 }
 
+if (!function_exists('spp_public_realm_log')) {
+    function spp_public_realm_log(string $message): void
+    {
+        error_log('[public.realm] ' . $message);
+    }
+}
+
+if (!function_exists('spp_public_realm_enabled_runtime_map')) {
+    function spp_public_realm_enabled_runtime_map(array $realmMap = array()): array
+    {
+        $configuredRealmMap = (array)($GLOBALS['allConfiguredRealmDbMap'] ?? $GLOBALS['fallbackConfiguredRealmDbMap'] ?? $realmMap);
+        if (empty($configuredRealmMap)) {
+            $configuredRealmMap = $realmMap;
+        }
+
+        $catalog = function_exists('spp_realm_runtime_catalog')
+            ? (array)spp_realm_runtime_catalog($configuredRealmMap)
+            : array();
+        $dbBackedRealmMap = (array)($catalog['realm_db_map'] ?? array());
+        if (empty($dbBackedRealmMap)) {
+            $dbBackedRealmMap = $realmMap;
+        }
+
+        $runtimeState = function_exists('spp_realm_runtime_state')
+            ? (array)spp_realm_runtime_state($dbBackedRealmMap)
+            : array('enabled_realm_ids' => array_keys($dbBackedRealmMap));
+        $enabledRealmIds = array_values(array_map('intval', (array)($runtimeState['enabled_realm_ids'] ?? array())));
+
+        $enabledRealmMap = array();
+        foreach ($enabledRealmIds as $realmId) {
+            if ($realmId > 0 && isset($dbBackedRealmMap[$realmId]) && is_array($dbBackedRealmMap[$realmId])) {
+                $enabledRealmMap[$realmId] = $dbBackedRealmMap[$realmId];
+            }
+        }
+
+        ksort($enabledRealmMap, SORT_NUMERIC);
+
+        return $enabledRealmMap;
+    }
+}
+
+if (!function_exists('spp_public_realm_definition_label')) {
+    function spp_public_realm_definition_label(int $realmId, array $realmInfo = array()): string
+    {
+        $label = spp_realm_display_name_from_info($realmInfo);
+        if ($label === '') {
+            $label = spp_realm_display_name_from_derived($realmId, $realmInfo);
+        }
+
+        if ($label !== '') {
+            return $label;
+        }
+
+        return sprintf('Realm %d', max(0, $realmId));
+    }
+}
+
+if (!function_exists('spp_public_realm_name_candidates')) {
+    function spp_public_realm_name_candidates(array $choice): array
+    {
+        $candidates = array();
+        $register = static function ($value) use (&$candidates): void {
+            $value = trim((string)$value);
+            if ($value === '' || spp_realm_display_name_is_placeholder($value)) {
+                return;
+            }
+
+            $key = strtolower(preg_replace('/[^a-z0-9]+/', '', $value));
+            if ($key !== '') {
+                $candidates[$key] = $value;
+            }
+        };
+
+        $register($choice['label'] ?? '');
+        foreach ((array)($choice['source_slot_ids'] ?? array()) as $slotId) {
+            $slotId = (int)$slotId;
+            $slotInfo = (array)($choice['source_slots'][$slotId] ?? array());
+            $register($slotInfo['name'] ?? '');
+            $register(spp_public_realm_definition_label($slotId, $slotInfo));
+        }
+
+        return array_values($candidates);
+    }
+}
+
+if (!function_exists('spp_public_realm_choice_key')) {
+    function spp_public_realm_choice_key(array $realmInfo, int $realmId): string
+    {
+        $worldDb = strtolower(trim((string)($realmInfo['world'] ?? '')));
+        if ($worldDb !== '') {
+            return 'world:' . $worldDb;
+        }
+
+        $charsDb = strtolower(trim((string)($realmInfo['chars'] ?? '')));
+        if ($charsDb !== '') {
+            return 'chars:' . $charsDb;
+        }
+
+        return 'slot:' . max(0, $realmId);
+    }
+}
+
+if (!function_exists('spp_public_realm_authority_slot_id')) {
+    function spp_public_realm_authority_slot_id(array $enabledRealmMap): int
+    {
+        if (empty($enabledRealmMap)) {
+            return 0;
+        }
+
+        $runtimeState = function_exists('spp_realm_runtime_state')
+            ? (array)spp_realm_runtime_state($enabledRealmMap)
+            : array();
+        $defaultRealmId = (int)($runtimeState['default_realm_id'] ?? 0);
+
+        // Authority selection is deterministic: prefer the enabled runtime default slot,
+        // then fall back to the lowest enabled slot id with a usable realmd name.
+        if ($defaultRealmId > 0 && !empty($enabledRealmMap[$defaultRealmId]['realmd'])) {
+            return $defaultRealmId;
+        }
+
+        $realmIds = array_values(array_map('intval', array_keys($enabledRealmMap)));
+        sort($realmIds, SORT_NUMERIC);
+        foreach ($realmIds as $realmId) {
+            if ($realmId > 0 && !empty($enabledRealmMap[$realmId]['realmd'])) {
+                return $realmId;
+            }
+        }
+
+        return !empty($realmIds) ? (int)$realmIds[0] : 0;
+    }
+}
+
+if (!function_exists('spp_public_realm_authority_rows')) {
+    function spp_public_realm_authority_rows(int $authoritySlotId): array
+    {
+        $rows = array();
+        if ($authoritySlotId <= 0 || !function_exists('spp_get_pdo')) {
+            return $rows;
+        }
+
+        try {
+            $pdo = spp_get_pdo('realmd', $authoritySlotId);
+            if (!$pdo instanceof PDO) {
+                return $rows;
+            }
+
+            $stmt = $pdo->query('SELECT * FROM `realmlist` ORDER BY `id` ASC');
+            foreach (($stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: array()) : array()) as $row) {
+                $rowId = (int)($row['id'] ?? 0);
+                if ($rowId > 0) {
+                    $rows[$rowId] = $row;
+                }
+            }
+        } catch (Throwable $e) {
+            spp_public_realm_log('authority realmd query failed for slot ' . $authoritySlotId . ': ' . $e->getMessage());
+        }
+
+        return $rows;
+    }
+}
+
+if (!function_exists('spp_public_realm_rows_for_realmd_db')) {
+    function spp_public_realm_rows_for_realmd_db(string $realmdDbName): array
+    {
+        static $cache = array();
+
+        $realmdDbName = trim($realmdDbName);
+        if ($realmdDbName === '') {
+            return array();
+        }
+        if (isset($cache[$realmdDbName])) {
+            return $cache[$realmdDbName];
+        }
+
+        $rows = array();
+        $db = (array)($GLOBALS['db'] ?? array());
+        if (empty($db['host']) || empty($db['user'])) {
+            return $cache[$realmdDbName] = $rows;
+        }
+
+        try {
+            $pdo = new PDO(
+                'mysql:host=' . (string)$db['host'] . ';port=' . (int)($db['port'] ?? 3306) . ';dbname=' . $realmdDbName . ';charset=utf8mb4',
+                (string)$db['user'],
+                (string)($db['pass'] ?? ''),
+                array(
+                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+                    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+                )
+            );
+            $stmt = $pdo->query('SELECT * FROM `realmlist` ORDER BY `id` ASC');
+            foreach (($stmt ? ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: array()) : array()) as $row) {
+                $rowId = (int)($row['id'] ?? 0);
+                if ($rowId > 0) {
+                    $rows[$rowId] = $row;
+                }
+            }
+        } catch (Throwable $e) {
+            spp_public_realm_log('realmd row query failed for db ' . $realmdDbName . ': ' . $e->getMessage());
+        }
+
+        return $cache[$realmdDbName] = $rows;
+    }
+}
+
+if (!function_exists('spp_public_realm_match_realmlist_row')) {
+    function spp_public_realm_match_realmlist_row(array $choice, array $authorityRows): array
+    {
+        $slotIds = array_values(array_map('intval', (array)($choice['source_slot_ids'] ?? array())));
+        sort($slotIds, SORT_NUMERIC);
+        foreach ($slotIds as $slotId) {
+            if ($slotId > 0 && isset($authorityRows[$slotId])) {
+                return array(
+                    'row' => (array)$authorityRows[$slotId],
+                    'reason' => 'slot-id',
+                );
+            }
+        }
+
+        $normalizedNames = array();
+        foreach (spp_public_realm_name_candidates($choice) as $candidateName) {
+            $normalizedNames[strtolower(preg_replace('/[^a-z0-9]+/', '', (string)$candidateName))] = true;
+        }
+
+        $definitionAddress = trim((string)($choice['configured_address'] ?? ''));
+        $definitionPort = (int)($choice['configured_port'] ?? 0);
+        $addressMatches = array();
+        $nameMatches = array();
+
+        foreach ($authorityRows as $row) {
+            $row = (array)$row;
+            $rowId = (int)($row['id'] ?? 0);
+            $rowAddress = trim((string)($row['address'] ?? ''));
+            $rowPort = (int)($row['port'] ?? 0);
+            $rowNameKey = strtolower(preg_replace('/[^a-z0-9]+/', '', trim((string)($row['name'] ?? ''))));
+
+            if ($definitionAddress !== '' && $rowAddress !== '' && strcasecmp($definitionAddress, $rowAddress) === 0) {
+                if ($definitionPort <= 0 || $definitionPort === $rowPort) {
+                    $addressMatches[$rowId] = $row;
+                }
+            }
+
+            if ($rowNameKey !== '' && isset($normalizedNames[$rowNameKey])) {
+                $nameMatches[$rowId] = $row;
+            }
+        }
+
+        if (count($addressMatches) === 1) {
+            $row = reset($addressMatches);
+            return array(
+                'row' => (array)$row,
+                'reason' => 'address',
+            );
+        }
+        if (count($addressMatches) > 1) {
+            spp_public_realm_log('ambiguous authority address match for public choice ' . (int)($choice['public_choice_id'] ?? 0));
+            return array('row' => array(), 'reason' => 'ambiguous-address');
+        }
+
+        if (count($nameMatches) === 1) {
+            $row = reset($nameMatches);
+            return array(
+                'row' => (array)$row,
+                'reason' => 'name',
+            );
+        }
+        if (count($nameMatches) > 1) {
+            spp_public_realm_log('ambiguous authority name match for public choice ' . (int)($choice['public_choice_id'] ?? 0));
+            return array('row' => array(), 'reason' => 'ambiguous-name');
+        }
+
+        return array('row' => array(), 'reason' => 'missing');
+    }
+}
+
+if (!function_exists('spp_public_realm_choices')) {
+    function spp_public_realm_choices(array $realmMap = array()): array
+    {
+        static $cache = array();
+
+        $enabledRealmMap = spp_public_realm_enabled_runtime_map($realmMap);
+        $cacheKey = md5(json_encode($enabledRealmMap));
+        if (isset($cache[$cacheKey])) {
+            return $cache[$cacheKey];
+        }
+
+        $authoritySlotId = spp_public_realm_authority_slot_id($enabledRealmMap);
+        $authorityRealmdDb = trim((string)($enabledRealmMap[$authoritySlotId]['realmd'] ?? ''));
+        spp_public_realm_log('chosen authority realmd slot=' . $authoritySlotId . ' db=' . ($authorityRealmdDb !== '' ? $authorityRealmdDb : '[missing]'));
+
+        $authorityRows = spp_public_realm_authority_rows($authoritySlotId);
+        $groupedChoices = array();
+
+        foreach ($enabledRealmMap as $realmId => $realmInfo) {
+            $realmId = (int)$realmId;
+            if ($realmId <= 0 || !is_array($realmInfo)) {
+                continue;
+            }
+
+            $choiceKey = spp_public_realm_choice_key($realmInfo, $realmId);
+            if (!isset($groupedChoices[$choiceKey])) {
+                $groupedChoices[$choiceKey] = array(
+                    'public_choice_id' => $realmId,
+                    'source_slot_id' => $realmId,
+                    'source_slot_ids' => array($realmId),
+                    'source_slots' => array($realmId => $realmInfo),
+                    'world_db' => trim((string)($realmInfo['world'] ?? '')),
+                    'chars_db' => trim((string)($realmInfo['chars'] ?? '')),
+                    'configured_address' => trim((string)($realmInfo['address'] ?? '')),
+                    'configured_port' => (int)($realmInfo['port'] ?? 0),
+                    'configured_realmd_db' => trim((string)($realmInfo['realmd'] ?? '')),
+                    'label' => spp_public_realm_definition_label($realmId, $realmInfo),
+                );
+                continue;
+            }
+
+            $existing = &$groupedChoices[$choiceKey];
+            $existing['source_slot_ids'][] = $realmId;
+            $existing['source_slots'][$realmId] = $realmInfo;
+            if ($realmId < (int)$existing['public_choice_id']) {
+                $existing['public_choice_id'] = $realmId;
+                $existing['source_slot_id'] = $realmId;
+                $existing['chars_db'] = trim((string)($realmInfo['chars'] ?? ''));
+                $existing['configured_address'] = trim((string)($realmInfo['address'] ?? ''));
+                $existing['configured_port'] = (int)($realmInfo['port'] ?? 0);
+                $existing['configured_realmd_db'] = trim((string)($realmInfo['realmd'] ?? ''));
+                $existing['label'] = spp_public_realm_definition_label($realmId, $realmInfo);
+            }
+            spp_public_realm_log(
+                'collapsed duplicate runtime slot ' . $realmId .
+                ' into public choice ' . (int)$existing['public_choice_id'] .
+                ' for world=' . trim((string)($realmInfo['world'] ?? ''))
+            );
+            unset($existing);
+        }
+
+        $choices = array();
+        foreach ($groupedChoices as $choiceKey => $choice) {
+            sort($choice['source_slot_ids'], SORT_NUMERIC);
+
+            $match = spp_public_realm_match_realmlist_row($choice, $authorityRows);
+            $row = (array)($match['row'] ?? array());
+            $metadataRealmdDb = $authorityRealmdDb;
+            $metadataSource = 'authority';
+
+            if (empty($row)) {
+                $sourceRealmdDbs = array();
+                foreach ((array)($choice['source_slots'] ?? array()) as $slotInfo) {
+                    $sourceRealmdDb = trim((string)($slotInfo['realmd'] ?? ''));
+                    if ($sourceRealmdDb !== '') {
+                        $sourceRealmdDbs[$sourceRealmdDb] = $sourceRealmdDb;
+                    }
+                }
+
+                if (count($sourceRealmdDbs) === 1) {
+                    $fallbackRealmdDb = (string)reset($sourceRealmdDbs);
+                    $isSeparateStackChoice = false;
+                    foreach ((array)($choice['source_slot_ids'] ?? array()) as $slotId) {
+                        $slotId = (int)$slotId;
+                        $slotExpansion = strtolower(trim((string)(function_exists('spp_realm_to_expansion_key') ? spp_realm_to_expansion_key($slotId) : '')));
+                        if ($slotExpansion === 'vmangos') {
+                            $isSeparateStackChoice = true;
+                            break;
+                        }
+                    }
+
+                    // Keep shared cMaNGOS realms on the canonical/default realmd stack.
+                    // The source-realdm fallback is reserved for isolated stacks such as vMaNGOS.
+                    if ($isSeparateStackChoice && $fallbackRealmdDb !== '' && strcasecmp($fallbackRealmdDb, $authorityRealmdDb) !== 0) {
+                        $fallbackRows = spp_public_realm_rows_for_realmd_db($fallbackRealmdDb);
+                        $fallbackMatch = spp_public_realm_match_realmlist_row($choice, $fallbackRows);
+                        $fallbackRow = (array)($fallbackMatch['row'] ?? array());
+                        if (!empty($fallbackRow)) {
+                            $row = $fallbackRow;
+                            $match = $fallbackMatch;
+                            $metadataRealmdDb = $fallbackRealmdDb;
+                            $metadataSource = 'source-realmd-fallback';
+                            spp_public_realm_log(
+                                'public choice ' . (int)$choice['public_choice_id'] .
+                                ' matched via source realmd fallback db=' . $fallbackRealmdDb
+                            );
+                        }
+                    }
+                }
+            }
+
+            $rowId = (int)($row['id'] ?? 0);
+            $host = trim((string)($row['address'] ?? ''));
+            $port = (int)($row['port'] ?? 0);
+            $missingReasons = array();
+
+            if ($metadataRealmdDb === '') {
+                $missingReasons[] = 'missing-authority-realmd';
+            }
+            if ($rowId <= 0) {
+                $missingReasons[] = 'missing-authority-row';
+                spp_public_realm_log('public choice ' . (int)$choice['public_choice_id'] . ' had no authority row match');
+            }
+            if ($host === '') {
+                $missingReasons[] = 'missing-host';
+            }
+
+            $label = trim((string)($row['name'] ?? ''));
+            if ($label === '' || spp_realm_display_name_is_placeholder($label)) {
+                $label = (string)$choice['label'];
+            }
+
+            $choices[(int)$choice['public_choice_id']] = array(
+                'public_choice_id' => (int)$choice['public_choice_id'],
+                'realm_id' => (int)$choice['public_choice_id'],
+                'label' => $label,
+                'world_db' => (string)$choice['world_db'],
+                'chars_db' => (string)$choice['chars_db'],
+                'authority_realmd_db' => $metadataRealmdDb,
+                'authority_slot_id' => $authoritySlotId,
+                'matched_realmlist_row_id' => $rowId > 0 ? $rowId : null,
+                'matched_realmlist_row' => !empty($row) ? $row : null,
+                'match_reason' => (string)($match['reason'] ?? 'missing'),
+                'metadata_source' => $metadataSource,
+                'address' => $host,
+                'host' => $host,
+                'port' => $port,
+                'icon' => (int)($row['icon'] ?? 0),
+                'realmflags' => (int)($row['realmflags'] ?? 0),
+                'timezone' => (int)($row['timezone'] ?? 0),
+                'allowed_security' => (int)($row['allowedSecurityLevel'] ?? 0),
+                'population' => (string)($row['population'] ?? ''),
+                'realmbuilds' => (string)($row['realmbuilds'] ?? ''),
+                'metadata_complete' => empty($missingReasons),
+                'metadata_state' => empty($missingReasons) ? 'complete' : 'incomplete',
+                'missing_reasons' => $missingReasons,
+                'is_download_available' => $host !== '',
+                'source_slot_id' => (int)$choice['source_slot_id'],
+                'source_slot_ids' => $choice['source_slot_ids'],
+                'source_slots' => $choice['source_slots'],
+                'public_choice_key' => $choiceKey,
+            );
+        }
+
+        ksort($choices, SORT_NUMERIC);
+
+        return $cache[$cacheKey] = array(
+            'authority_slot_id' => $authoritySlotId,
+            'authority_realmd_db' => $authorityRealmdDb,
+            'authority_available' => $authoritySlotId > 0 && $authorityRealmdDb !== '',
+            'authority_rows' => $authorityRows,
+            'choices' => $choices,
+        );
+    }
+}
+
+if (!function_exists('spp_public_realm_choice')) {
+    function spp_public_realm_choice(array $realmMap = array(), int $requestedChoiceId = 0): ?array
+    {
+        $resolved = spp_public_realm_choices($realmMap);
+        $choices = (array)($resolved['choices'] ?? array());
+        if (empty($choices)) {
+            return null;
+        }
+
+        if ($requestedChoiceId > 0) {
+            if (isset($choices[$requestedChoiceId])) {
+                return $choices[$requestedChoiceId];
+            }
+
+            foreach ($choices as $choice) {
+                if (in_array($requestedChoiceId, array_map('intval', (array)($choice['source_slot_ids'] ?? array())), true)) {
+                    return $choice;
+                }
+            }
+        }
+
+        $authoritySlotId = (int)($resolved['authority_slot_id'] ?? 0);
+        if ($authoritySlotId > 0) {
+            foreach ($choices as $choice) {
+                if (in_array($authoritySlotId, array_map('intval', (array)($choice['source_slot_ids'] ?? array())), true)) {
+                    return $choice;
+                }
+            }
+        }
+
+        $firstChoice = reset($choices);
+        return is_array($firstChoice) ? $firstChoice : null;
+    }
+}
+
 if (!function_exists('spp_forum_detect_realm_hint')) {
     function spp_forum_detect_realm_hint(array $forum, int $fallbackRealmId = 0): int
     {

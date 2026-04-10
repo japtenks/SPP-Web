@@ -72,10 +72,12 @@ if (!function_exists('spp_server_downloads_load_page_state')) {
         $get = (array)($args['get'] ?? $_GET);
         $siteRoot = dirname(__DIR__, 2);
         $downloadsRoot = $siteRoot . DIRECTORY_SEPARATOR . 'downloads';
-        $requestedRealmId = isset($get['realm']) ? (int)$get['realm'] : 0;
-        $downloadsRealmId = !empty($realmMap) ? (int)spp_resolve_realm_id($realmMap, $requestedRealmId > 0 ? $requestedRealmId : null) : 1;
-        $realmCapabilities = spp_realm_capabilities($realmMap, $downloadsRealmId);
-        $realmlistHref = 'index.php?n=server&sub=realmlist&nobody=1&realm=' . $downloadsRealmId;
+        $requestedChoiceId = isset($get['realm']) ? (int)$get['realm'] : 0;
+        $choice = spp_server_realmlist_choice($realmMap, $requestedChoiceId);
+        $downloadsRealmId = (int)($choice['public_choice_id'] ?? 0);
+        $sourceSlotId = (int)($choice['source_slot_id'] ?? $downloadsRealmId);
+        $realmCapabilities = $sourceSlotId > 0 ? spp_realm_capabilities($realmMap, $sourceSlotId) : array();
+        $realmlistHref = 'index.php?n=server&sub=realmlist&nobody=1&realm=' . max(1, $downloadsRealmId);
         $realmlistOptions = spp_server_realmlist_download_options($realmMap, $downloadsRealmId);
 
         $sectionDefinitions = array(
@@ -104,6 +106,9 @@ if (!function_exists('spp_server_downloads_load_page_state')) {
             'downloadsRealmId' => $downloadsRealmId,
             'downloadsRealmlistHref' => $realmlistHref,
             'downloadsRealmlistOptions' => $realmlistOptions,
+            'downloadsRealmlistDownloadAvailable' => !empty($choice['is_download_available']),
+            'downloadsRealmlistMetadataState' => (string)($choice['metadata_state'] ?? 'incomplete'),
+            'downloadsRealmlistMissingReasons' => (array)($choice['missing_reasons'] ?? array()),
             'downloadsSections' => $downloadsSections,
             'realmCapabilities' => $realmCapabilities,
             'pathway_info' => array(
