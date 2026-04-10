@@ -1,46 +1,55 @@
+# Local/private config
 config/config-protected.local.php
+.local/
+tmp/
+
+# Generated logs
 core/logs/error_log.txt
-core/cache/portraits/**
-!core/cache/portraits/
-!core/cache/portraits/.gitkeep
-core/cache/sql_backups/**
-!core/cache/sql_backups/
-!core/cache/sql_backups/.gitkeep
-storage/backups/
+/config/storage/logs
+storage/logs/**
+!storage/logs/
+!storage/logs/.gitkeep
+
+# Generated caches
+/config/storage/cache
+/core/cache
 storage/cache/**
 !storage/cache/
 !storage/cache/.gitkeep
 !storage/cache/sites/
 !storage/cache/sites/.gitkeep
-storage/logs/**
-!storage/logs/
-!storage/logs/.gitkeep
 templates/offlike/cache/**
 !templates/offlike/cache/
 !templates/offlike/cache/.gitkeep
 !templates/offlike/cache/portraits/
 !templates/offlike/cache/portraits/.gitkeep
+
+# Generated backups and exports
+storage/backups/
 jsons/guilds/**
 !jsons/guilds/
 !jsons/guilds/.gitkeep
-.svn/
-*.spp
-ToS.html
-docs/release/
-.local/
-tmp/
+
+# User uploads
 uploads/**
 !uploads/
 !uploads/avatars/
 !uploads/avatars/.gitkeep
-/config/storage/logs
-/config/storage/cache
-/core/cache
-/core/cache_class/test1.php
-/core/cache_class/test2.php
+
+# Optional local downloads
 /downloads/addons/**
 !/downloads/addons/
 !/downloads/addons/.gitkeep
+
+# Local-only tooling artifacts
+/core/cache_class/test1.php
+/core/cache_class/test2.php
+.svn/
+*.spp
+ToS.html
+docs/release/
+
+# Large/generated template assets
 /templates/offlike/images/forum/bkup
 /templates/offlike/images/armory/icons/64x64
 /templates/offlike/images/portraits
