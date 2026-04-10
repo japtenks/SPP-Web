@@ -31,6 +31,11 @@ if (!function_exists('spp_account_register_build_state')) {
 
 if (!function_exists('spp_account_register_resolve_realmlist_host')) {
     function spp_account_register_resolve_realmlist_host($realmId) {
+        $configuredHost = trim((string)($GLOBALS['clientConnectionHost'] ?? ''));
+        if ($configuredHost !== '') {
+            return $configuredHost;
+        }
+
         $host = preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
         if ($host === '') {
             $host = (string)($_SERVER['SERVER_ADDR'] ?? '127.0.0.1');

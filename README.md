@@ -43,9 +43,11 @@ You can install this site by cloning the repository or by downloading the releas
    - `default_realm_id`
    - Database names for `realmd`, `world`, `chars`, and `armory`
    - Database host/port if your MySQL service is not using the default SPP values
+   - `clientConnectionHost` for the address players should use in `realmlist.wtf`
    - SOAP port/credentials if you plan to use SOAP-backed admin features
 
    `default_realm_id` must match the realm/realmlist entry your site should use.
+   `clientConnectionHost` is the value the website uses for the generated `realmlist.wtf` downloads and the on-page `set realmlist ...` instructions shown to players.
    
 ```
     'genericRuntime' => [
@@ -54,6 +56,7 @@ You can install this site by cloning the repository or by downloading the releas
     'realmRuntime' => [
         'default_realm_id' => 1,
     ],
+    'clientConnectionHost' => '192.168.1.42',
     'realmDbMap' => [
         1 => [
             'realmd' => 'tbcrealmd',

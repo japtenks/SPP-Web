@@ -583,7 +583,9 @@ if (!function_exists('spp_public_realm_choices')) {
             }
 
             $rowId = (int)($row['id'] ?? 0);
-            $host = trim((string)($row['address'] ?? ''));
+            $configuredClientHost = trim((string)($GLOBALS['clientConnectionHost'] ?? ''));
+            $rowHost = trim((string)($row['address'] ?? ''));
+            $host = $configuredClientHost !== '' ? $configuredClientHost : $rowHost;
             $port = (int)($row['port'] ?? 0);
             $missingReasons = array();
 
