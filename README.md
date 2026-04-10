@@ -2,6 +2,8 @@
 
 Beta release of the redesigned and modernized website for SPP-based installs.
 
+Current packaged release: `Beta v0.2`
+
 Supported targets:
 
 - Windows SPP release: [celguar/spp-classics-cmangos](https://github.com/celguar/spp-classics-cmangos)
@@ -72,6 +74,12 @@ SOAP.Enabled = 1
    - `Console.Enable = 1` if your environment depends on console access or console-driven controls
 
 6. Make sure the database server is running and reachable from the website.
+   For this install, MySQL/MariaDB connections should be made with SSL disabled. Older SPP-style MySQL setups on this stack may fail or hang during connection attempts unless SSL is explicitly disabled on the client side.
+   Current live DB reference for this install:
+   - Host: `192.168.1.47`
+   - Port: `3306`
+   - User: `mangos`
+   - Password: `mangos`
 7. From the `website` folder, run the SQL updates:
    - Apply the armory/world-side patch files in `db-updates/01_armory_world_patch` in this order:
      - `10_dbc_spellicon_delta.sql`
@@ -85,6 +93,27 @@ SOAP.Enabled = 1
    - `db-updates/04_populationdirector.sql` if you want the population director features
 
 After the patches are applied, the website should be available for guest access.
+
+## Windows PATH Guidance
+
+Some website tools and patch workflows work best when the default SPP PHP and MySQL binaries are available on `PATH`.
+
+For a default SPP install, you can use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\add_spp_tools_to_path.ps1
+```
+
+That helper adds the usual SPP tool locations to your user `PATH`:
+
+- `Tools\php7`
+- `Database\bin`
+
+Notes:
+
+- `php` on `PATH` is useful for website helper scripts such as identity backfill and bot event processing
+- `mysql` on `PATH` is useful if you want to run the SQL patch files from a terminal instead of importing them manually
+- Open a new PowerShell window after running the helper if you want the updated `PATH` outside the current session
 
 ## Installation On Proxmox
 
@@ -140,6 +169,8 @@ Useful scripts in `tools/` include:
 ## Windows SPP Notes And Troubleshooting
 
 - If the site loads but shows the wrong realm, missing characters, or empty armory data, check `expansion`, `default_realm_id`, database names, and MySQL port first.
+- If database connection attempts only work after retrying with SSL disabled, keep SSL disabled for MySQL clients on this install. This is expected for this older SPP/MySQL environment.
+- Current live DB reference on this install is `192.168.1.47:3306` with `mangos/mangos`.
 - If guest pages work but admin actions do not, verify SOAP is enabled and the configured SOAP port and credentials are correct.
 - If pages render strangely after replacing the site, stop the launcher and clear generated cache/log files before trying again.
 - If you replaced `Server\website` while the launcher or bundled web server was still running, restart the stack and re-check the copied files.

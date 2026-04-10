@@ -45,7 +45,7 @@ return [
         'max_avatar_file' => 102400,
         'max_avatar_size' => '64x64',
         'site_cookie' => 'sppArmory',
-        'site_title' => 'SPP-Web Beta - v0.1',
+        'site_title' => 'SPP-Web Beta v0.2',
         'smiles_path' => 'images/smiles/',
     ],
     'armoryRuntime' => [

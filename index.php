@@ -4,7 +4,7 @@ require_once('config/config-helper.php');
 require_once('app/bootstrap/request-runtime.php');
 
 // Current Revision
-$rev = "58";
+$rev = "beta_v0.2";
 
 $sessionCookieOptions = spp_bootstrap_session_cookie_options();
 if (defined('PHP_VERSION_ID') && PHP_VERSION_ID >= 70300) {
@@ -266,7 +266,7 @@ if ( $mangos['db_host'] == '127.0.0.1' && $mangos['db_port'] == '3306' && $mango
 	'username' && $mangos['db_password'] == 'password' && $mangos['db_name'] ==
 	'DBName' )
 {
-	echo "Please read README_HOWTO.txt, This is a error message btw. You must remember to setup the WORLD database information in the realm.realmlist database! :)<br />Edit the `dbinfo` to: World database info: username;password;3306;127.0.0.1;DBName" ;
+	echo "Setup error: the WORLD database connection in realmd.realmlist.dbinfo is still using placeholder values.<br />Update dbinfo to the correct format: username;password;3306;127.0.0.1;DBName" ;
 	die ;
 }
 
