@@ -12,7 +12,7 @@ return [
         'soap' => [
             'port' => 7878,
             'user' => '',
-            'pass' => '',
+            'pass' => '', 
         ],
     ],
     'genericRuntime' => [

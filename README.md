@@ -22,22 +22,21 @@ You can install this site by cloning the repository or by downloading the releas
    Uncomment and adjust to your setup.
    0=Classic, 1=TBC, 2=WOTLK
    realm ID must match realmd.conf/realmlist entry
-   ```
-   	//remove the comments if your setup is for TBC
-    // 'genericRuntime' => [
-        // 'expansion' => 1, 
-    // ],
-    // 'realmRuntime' => [
-        // 'default_realm_id' => 1,
-    // ],
-    // 'realmDbMap' => [
-        // 1 => [
-            // 'realmd' => 'tbcrealmd',
-            // 'world' => 'tbcmangos',
-            // 'chars' => 'tbccharacters',
-            // 'armory' => 'tbcarmory',
-   ```
    
+```
+    'genericRuntime' => [
+        'expansion' => 1,
+    ],
+    'realmRuntime' => [
+        'default_realm_id' => 1,
+    ],
+    'realmDbMap' => [
+        1 => [
+            'realmd' => 'tbcrealmd',
+            'world' => 'tbcmangos',
+            'chars' => 'tbccharacters',
+            'armory' => 'tbcarmory',
+```
    
 6. In `mangos.conf`, update these values near the end of the file:
 
