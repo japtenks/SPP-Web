@@ -5,7 +5,7 @@ builddiv_start(1, 'Downloads', 0);
   <section class="feature-hero">
     <p class="feature-eyebrow">Hosted Files</p>
     <h2 class="feature-title">Downloads and client extras in one place.</h2>
-    <p class="feature-copy">This page is for hosted client files. The main target is addon packs from the <a class="feature-link" href="https://github.com/celguar/spp-classics-cmangos/tree/master/Addons" target="_blank" rel="noopener noreferrer">spp-classics-cmangos</a> repo, but you can also drop in launchers, patches, PDFs, or other curated files.</p>
+    <p class="feature-copy">This page is for hosted client files. Addon bundles now come from the <a class="feature-link" href="https://github.com/japtenks/spp-cmangos-prox/releases/tag/assets" target="_blank" rel="noopener noreferrer">spp-cmangos-prox GitHub assets release</a>, while tools, patches, PDFs, and other curated files can still be hosted here.</p>
     <div class="feature-actions">
       <?php if (!empty($downloadsRealmlistOptions) && count((array)$downloadsRealmlistOptions) > 1): ?>
         <?php foreach ((array)$downloadsRealmlistOptions as $realmlistOption): ?>
@@ -65,7 +65,7 @@ builddiv_start(1, 'Downloads', 0);
               <div class="download-item">
                 <a class="feature-link" href="<?php echo htmlspecialchars($file['href']); ?>"><?php echo htmlspecialchars($file['name']); ?></a>
                 <span class="download-badge feature-badge"><?php echo htmlspecialchars($file['ext']); ?></span>
-                <span class="download-meta"><?php echo htmlspecialchars($file['size']); ?><?php if (!empty($file['modified'])) echo ' | ' . htmlspecialchars($file['modified']); ?></span>
+                <span class="download-meta"><?php echo htmlspecialchars($file['size']); ?><?php if (!empty($file['note'])) echo ' | ' . htmlspecialchars($file['note']); ?><?php if (!empty($file['modified'])) echo ' | ' . htmlspecialchars($file['modified']); ?></span>
               </div>
             <?php endforeach; ?>
           </div>

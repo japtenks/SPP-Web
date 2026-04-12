@@ -65,6 +65,75 @@ if (!function_exists('spp_downloads_collect_files')) {
     }
 }
 
+if (!function_exists('spp_downloads_addon_release_manifest')) {
+    function spp_downloads_addon_release_manifest(): array
+    {
+        return array(
+            'classic' => array(
+                'name' => 'addons-vanilla-1.12.zip',
+                'href' => 'https://github.com/japtenks/spp-cmangos-prox/releases/download/assets/addons-vanilla-1.12.zip',
+                'size' => 'GitHub Release Asset',
+                'modified' => '',
+                'ext' => 'ZIP',
+                'expansion_key' => 'classic',
+                'expansion_label' => 'Classic',
+            ),
+            'tbc' => array(
+                'name' => 'addons-tbc-2.4.3.zip',
+                'href' => 'https://github.com/japtenks/spp-cmangos-prox/releases/download/assets/addons-tbc-2.4.3.zip',
+                'size' => 'GitHub Release Asset',
+                'modified' => '',
+                'ext' => 'ZIP',
+                'expansion_key' => 'tbc',
+                'expansion_label' => 'TBC',
+            ),
+            'wotlk' => array(
+                'name' => 'addon-3.3.5a.zip',
+                'href' => 'https://github.com/japtenks/spp-cmangos-prox/releases/download/assets/addon-3.3.5a.zip',
+                'size' => 'GitHub Release Asset',
+                'modified' => '',
+                'ext' => 'ZIP',
+                'expansion_key' => 'wotlk',
+                'expansion_label' => 'WotLK / 3.3.5a',
+            ),
+        );
+    }
+}
+
+if (!function_exists('spp_downloads_addon_files_for_expansion')) {
+    function spp_downloads_addon_files_for_expansion(string $selectedExpansionKey = ''): array
+    {
+        $manifest = spp_downloads_addon_release_manifest();
+        $normalizedExpansionKey = strtolower(trim($selectedExpansionKey));
+        if ($normalizedExpansionKey === 'vanilla') {
+            $normalizedExpansionKey = 'classic';
+        } elseif ($normalizedExpansionKey === '3.3.5a') {
+            $normalizedExpansionKey = 'wotlk';
+        }
+
+        $order = array('classic', 'tbc', 'wotlk');
+        if ($normalizedExpansionKey !== '' && in_array($normalizedExpansionKey, $order, true)) {
+            $order = array_values(array_unique(array_merge(array($normalizedExpansionKey), $order)));
+        }
+
+        $items = array();
+        foreach ($order as $expansionKey) {
+            if (empty($manifest[$expansionKey])) {
+                continue;
+            }
+
+            $item = $manifest[$expansionKey];
+            $item['is_recommended'] = $expansionKey === $normalizedExpansionKey;
+            $item['note'] = $item['is_recommended']
+                ? ('Recommended for ' . $item['expansion_label'])
+                : ('Use for ' . $item['expansion_label']);
+            $items[] = $item;
+        }
+
+        return $items;
+    }
+}
+
 if (!function_exists('spp_server_downloads_load_page_state')) {
     function spp_server_downloads_load_page_state(array $args = array()): array
     {
@@ -77,15 +146,17 @@ if (!function_exists('spp_server_downloads_load_page_state')) {
         $downloadsRealmId = (int)($choice['public_choice_id'] ?? 0);
         $sourceSlotId = (int)($choice['source_slot_id'] ?? $downloadsRealmId);
         $realmCapabilities = $sourceSlotId > 0 ? spp_realm_capabilities($realmMap, $sourceSlotId) : array();
+        $selectedExpansionKey = (string)($realmCapabilities['expansion_key'] ?? '');
         $realmlistHref = 'index.php?n=server&sub=realmlist&nobody=1&realm=' . max(1, $downloadsRealmId);
         $realmlistOptions = spp_server_realmlist_download_options($realmMap, $downloadsRealmId);
 
         $sectionDefinitions = array(
             'addons' => array(
-                'title' => 'Addon Packs',
-                'description' => 'Local copies of addon zips and folders. Start by copying files here.',
-                'web' => '/downloads/addons',
-                'path' => $downloadsRoot . DIRECTORY_SEPARATOR . 'addons',
+                'title' => 'Addon Bundles',
+                'description' => 'Expansion-matched bundled addon archives hosted on the GitHub assets release.',
+                'web' => 'https://github.com/japtenks/spp-cmangos-prox/releases/tag/assets',
+                'path' => '',
+                'files' => spp_downloads_addon_files_for_expansion($selectedExpansionKey),
             ),
             'tools' => array(
                 'title' => 'Tools & Utilities',
@@ -97,7 +168,9 @@ if (!function_exists('spp_server_downloads_load_page_state')) {
 
         $downloadsSections = array();
         foreach ($sectionDefinitions as $key => $section) {
-            $section['files'] = spp_downloads_collect_files($section['path'], $section['web']);
+            if (!isset($section['files'])) {
+                $section['files'] = spp_downloads_collect_files($section['path'], $section['web']);
+            }
             $section['show_realmlist_action'] = ($key === 'tools');
             $downloadsSections[$key] = $section;
         }
