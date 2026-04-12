@@ -123,10 +123,6 @@ if (!function_exists('spp_downloads_addon_files_for_expansion')) {
             }
 
             $item = $manifest[$expansionKey];
-            $item['is_recommended'] = $expansionKey === $normalizedExpansionKey;
-            $item['note'] = $item['is_recommended']
-                ? ('Recommended for ' . $item['expansion_label'])
-                : ('Use for ' . $item['expansion_label']);
             $items[] = $item;
         }
 

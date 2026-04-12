@@ -7030,27 +7030,37 @@ textarea.editor {
 }
 .download-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 12px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "link badge"
+    "meta meta";
+  gap: 8px 12px;
+  align-items: start;
   padding: 14px 16px;
   border-radius: 16px;
   border: 1px solid rgba(255, 204, 72, 0.14);
   background: linear-gradient(180deg, rgba(15, 20, 34, 0.94), rgba(7, 10, 18, 0.94));
 }
 .download-item a {
-  word-break: break-word;
+  grid-area: link;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .download-badge,
 .download-meta {
   color: #d9d1ba;
   font-size: 0.92rem;
-  white-space: nowrap;
 }
 .download-badge {
+  grid-area: badge;
+  justify-self: end;
   min-width: 48px;
   text-align: center;
   padding: 4px 8px;
+}
+.download-meta {
+  grid-area: meta;
+  white-space: normal;
 }
 .alert-denied {
   margin: 10px;
