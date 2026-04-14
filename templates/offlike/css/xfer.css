@@ -4178,6 +4178,10 @@ tr.sub-behavior td:nth-child(3)       { color: #ffaaee; }
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
   transform: translateY(-1px);
 }
+.playerbots-button.is-muted {
+  border-color: rgba(156, 178, 214, 0.16);
+  background: rgba(15, 21, 32, 0.9);
+}
 .playerbots-note {
   color: #b8c6da;
   font-size: 0.9em;
@@ -4279,6 +4283,34 @@ tr.sub-behavior td:nth-child(3)       { color: #ffaaee; }
   display: block;
   color: #f0e0b6;
   margin-bottom: 4px;
+}
+.playerbots-lane-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.playerbots-lane-card {
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.playerbots-lane-card h4 {
+  margin: 0 0 4px;
+  color: #f0e0b6;
+}
+.playerbots-advanced-toggle {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.playerbots-advanced-toggle summary {
+  cursor: pointer;
+  color: #f0e0b6;
+  font-weight: 700;
 }
 .playerbots-tone-grid {
   display: grid;

@@ -8,6 +8,12 @@ $guildStrategyMixedCount = (int)($guildStrategyState['mixed_count'] ?? 0);
 $randomBotBaselineProfile = is_array($randomBotBaselineProfile ?? null) ? $randomBotBaselineProfile : array();
 $characterStrategyValues = is_array($characterStrategyState['values'] ?? null) ? $characterStrategyState['values'] : array();
 $characterStrategyProfileKey = (string)($characterStrategyState['profile_key'] ?? 'custom');
+$characterControlState = is_array($characterControlState ?? null) ? $characterControlState : array();
+$characterAuthorityMode = (string)($characterControlState['authority_mode'] ?? 'LEGACY_FULL');
+$characterLegacyStrings = is_array($characterControlState['legacy_strings'] ?? null) ? $characterControlState['legacy_strings'] : array();
+$characterEffectiveStrings = is_array($characterControlState['effective_strings'] ?? null) ? $characterControlState['effective_strings'] : array();
+$characterCompiledStrings = is_array($characterControlState['compiled_strings'] ?? null) ? $characterControlState['compiled_strings'] : array();
+$characterRtscOverlay = is_array($characterControlState['rtsc_overlay'] ?? null) ? $characterControlState['rtsc_overlay'] : array('active' => false, 'label' => '', 'anchor' => '');
 $renderWriteSuffix = static function ($mode) {
     $mode = (string)$mode;
     if ($mode === 'soap') {
@@ -33,7 +39,7 @@ $renderWriteSuffix = static function ($mode) {
   <?php if ($notesSaved): ?><div class="playerbots-success">Officer order notes saved.<?php echo htmlspecialchars($renderWriteSuffix($notesWriteMode ?? '')); ?></div><?php endif; ?>
   <?php if ($personalitySaved): ?><div class="playerbots-success">Bot personality saved.<?php echo htmlspecialchars($renderWriteSuffix($personalityWriteMode ?? '')); ?></div><?php endif; ?>
   <?php if ($forumToneSaved): ?><div class="playerbots-success">Forum chatter tone saved.<?php echo htmlspecialchars($renderWriteSuffix($forumToneWriteMode ?? '')); ?></div><?php endif; ?>
-  <?php if ($botStrategySaved): ?><div class="playerbots-success">Bot strategy override saved.<?php echo htmlspecialchars($renderWriteSuffix($botStrategyWriteMode ?? '')); ?></div><?php endif; ?>
+  <?php if ($botStrategySaved): ?><div class="playerbots-success">Bot control lanes saved.<?php echo htmlspecialchars($renderWriteSuffix($botStrategyWriteMode ?? '')); ?></div><?php endif; ?>
   <?php if ($strategySaved): ?><div class="playerbots-success">Guild flavor applied to member bots.<?php echo htmlspecialchars($renderWriteSuffix($strategyWriteMode ?? '')); ?></div><?php endif; ?>
   <?php if (!empty($invalidRealmRequested)): ?><div class="playerbots-success is-warning">Realm <?php echo (int)$requestedRealmId; ?> is not configured here. Showing the nearest valid configured realm instead.</div><?php endif; ?>
 
@@ -343,71 +349,91 @@ $renderWriteSuffix = static function ($mode) {
 
       <?php if (!empty($selectedCharacter)): ?>
       <div class="playerbots-preview is-gap-top">
-        <strong>Bot React / Role Builder</strong>
-        <p class="playerbots-note is-gap-md">These fields start from the current effective strategy values for <strong><?php echo htmlspecialchars((string)($selectedCharacter['name'] ?? 'this bot')); ?></strong>, including the guild flavor stored in <code>preset='default'</code>. Saving here stores only this bot's override layer, so future guild flavor updates can still flow through.</p>
+        <strong>Bot Control Lanes</strong>
+        <p class="playerbots-note is-gap-md">Grouped lanes are the primary model for <strong><?php echo htmlspecialchars((string)($selectedCharacter['name'] ?? 'this bot')); ?></strong>. In refreshed mode the page stores lane selections, compiles them back into legacy compatibility strings, and keeps the raw editor available underneath for advanced use.</p>
         <form method="post" action="index.php?n=admin&sub=playerbots&realm=<?php echo (int)$realmId; ?>&guildid=<?php echo (int)$selectedGuildId; ?>&character_guid=<?php echo (int)$selectedCharacterGuid; ?>">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($admin_playerbots_csrf_token, ENT_QUOTES); ?>">
           <input type="hidden" name="playerbots_action" value="save_bot_strategy">
           <input type="hidden" name="guildid" value="<?php echo (int)$selectedGuildId; ?>">
           <input type="hidden" name="character_guid" value="<?php echo (int)$selectedCharacterGuid; ?>">
+
           <div class="playerbots-field">
-            <label>Bot Role Preset</label>
-            <select id="playerbots-bot-strategy-profile" data-strategy-profile="bot">
-              <?php foreach (($botStrategyProfiles ?? array()) as $profileKey => $profile): ?>
-                <option value="<?php echo htmlspecialchars((string)$profileKey); ?>"<?php echo $profileKey === $characterStrategyProfileKey ? ' selected' : ''; ?>><?php echo htmlspecialchars((string)$profile['label']); ?> - <?php echo htmlspecialchars((string)$profile['description']); ?></option>
+            <label>Authority Mode</label>
+            <select name="authority_mode">
+              <?php foreach (($authorityModes ?? array()) as $modeKey => $modeMeta): ?>
+                <option value="<?php echo htmlspecialchars((string)$modeKey); ?>"<?php echo $modeKey === $characterAuthorityMode ? ' selected' : ''; ?>><?php echo htmlspecialchars((string)($modeMeta['label'] ?? $modeKey)); ?> - <?php echo htmlspecialchars((string)($modeMeta['description'] ?? '')); ?></option>
               <?php endforeach; ?>
             </select>
           </div>
-          <div class="playerbots-profile-grid is-gap-bottom">
-            <?php foreach (($botStrategyProfiles ?? array()) as $profileKey => $profile): ?>
-              <?php if ($profileKey === 'custom'): continue; endif; ?>
-              <div class="playerbots-profile-card">
-                <strong><?php echo htmlspecialchars((string)$profile['label']); ?></strong>
-                <div class="playerbots-note"><?php echo htmlspecialchars((string)$profile['description']); ?></div>
+
+          <div class="playerbots-lane-grid">
+            <?php foreach ((array)($lanePresets ?? array()) as $laneKey => $laneMeta): ?>
+              <div class="playerbots-lane-card">
+                <h4><?php echo htmlspecialchars((string)($laneMeta['label'] ?? $laneKey)); ?></h4>
+                <div class="playerbots-note is-gap-sm"><?php echo htmlspecialchars((string)($laneMeta['description'] ?? '')); ?></div>
+                <div class="playerbots-field">
+                  <select name="<?php echo htmlspecialchars((string)$laneKey, ENT_QUOTES); ?>">
+                    <?php foreach ((array)($laneMeta['options'] ?? array()) as $optionKey => $optionMeta): ?>
+                      <option value="<?php echo htmlspecialchars((string)$optionKey); ?>"<?php echo (string)($characterControlState[$laneKey] ?? '') === (string)$optionKey ? ' selected' : ''; ?>><?php echo htmlspecialchars((string)($optionMeta['label'] ?? $optionKey)); ?> - <?php echo htmlspecialchars((string)($optionMeta['description'] ?? '')); ?></option>
+                    <?php endforeach; ?>
+                  </select>
+                </div>
               </div>
             <?php endforeach; ?>
           </div>
-          <div class="playerbots-strategy-grid">
-            <div class="playerbots-field">
-              <label>Combat (<code>co</code>)</label>
-              <div class="playerbots-strategy-builder">
-                <?php foreach (($strategyBuilderOptions['co'] ?? array()) as $token): ?>
-                  <button class="playerbots-strategy-chip" type="button" data-strategy-target="playerbots-bot-strategy-co" data-strategy-token="<?php echo htmlspecialchars((string)$token, ENT_QUOTES); ?>" data-strategy-mode="plus">+<?php echo htmlspecialchars((string)$token); ?></button>
-                <?php endforeach; ?>
-              </div>
-              <textarea id="playerbots-bot-strategy-co" name="strategy_co" placeholder="+dps,+dps assist,-threat"><?php echo htmlspecialchars((string)($characterStrategyValues['co'] ?? '')); ?></textarea>
+
+          <div class="playerbots-preview is-gap-top">
+            <strong>RTSC Status / Overlay</strong>
+            <div class="playerbots-note is-gap-sm">RTSC is treated here as a live movement overlay, not a fifth strategy family. This page shows the stored overlay state when available and lets you clear it without rewriting route intent or personality.</div>
+            <div class="playerbots-list">
+              <div class="playerbots-row"><strong>Active</strong><div class="playerbots-note"><?php echo !empty($characterRtscOverlay['active']) ? 'Yes' : 'No'; ?></div></div>
+              <div class="playerbots-row"><strong>Stance / Order</strong><div class="playerbots-note"><?php echo htmlspecialchars((string)(trim((string)($characterRtscOverlay['label'] ?? '')) !== '' ? $characterRtscOverlay['label'] : 'No stored RTSC overlay order')); ?></div></div>
+              <div class="playerbots-row"><strong>Anchor</strong><div class="playerbots-note"><?php echo htmlspecialchars((string)(trim((string)($characterRtscOverlay['anchor'] ?? '')) !== '' ? $characterRtscOverlay['anchor'] : 'No stored anchor')); ?></div></div>
             </div>
-            <div class="playerbots-field">
-              <label>Non-Combat (<code>nc</code>)</label>
-              <div class="playerbots-strategy-builder">
-                <?php foreach (($strategyBuilderOptions['nc'] ?? array()) as $token): ?>
-                  <button class="playerbots-strategy-chip" type="button" data-strategy-target="playerbots-bot-strategy-nc" data-strategy-token="<?php echo htmlspecialchars((string)$token, ENT_QUOTES); ?>" data-strategy-mode="plus">+<?php echo htmlspecialchars((string)$token); ?></button>
-                <?php endforeach; ?>
-              </div>
-              <textarea id="playerbots-bot-strategy-nc" name="strategy_nc" placeholder="+follow,+loot,+food"><?php echo htmlspecialchars((string)($characterStrategyValues['nc'] ?? '')); ?></textarea>
-            </div>
-            <div class="playerbots-field">
-              <label>Dead (<code>dead</code>)</label>
-              <div class="playerbots-strategy-builder">
-                <?php foreach (($strategyBuilderOptions['dead'] ?? array()) as $token): ?>
-                  <button class="playerbots-strategy-chip" type="button" data-strategy-target="playerbots-bot-strategy-dead" data-strategy-token="<?php echo htmlspecialchars((string)$token, ENT_QUOTES); ?>" data-strategy-mode="plus">+<?php echo htmlspecialchars((string)$token); ?></button>
-                <?php endforeach; ?>
-              </div>
-              <textarea id="playerbots-bot-strategy-dead" name="strategy_dead" placeholder="+auto release"><?php echo htmlspecialchars((string)($characterStrategyValues['dead'] ?? '')); ?></textarea>
-            </div>
-            <div class="playerbots-field">
-              <label>Reaction (<code>react</code>)</label>
-              <div class="playerbots-strategy-builder">
-                <?php foreach (($strategyBuilderOptions['react'] ?? array()) as $token): ?>
-                  <button class="playerbots-strategy-chip" type="button" data-strategy-target="playerbots-bot-strategy-react" data-strategy-token="<?php echo htmlspecialchars((string)$token, ENT_QUOTES); ?>" data-strategy-mode="plus">+<?php echo htmlspecialchars((string)$token); ?></button>
-                <?php endforeach; ?>
-              </div>
-              <textarea id="playerbots-bot-strategy-react" name="strategy_react" placeholder="+pvp,+preheal"><?php echo htmlspecialchars((string)($characterStrategyValues['react'] ?? '')); ?></textarea>
+            <div class="playerbots-actions">
+              <button class="playerbots-button" type="submit" name="rtsc_overlay_action" value="keep">Save Lanes</button>
+              <button class="playerbots-button is-muted" type="submit" name="rtsc_overlay_action" value="clear">Clear RTSC Overlay</button>
             </div>
           </div>
-          <div class="playerbots-actions">
-            <button class="playerbots-button" type="submit">Save Bot Role / React</button>
-            <span class="playerbots-note">The editor starts from this bot's current saved strategy snapshot. Choosing a preset layers that role onto the current values instead of flattening the existing guild flavor.</span>
+
+          <details class="playerbots-advanced-toggle">
+            <summary>Advanced Legacy Strings</summary>
+            <div class="playerbots-note is-gap-md">These raw compatibility strings remain available for legacy workflows and edge-case manual edits. In <code>LEGACY_FULL</code> they stay authoritative. In <code>REFRESHED_WITH_OVERRIDE</code> they are stored as the baseline compatibility layer underneath the grouped lanes.</div>
+            <div class="playerbots-strategy-grid">
+              <?php foreach (array('co' => 'Combat', 'nc' => 'Non-Combat', 'dead' => 'Dead', 'react' => 'Reaction', 'follow' => 'Follow', 'guard' => 'Guard', 'free' => 'Free', 'wander' => 'Wander', 'rtsc' => 'RTSC') as $legacyKey => $legacyLabel): ?>
+                <div class="playerbots-field">
+                  <label><?php echo htmlspecialchars($legacyLabel); ?> (<code><?php echo htmlspecialchars($legacyKey); ?></code>)</label>
+                  <?php if (isset($strategyBuilderOptions[$legacyKey])): ?>
+                  <div class="playerbots-strategy-builder">
+                    <?php foreach (($strategyBuilderOptions[$legacyKey] ?? array()) as $token): ?>
+                      <button class="playerbots-strategy-chip" type="button" data-strategy-target="playerbots-legacy-<?php echo htmlspecialchars($legacyKey); ?>" data-strategy-token="<?php echo htmlspecialchars((string)$token, ENT_QUOTES); ?>" data-strategy-mode="plus">+<?php echo htmlspecialchars((string)$token); ?></button>
+                    <?php endforeach; ?>
+                  </div>
+                  <?php endif; ?>
+                  <textarea id="playerbots-legacy-<?php echo htmlspecialchars($legacyKey); ?>" name="legacy_<?php echo htmlspecialchars($legacyKey); ?>" placeholder="Compatibility value"><?php echo htmlspecialchars((string)($characterLegacyStrings[$legacyKey] ?? '')); ?></textarea>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          </details>
+
+          <div class="playerbots-preview is-gap-top">
+            <strong>Compiled Compatibility Preview</strong>
+            <div class="playerbots-note is-gap-sm">This preview shows what the grouped lanes currently compile into before guild flavor is layered back underneath.</div>
+            <div class="playerbots-list">
+              <?php foreach ($characterCompiledStrings as $compiledKey => $compiledValue): ?>
+                <div class="playerbots-row"><strong><?php echo htmlspecialchars((string)$compiledKey); ?></strong><div class="playerbots-note"><?php echo htmlspecialchars((string)($compiledValue !== '' ? $compiledValue : 'No grouped override')); ?></div></div>
+              <?php endforeach; ?>
+            </div>
+          </div>
+
+          <div class="playerbots-preview is-gap-top">
+            <strong>Effective Stored Compatibility</strong>
+            <div class="playerbots-note is-gap-sm">These are the raw values this page writes back into <code>ai_playerbot_db_store</code> for runtime compatibility.</div>
+            <div class="playerbots-list">
+              <?php foreach ($characterEffectiveStrings as $effectiveKey => $effectiveValue): ?>
+                <div class="playerbots-row"><strong><?php echo htmlspecialchars((string)$effectiveKey); ?></strong><div class="playerbots-note"><?php echo htmlspecialchars((string)($effectiveValue !== '' ? $effectiveValue : 'Empty')); ?></div></div>
+              <?php endforeach; ?>
+            </div>
           </div>
         </form>
       </div>

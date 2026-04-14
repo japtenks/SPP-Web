@@ -26,6 +26,200 @@ function spp_admin_playerbots_strategy_keys(): array
     return array('co', 'nc', 'dead', 'react');
 }
 
+function spp_admin_playerbots_legacy_string_keys(): array
+{
+    return array('co', 'nc', 'dead', 'react', 'follow', 'guard', 'free', 'wander', 'rtsc');
+}
+
+function spp_admin_playerbots_structured_control_keys(): array
+{
+    return array(
+        'authority_mode',
+        'combat_profile',
+        'movement_profile',
+        'route_profile',
+        'reaction_profile',
+        'rtsc_overlay_active',
+        'rtsc_overlay_label',
+        'rtsc_overlay_anchor',
+    );
+}
+
+function spp_admin_playerbots_authority_modes(): array
+{
+    return array(
+        'LEGACY_FULL' => array(
+            'label' => 'Legacy Full',
+            'description' => 'Raw legacy strategy strings remain the direct owner. Existing co / nc / react / follow / guard / rtsc flows stay authoritative.',
+        ),
+        'REFRESHED_WITH_OVERRIDE' => array(
+            'label' => 'Refreshed With Override',
+            'description' => 'Grouped lanes own the concept model. Legacy strings remain as the compiled compatibility substrate underneath.',
+        ),
+    );
+}
+
+function spp_admin_playerbots_lane_presets(): array
+{
+    return array(
+        'combat_profile' => array(
+            'label' => 'Combat',
+            'description' => 'Fight doctrine only.',
+            'options' => array(
+                'tank' => array('label' => 'Tank', 'description' => 'Threat-focused frontliner.'),
+                'support_dps' => array('label' => 'Support DPS', 'description' => 'Damage with calmer threat and party support.'),
+                'aggressive_dps' => array('label' => 'Aggressive DPS', 'description' => 'Pushes damage and tempo harder.'),
+                'healer_support' => array('label' => 'Healer / Support', 'description' => 'Healing-biased support doctrine.'),
+                'custom' => array('label' => 'Custom', 'description' => 'Keep manual compatibility strings and hand-tuned edits.'),
+            ),
+        ),
+        'movement_profile' => array(
+            'label' => 'Movement / RTS',
+            'description' => 'Follow, hold, guard, free, formation, and short-horizon movement behavior.',
+            'options' => array(
+                'follow_leader' => array('label' => 'Follow Leader', 'description' => 'Stay on leader and travel as a unit.'),
+                'guard_point' => array('label' => 'Guard Point', 'description' => 'Treat a guard / anchor posture as primary.'),
+                'free_skirmish' => array('label' => 'Free Skirmish', 'description' => 'Loose movement with room to roam and react.'),
+                'hold_line' => array('label' => 'Hold Line', 'description' => 'Stay near the current position and defend it.'),
+                'escort' => array('label' => 'Escort', 'description' => 'Follow with a more protective movement posture.'),
+                'custom' => array('label' => 'Custom', 'description' => 'Use manual movement compatibility strings.'),
+            ),
+        ),
+        'route_profile' => array(
+            'label' => 'Route / Non-Combat',
+            'description' => 'Travel, questing, grinding, gathering, maintenance, and social routing.',
+            'options' => array(
+                'questing' => array('label' => 'Questing', 'description' => 'Quest-driven travel and social routing.'),
+                'grind_loop' => array('label' => 'Grind Loop', 'description' => 'Grinding with loot and repeatable activity.'),
+                'gather_craft' => array('label' => 'Gather / Craft', 'description' => 'Gathering, crafting, vendor, and upkeep bias.'),
+                'maintenance' => array('label' => 'Maintenance', 'description' => 'Vendor, upkeep, and consumable management.'),
+                'guild_social' => array('label' => 'Guild Social', 'description' => 'Guild-facing social routing and chatter.'),
+                'rpg_social' => array('label' => 'RPG Social', 'description' => 'Wandering, exploration, and world-social flavor.'),
+                'custom' => array('label' => 'Custom', 'description' => 'Use manual compatibility strings for route intent.'),
+            ),
+        ),
+        'reaction_profile' => array(
+            'label' => 'Reaction',
+            'description' => 'Interrupt / emergency posture only.',
+            'options' => array(
+                'cautious' => array('label' => 'Cautious', 'description' => 'Bails earlier and avoids risk.'),
+                'standard' => array('label' => 'Standard', 'description' => 'Default reaction policy.'),
+                'panic_early' => array('label' => 'Panic Early', 'description' => 'Cuts across earlier when things turn bad.'),
+                'pvp_eager' => array('label' => 'PvP Eager', 'description' => 'More willing to commit to PvP reactions.'),
+                'custom' => array('label' => 'Custom', 'description' => 'Keep manual reaction compatibility strings.'),
+            ),
+        ),
+    );
+}
+
+function spp_admin_playerbots_default_control_state(): array
+{
+    $legacyDefaults = array_fill_keys(spp_admin_playerbots_legacy_string_keys(), '');
+
+    return array(
+        'authority_mode' => 'LEGACY_FULL',
+        'combat_profile' => 'custom',
+        'movement_profile' => 'custom',
+        'route_profile' => 'custom',
+        'reaction_profile' => 'standard',
+        'legacy_strings' => $legacyDefaults,
+        'effective_strings' => $legacyDefaults,
+        'compiled_strings' => $legacyDefaults,
+        'rtsc_overlay' => array(
+            'active' => false,
+            'label' => '',
+            'anchor' => '',
+        ),
+    );
+}
+
+function spp_admin_playerbots_build_lane_compile_map(): array
+{
+    return array(
+        'combat_profile' => array(
+            'tank' => array('co' => '+tank,+tank assist,+threat,+dps assist'),
+            'support_dps' => array('co' => '+dps,+dps assist,-threat,+offheal'),
+            'aggressive_dps' => array('co' => '+dps,+dps aoe,+boost,+threat'),
+            'healer_support' => array('co' => '+offheal,+heal,+dps assist,+cast time'),
+            'custom' => array(),
+        ),
+        'movement_profile' => array(
+            'follow_leader' => array('nc' => '+follow', 'follow' => '+follow', 'guard' => '', 'free' => '', 'wander' => ''),
+            'guard_point' => array('nc' => '+follow', 'follow' => '', 'guard' => '+guard', 'free' => '', 'wander' => ''),
+            'free_skirmish' => array('nc' => '+free,+wander', 'follow' => '', 'guard' => '', 'free' => '+free', 'wander' => '+wander'),
+            'hold_line' => array('nc' => '+guard', 'follow' => '', 'guard' => '+guard', 'free' => '', 'wander' => ''),
+            'escort' => array('nc' => '+follow,+guard', 'follow' => '+follow', 'guard' => '+guard', 'free' => '', 'wander' => ''),
+            'custom' => array(),
+        ),
+        'route_profile' => array(
+            'questing' => array('nc' => '+quest,+rpg,+loot,+food'),
+            'grind_loop' => array('nc' => '+grind,+loot,+food,+consumables'),
+            'gather_craft' => array('nc' => '+gather,+rpg craft,+rpg vendor,+rpg maintenance'),
+            'maintenance' => array('nc' => '+rpg maintenance,+rpg vendor,+consumables,+food'),
+            'guild_social' => array('nc' => '+rpg guild,+rpg,+custom::say'),
+            'rpg_social' => array('nc' => '+rpg,+rpg explore,+wander,+custom::say'),
+            'custom' => array(),
+        ),
+        'reaction_profile' => array(
+            'cautious' => array('react' => '+flee,+avoid aoe'),
+            'standard' => array('react' => ''),
+            'panic_early' => array('react' => '+flee,+preheal,+avoid aoe'),
+            'pvp_eager' => array('react' => '+pvp,+preheal'),
+            'custom' => array(),
+        ),
+    );
+}
+
+function spp_admin_playerbots_compile_lane_state(array $state): array
+{
+    $compiled = array_fill_keys(spp_admin_playerbots_legacy_string_keys(), '');
+    $compileMap = spp_admin_playerbots_build_lane_compile_map();
+
+    foreach ($compileMap as $laneKey => $options) {
+        $selected = (string)($state[$laneKey] ?? 'custom');
+        if (!isset($options[$selected]) || !is_array($options[$selected])) {
+            continue;
+        }
+
+        foreach ($options[$selected] as $stringKey => $value) {
+            if (!array_key_exists($stringKey, $compiled)) {
+                continue;
+            }
+            $compiled[$stringKey] = spp_admin_playerbots_merge_strategy_delta(
+                (string)$compiled[$stringKey],
+                spp_admin_playerbots_normalize_strategy_value((string)$value)
+            );
+        }
+    }
+
+    return $compiled;
+}
+
+function spp_admin_playerbots_merge_legacy_strings(array $legacyStrings, array $compiledStrings, string $authorityMode): array
+{
+    $effective = array_fill_keys(spp_admin_playerbots_legacy_string_keys(), '');
+    $authorityMode = strtoupper(trim($authorityMode));
+
+    foreach (spp_admin_playerbots_legacy_string_keys() as $stringKey) {
+        $legacyValue = spp_admin_playerbots_normalize_strategy_value((string)($legacyStrings[$stringKey] ?? ''));
+        $compiledValue = spp_admin_playerbots_normalize_strategy_value((string)($compiledStrings[$stringKey] ?? ''));
+
+        if ($authorityMode === 'LEGACY_FULL') {
+            $effective[$stringKey] = $legacyValue;
+            continue;
+        }
+
+        if (in_array($stringKey, array('co', 'nc', 'dead', 'react'), true)) {
+            $effective[$stringKey] = spp_admin_playerbots_merge_strategy_delta($legacyValue, $compiledValue);
+            continue;
+        }
+
+        $effective[$stringKey] = $compiledValue !== '' ? $compiledValue : $legacyValue;
+    }
+
+    return $effective;
+}
+
 function spp_admin_playerbots_forum_tone_groups(): array
 {
     return array(
@@ -980,6 +1174,41 @@ function spp_admin_playerbots_fetch_strategy_rows_for_guids(PDO $charsPdo, array
     return $result;
 }
 
+function spp_admin_playerbots_fetch_named_rows_for_guids(PDO $charsPdo, array $guids, string $preset, array $keys): array
+{
+    $guids = array_values(array_unique(array_filter(array_map('intval', $guids))));
+    $keys = array_values(array_unique(array_filter(array_map('strval', $keys))));
+    $result = array();
+    foreach ($guids as $guid) {
+        $result[$guid] = array_fill_keys($keys, '');
+    }
+
+    if (empty($guids) || empty($keys)) {
+        return $result;
+    }
+
+    $placeholders = implode(',', array_fill(0, count($guids), '?'));
+    $keyPlaceholders = implode(',', array_fill(0, count($keys), '?'));
+    $stmt = $charsPdo->prepare("
+        SELECT guid, `key`, value
+        FROM ai_playerbot_db_store
+        WHERE guid IN ($placeholders)
+          AND preset = ?
+          AND `key` IN ($keyPlaceholders)
+    ");
+    $stmt->execute(array_merge($guids, array($preset), $keys));
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) ?: array() as $row) {
+        $guid = (int)($row['guid'] ?? 0);
+        $key = (string)($row['key'] ?? '');
+        if (!isset($result[$guid]) || !array_key_exists($key, $result[$guid])) {
+            continue;
+        }
+        $result[$guid][$key] = trim((string)($row['value'] ?? ''));
+    }
+
+    return $result;
+}
+
 function spp_admin_playerbots_strategy_values_are_empty(array $values): bool
 {
     foreach (spp_admin_playerbots_strategy_keys() as $strategyKey) {
@@ -1114,4 +1343,53 @@ function spp_admin_playerbots_fetch_guild_strategy_state(PDO $charsPdo, int $gui
 function spp_admin_playerbots_fetch_character_strategy_state(PDO $charsPdo, int $characterGuid): array
 {
     return spp_admin_playerbots_fetch_effective_strategy_state_for_guids($charsPdo, $characterGuid > 0 ? array($characterGuid) : array(), spp_admin_playerbots_bot_strategy_profiles());
+}
+
+function spp_admin_playerbots_fetch_character_control_state(PDO $charsPdo, int $characterGuid): array
+{
+    $state = spp_admin_playerbots_default_control_state();
+    if ($characterGuid <= 0) {
+        return $state;
+    }
+
+    $legacyKeys = spp_admin_playerbots_legacy_string_keys();
+    $legacyPrefixedKeys = array_map(static function (string $key): string {
+        return 'legacy_' . $key;
+    }, $legacyKeys);
+    $structuredKeys = spp_admin_playerbots_structured_control_keys();
+    $rawKeys = array_merge($legacyKeys, $legacyPrefixedKeys, $structuredKeys);
+    $rows = spp_admin_playerbots_fetch_named_rows_for_guids($charsPdo, array($characterGuid), '', $rawKeys);
+    $row = $rows[$characterGuid] ?? array();
+
+    $authorityMode = strtoupper(trim((string)($row['authority_mode'] ?? '')));
+    if (!isset(spp_admin_playerbots_authority_modes()[$authorityMode])) {
+        $authorityMode = 'LEGACY_FULL';
+    }
+    $state['authority_mode'] = $authorityMode;
+
+    $lanePresets = spp_admin_playerbots_lane_presets();
+    foreach (array('combat_profile', 'movement_profile', 'route_profile', 'reaction_profile') as $laneKey) {
+        $value = trim((string)($row[$laneKey] ?? ''));
+        $state[$laneKey] = isset($lanePresets[$laneKey]['options'][$value]) ? $value : $state[$laneKey];
+    }
+
+    foreach ($legacyKeys as $legacyKey) {
+        $storedLegacy = spp_admin_playerbots_normalize_strategy_value((string)($row['legacy_' . $legacyKey] ?? ''));
+        $fallbackLive = spp_admin_playerbots_normalize_strategy_value((string)($row[$legacyKey] ?? ''));
+        $state['legacy_strings'][$legacyKey] = $storedLegacy !== '' ? $storedLegacy : $fallbackLive;
+        $state['effective_strings'][$legacyKey] = $fallbackLive;
+    }
+
+    $state['compiled_strings'] = spp_admin_playerbots_compile_lane_state($state);
+    if ($authorityMode !== 'LEGACY_FULL') {
+        $state['effective_strings'] = spp_admin_playerbots_merge_legacy_strings($state['legacy_strings'], $state['compiled_strings'], $authorityMode);
+    }
+
+    $state['rtsc_overlay'] = array(
+        'active' => trim((string)($row['rtsc_overlay_active'] ?? '0')) === '1',
+        'label' => trim((string)($row['rtsc_overlay_label'] ?? '')),
+        'anchor' => trim((string)($row['rtsc_overlay_anchor'] ?? '')),
+    );
+
+    return $state;
 }

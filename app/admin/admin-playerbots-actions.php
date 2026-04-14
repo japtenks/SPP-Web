@@ -232,41 +232,93 @@ function spp_admin_playerbots_handle_action(PDO $charsPdo, int $realmId): void
 
     if ($action === 'save_bot_strategy') {
         if ($characterGuid <= 0) {
-            output_message('alert', 'Choose a character before saving bot strategies.');
+            output_message('alert', 'Choose a character before saving bot control lanes.');
             return;
         }
 
-        $effectiveStrategyValues = array();
-        foreach (spp_admin_playerbots_strategy_keys() as $strategyKey) {
-            $effectiveStrategyValues[$strategyKey] = spp_admin_playerbots_normalize_strategy_value((string)($_POST['strategy_' . $strategyKey] ?? ''));
+        $authorityMode = strtoupper(trim((string)($_POST['authority_mode'] ?? 'LEGACY_FULL')));
+        if (!isset(spp_admin_playerbots_authority_modes()[$authorityMode])) {
+            $authorityMode = 'LEGACY_FULL';
         }
 
-        $baseRows = spp_admin_playerbots_fetch_strategy_rows_for_guids($charsPdo, array($characterGuid), 'default');
-        $baseValues = $baseRows[$characterGuid] ?? array_fill_keys(spp_admin_playerbots_strategy_keys(), '');
-        $strategyValues = spp_admin_playerbots_build_strategy_override_set($baseValues, $effectiveStrategyValues);
+        $laneKeys = array('combat_profile', 'movement_profile', 'route_profile', 'reaction_profile');
+        $lanePresets = spp_admin_playerbots_lane_presets();
+        $controlState = spp_admin_playerbots_default_control_state();
+        $controlState['authority_mode'] = $authorityMode;
+        foreach ($laneKeys as $laneKey) {
+            $selectedLane = trim((string)($_POST[$laneKey] ?? $controlState[$laneKey]));
+            $controlState[$laneKey] = isset($lanePresets[$laneKey]['options'][$selectedLane]) ? $selectedLane : $controlState[$laneKey];
+        }
+
+        foreach (spp_admin_playerbots_legacy_string_keys() as $legacyKey) {
+            $controlState['legacy_strings'][$legacyKey] = spp_admin_playerbots_normalize_strategy_value((string)($_POST['legacy_' . $legacyKey] ?? ''));
+        }
+        $controlState['compiled_strings'] = spp_admin_playerbots_compile_lane_state($controlState);
+        $controlState['effective_strings'] = spp_admin_playerbots_merge_legacy_strings(
+            $controlState['legacy_strings'],
+            $controlState['compiled_strings'],
+            $authorityMode
+        );
+
+        $rtscAction = trim((string)($_POST['rtsc_overlay_action'] ?? 'keep'));
+        $existingControlState = spp_admin_playerbots_fetch_character_control_state($charsPdo, $characterGuid);
+        $rtscOverlay = $existingControlState['rtsc_overlay'] ?? array('active' => false, 'label' => '', 'anchor' => '');
+        if ($rtscAction === 'clear') {
+            $rtscOverlay = array('active' => false, 'label' => '', 'anchor' => '');
+        }
 
         try {
             $charsPdo->beginTransaction();
 
-            $strategyKeys = spp_admin_playerbots_strategy_keys();
-            $keyPlaceholders = implode(',', array_fill(0, count($strategyKeys), '?'));
+            $deleteKeys = array_merge(
+                spp_admin_playerbots_legacy_string_keys(),
+                array_map(static function (string $key): string {
+                    return 'legacy_' . $key;
+                }, spp_admin_playerbots_legacy_string_keys()),
+                spp_admin_playerbots_structured_control_keys()
+            );
+            $keyPlaceholders = implode(',', array_fill(0, count($deleteKeys), '?'));
             $deleteStmt = $charsPdo->prepare("
                 DELETE FROM ai_playerbot_db_store
                 WHERE guid = ?
                   AND preset = ''
                   AND `key` IN ($keyPlaceholders)
             ");
-            $deleteStmt->execute(array_merge(array($characterGuid), $strategyKeys));
+            $deleteStmt->execute(array_merge(array($characterGuid), $deleteKeys));
 
             $insertStmt = $charsPdo->prepare("
                 INSERT INTO ai_playerbot_db_store (`guid`, `preset`, `key`, `value`)
                 VALUES (?, '', ?, ?)
             ");
-            foreach ($strategyValues as $strategyKey => $strategyValue) {
-                if ($strategyValue === '') {
+
+            $structuredValues = array(
+                'authority_mode' => $authorityMode,
+                'combat_profile' => (string)$controlState['combat_profile'],
+                'movement_profile' => (string)$controlState['movement_profile'],
+                'route_profile' => (string)$controlState['route_profile'],
+                'reaction_profile' => (string)$controlState['reaction_profile'],
+                'rtsc_overlay_active' => !empty($rtscOverlay['active']) ? '1' : '0',
+                'rtsc_overlay_label' => trim((string)($rtscOverlay['label'] ?? '')),
+                'rtsc_overlay_anchor' => trim((string)($rtscOverlay['anchor'] ?? '')),
+            );
+
+            foreach ($structuredValues as $key => $value) {
+                if ($value === '') {
                     continue;
                 }
-                $insertStmt->execute(array($characterGuid, $strategyKey, $strategyValue));
+                $insertStmt->execute(array($characterGuid, $key, $value));
+            }
+
+            foreach (spp_admin_playerbots_legacy_string_keys() as $legacyKey) {
+                $legacyValue = (string)($controlState['legacy_strings'][$legacyKey] ?? '');
+                if ($legacyValue !== '') {
+                    $insertStmt->execute(array($characterGuid, 'legacy_' . $legacyKey, $legacyValue));
+                }
+
+                $effectiveValue = (string)($controlState['effective_strings'][$legacyKey] ?? '');
+                if ($effectiveValue !== '') {
+                    $insertStmt->execute(array($characterGuid, $legacyKey, $effectiveValue));
+                }
             }
 
             $charsPdo->commit();
@@ -274,8 +326,8 @@ function spp_admin_playerbots_handle_action(PDO $charsPdo, int $realmId): void
             if ($charsPdo->inTransaction()) {
                 $charsPdo->rollBack();
             }
-            error_log('[admin.playerbots] Failed saving bot strategies: ' . $e->getMessage());
-            output_message('alert', 'Saving bot strategy overrides failed.');
+            error_log('[admin.playerbots] Failed saving bot control lanes: ' . $e->getMessage());
+            output_message('alert', 'Saving bot control lanes failed.');
             return;
         }
 

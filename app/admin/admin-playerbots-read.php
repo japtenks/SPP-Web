@@ -57,6 +57,7 @@ function spp_admin_playerbots_build_view(array $realmDbMap): array
         'profile_key' => 'custom',
         'mixed_count' => 0,
     );
+    $characterControlState = spp_admin_playerbots_default_control_state();
     $forumToneGroups = spp_admin_playerbots_forum_tone_groups();
     $forumToneState = spp_admin_playerbots_fetch_forum_tone_state($worldPdo);
 
@@ -117,6 +118,7 @@ function spp_admin_playerbots_build_view(array $realmDbMap): array
 
     if ($selectedCharacterGuid > 0) {
         $characterStrategyState = spp_admin_playerbots_fetch_character_strategy_state($charsPdo, $selectedCharacterGuid);
+        $characterControlState = spp_admin_playerbots_fetch_character_control_state($charsPdo, $selectedCharacterGuid);
         $stmt = $charsPdo->prepare("
             SELECT value
             FROM ai_playerbot_db_store
@@ -162,6 +164,9 @@ function spp_admin_playerbots_build_view(array $realmDbMap): array
         'strategyBuilderOptions' => spp_admin_playerbots_strategy_builder_options(),
         'guildStrategyState' => $guildStrategyState,
         'characterStrategyState' => $characterStrategyState,
+        'characterControlState' => $characterControlState,
+        'authorityModes' => spp_admin_playerbots_authority_modes(),
+        'lanePresets' => spp_admin_playerbots_lane_presets(),
         'forumToneGroups' => $forumToneGroups,
         'forumToneState' => $forumToneState,
         'invalidRealmRequested' => $invalidRealmRequested,
