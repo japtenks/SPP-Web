@@ -31,6 +31,16 @@ function spp_admin_playerbots_legacy_string_keys(): array
     return array('co', 'nc', 'dead', 'react', 'follow', 'guard', 'free', 'wander', 'rtsc');
 }
 
+function spp_admin_playerbots_runtime_legacy_string_keys(string $authorityMode = 'LEGACY_FULL'): array
+{
+    $authorityMode = strtoupper(trim($authorityMode));
+    if ($authorityMode === 'REFRESHED_WITH_OVERRIDE') {
+        return array('co', 'nc', 'dead', 'react', 'follow', 'guard', 'free', 'wander');
+    }
+
+    return spp_admin_playerbots_legacy_string_keys();
+}
+
 function spp_admin_playerbots_structured_control_keys(): array
 {
     return array(
@@ -50,11 +60,11 @@ function spp_admin_playerbots_authority_modes(): array
     return array(
         'LEGACY_FULL' => array(
             'label' => 'Legacy Full',
-            'description' => 'Raw legacy strategy strings remain the direct owner. Existing co / nc / react / follow / guard / rtsc flows stay authoritative.',
+            'description' => 'Raw legacy strategy strings remain the direct owner. Existing co / nc / react / follow / guard / rtsc flows stay authoritative, including saved RTSC control for in-game overrides, macros, and custom action setups.',
         ),
         'REFRESHED_WITH_OVERRIDE' => array(
             'label' => 'Refreshed With Override',
-            'description' => 'Grouped lanes own the concept model. Legacy strings remain as the compiled compatibility substrate underneath.',
+            'description' => 'Grouped lanes own the concept model. Legacy strings remain as the compiled compatibility substrate underneath, while RTSC stays a bounded overlay instead of the primary route or identity owner.',
         ),
     );
 }
@@ -1376,13 +1386,16 @@ function spp_admin_playerbots_fetch_character_control_state(PDO $charsPdo, int $
     foreach ($legacyKeys as $legacyKey) {
         $storedLegacy = spp_admin_playerbots_normalize_strategy_value((string)($row['legacy_' . $legacyKey] ?? ''));
         $fallbackLive = spp_admin_playerbots_normalize_strategy_value((string)($row[$legacyKey] ?? ''));
-        $state['legacy_strings'][$legacyKey] = $storedLegacy !== '' ? $storedLegacy : $fallbackLive;
+        $state['legacy_strings'][$legacyKey] = $storedLegacy !== '' ? $storedLegacy : (
+            $authorityMode === 'LEGACY_FULL' ? $fallbackLive : ''
+        );
         $state['effective_strings'][$legacyKey] = $fallbackLive;
     }
 
     $state['compiled_strings'] = spp_admin_playerbots_compile_lane_state($state);
     if ($authorityMode !== 'LEGACY_FULL') {
         $state['effective_strings'] = spp_admin_playerbots_merge_legacy_strings($state['legacy_strings'], $state['compiled_strings'], $authorityMode);
+        $state['effective_strings']['rtsc'] = '';
     }
 
     $state['rtsc_overlay'] = array(

@@ -350,7 +350,7 @@ $renderWriteSuffix = static function ($mode) {
       <?php if (!empty($selectedCharacter)): ?>
       <div class="playerbots-preview is-gap-top">
         <strong>Bot Control Lanes</strong>
-        <p class="playerbots-note is-gap-md">Grouped lanes are the primary model for <strong><?php echo htmlspecialchars((string)($selectedCharacter['name'] ?? 'this bot')); ?></strong>. In refreshed mode the page stores lane selections, compiles them back into legacy compatibility strings, and keeps the raw editor available underneath for advanced use.</p>
+        <p class="playerbots-note is-gap-md">Grouped lanes are the primary model for <strong><?php echo htmlspecialchars((string)($selectedCharacter['name'] ?? 'this bot')); ?></strong>. In refreshed mode the page stores lane selections, compiles them back into legacy compatibility strings, and keeps the raw editor available underneath for advanced use. In legacy mode, the page continues to support full saved RTSC-style control for players who want heavy in-game override, macro, and custom action workflows.</p>
         <form method="post" action="index.php?n=admin&sub=playerbots&realm=<?php echo (int)$realmId; ?>&guildid=<?php echo (int)$selectedGuildId; ?>&character_guid=<?php echo (int)$selectedCharacterGuid; ?>">
           <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($admin_playerbots_csrf_token, ENT_QUOTES); ?>">
           <input type="hidden" name="playerbots_action" value="save_bot_strategy">
@@ -384,7 +384,8 @@ $renderWriteSuffix = static function ($mode) {
 
           <div class="playerbots-preview is-gap-top">
             <strong>RTSC Status / Overlay</strong>
-            <div class="playerbots-note is-gap-sm">RTSC is treated here as a live movement overlay, not a fifth strategy family. This page shows the stored overlay state when available and lets you clear it without rewriting route intent or personality.</div>
+            <div class="playerbots-note is-gap-sm">RTSC is treated here as a live movement overlay, not a fifth strategy family. In <code>LEGACY_FULL</code>, saved RTSC strings still remain part of the direct control surface for in-game command-heavy play. In <code>REFRESHED_WITH_OVERRIDE</code>, this page shows the stored overlay state when available and lets you clear it without rewriting route intent or personality.</div>
+            <div class="playerbots-note is-gap-sm">Legacy in-game control also includes selector-heavy chat filter workflows like <code>@tank</code>, <code>@notank</code>, <code>@heal</code>, <code>@melee</code>, class filters, subgroup filters, RTI filters, and saved <code>rtsc go &lt;spot&gt;</code> movement macros. Those remain part of the supported legacy command stack alongside this admin page. See the <a href="index.php?n=server&amp;sub=botcommands&amp;tab=filters">chat filters guide</a> and <a href="index.php?n=server&amp;sub=botcommands&amp;tab=builder">macro builder</a>.</div>
             <div class="playerbots-list">
               <div class="playerbots-row"><strong>Active</strong><div class="playerbots-note"><?php echo !empty($characterRtscOverlay['active']) ? 'Yes' : 'No'; ?></div></div>
               <div class="playerbots-row"><strong>Stance / Order</strong><div class="playerbots-note"><?php echo htmlspecialchars((string)(trim((string)($characterRtscOverlay['label'] ?? '')) !== '' ? $characterRtscOverlay['label'] : 'No stored RTSC overlay order')); ?></div></div>
@@ -398,7 +399,7 @@ $renderWriteSuffix = static function ($mode) {
 
           <details class="playerbots-advanced-toggle">
             <summary>Advanced Legacy Strings</summary>
-            <div class="playerbots-note is-gap-md">These raw compatibility strings remain available for legacy workflows and edge-case manual edits. In <code>LEGACY_FULL</code> they stay authoritative. In <code>REFRESHED_WITH_OVERRIDE</code> they are stored as the baseline compatibility layer underneath the grouped lanes.</div>
+            <div class="playerbots-note is-gap-md">These raw compatibility strings remain available for legacy workflows and edge-case manual edits. In <code>LEGACY_FULL</code> they stay authoritative, including direct saved <code>RTSC</code> strings for in-game control-heavy setups. In <code>REFRESHED_WITH_OVERRIDE</code> they are stored as the baseline compatibility layer underneath the grouped lanes, while live <code>RTSC</code> state stays conceptually separate from ordinary lane saves.</div>
             <div class="playerbots-strategy-grid">
               <?php foreach (array('co' => 'Combat', 'nc' => 'Non-Combat', 'dead' => 'Dead', 'react' => 'Reaction', 'follow' => 'Follow', 'guard' => 'Guard', 'free' => 'Free', 'wander' => 'Wander', 'rtsc' => 'RTSC') as $legacyKey => $legacyLabel): ?>
                 <div class="playerbots-field">

@@ -309,6 +309,7 @@ function spp_admin_playerbots_handle_action(PDO $charsPdo, int $realmId): void
                 $insertStmt->execute(array($characterGuid, $key, $value));
             }
 
+            $runtimeLegacyKeys = array_fill_keys(spp_admin_playerbots_runtime_legacy_string_keys($authorityMode), true);
             foreach (spp_admin_playerbots_legacy_string_keys() as $legacyKey) {
                 $legacyValue = (string)($controlState['legacy_strings'][$legacyKey] ?? '');
                 if ($legacyValue !== '') {
@@ -316,7 +317,7 @@ function spp_admin_playerbots_handle_action(PDO $charsPdo, int $realmId): void
                 }
 
                 $effectiveValue = (string)($controlState['effective_strings'][$legacyKey] ?? '');
-                if ($effectiveValue !== '') {
+                if ($effectiveValue !== '' && isset($runtimeLegacyKeys[$legacyKey])) {
                     $insertStmt->execute(array($characterGuid, $legacyKey, $effectiveValue));
                 }
             }
