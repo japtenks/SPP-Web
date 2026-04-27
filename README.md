@@ -95,6 +95,7 @@ SOAP.Enabled = 1
    - Apply `db-updates/02_realmd_patch.sql` to the website-owned `realmd` database
    - `db-updates/03_seeds.sql`
    - `db-updates/04_populationdirector.sql` if you want the population director features
+   - `db-updates/05_personality_history.sql` if you want external polling snapshots for personality drift history
 
 After the patches are applied, the website should be available for guest access.
 
@@ -168,6 +169,7 @@ Useful scripts in `tools/` include:
 
 - `process_bot_events.php` to process bot event data
 - `scan_bot_events.php` to scan and inspect bot event inputs
+- `snapshot_personality_history.php` to poll `ai_playerbot_personality` into the website-owned history table for drift-over-time analysis
 
 ## Windows SPP Notes And Troubleshooting
 

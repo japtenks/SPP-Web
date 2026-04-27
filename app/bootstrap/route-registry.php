@@ -70,6 +70,7 @@ if (!function_exists('spp_route_registry')) {
                 'guilds' => array('', 'Guilds on the server', spp_route_url('server', 'guilds'), '7-Armory', 0),
                 'guild' => array('', 'Guild', spp_route_url('server', 'guild'), '', 0),
                 'realmstatus' => array('', 'Realm Status', spp_route_url('server', 'realmstatus'), '4-Workshop', 0),
+                'personality' => array('', 'Personality Feed', spp_route_url('server', 'personality'), '4-Workshop', 0),
                 'honor' => array('', 'Honor', spp_route_url('server', 'honor'), '7-Armory', 0),
                 'playermap' => array('', 'Player Map', spp_route_url('server', 'playermap'), '4-Workshop', 0),
                 'talents' => array('', 'Talents', spp_route_url('server', 'talents', $talentParams), '7-Armory', 0),
@@ -406,6 +407,11 @@ if (!function_exists('spp_route_page_contracts')) {
                         'scripts' => array('spp.async.js', 'server.realmstatus.js'),
                     ),
                 ),
+                'personality' => array(
+                    'loader' => 'app/server/personality-page.php',
+                    'component_role' => 'adapter',
+                    'template_role' => 'render',
+                ),
                 'statistic' => array(
                     'loader' => 'app/server/statistic-page.php',
                     'component_role' => 'adapter',
@@ -543,6 +549,7 @@ if (!function_exists('spp_main_navigation_registry')) {
             ),
             '4-Workshop' => array(
                 0 => array('Realm Status', spp_route_url('server', 'realmstatus'), ''),
+                1 => array('Personality Feed', spp_route_url('server', 'personality'), ''),
                 2 => array('Player Map', spp_route_url('server', 'playermap'), ''),
                 3 => array('Statistics', spp_route_url('server', 'statistic'), ''),
                 4 => array('Auction House', spp_route_url('server', 'ah'), ''),
