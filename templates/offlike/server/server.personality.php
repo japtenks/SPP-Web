@@ -9,11 +9,11 @@
       in <strong style="color:#f0e6c8;"><?php echo htmlspecialchars($serverTimezoneLabel, ENT_QUOTES); ?></strong>.
     </div>
     <div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(214,188,124,0.12);color:#b9ad88;">
-      Snapshot polling:
-      <code style="color:#f0e6c8;">php C:\Git\SPP\SPP-Web\tools\snapshot_personality_history.php --realm=<?php echo (int)$realmId; ?></code>
+      From the site root, snapshot polling:
+      <code style="color:#f0e6c8;">php tools/snapshot_personality_history.php --realm=<?php echo (int)$realmId; ?></code>
       <br>
       Lighter sample:
-      <code style="color:#f0e6c8;">php C:\Git\SPP\SPP-Web\tools\snapshot_personality_history.php --realm=<?php echo (int)$realmId; ?> --limit=200</code>
+      <code style="color:#f0e6c8;">php tools/snapshot_personality_history.php --realm=<?php echo (int)$realmId; ?> --limit=200</code>
     </div>
   </div>
 
